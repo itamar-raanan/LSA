@@ -42,7 +42,7 @@ export function HostsPage() {
         </section>
       )}
       {enrolling && <EnrollHostPanel close={() => setEnrolling(false)} created={() => void reload()} />}
-      {selected && <HostQuickView host={selected} close={() => setSelected(null)} deleted={() => { setSelected(null); void reload() }} />}
+      {selected && <HostQuickView key={selected.id} host={selected} close={() => setSelected(null)} deleted={() => { setSelected(null); void reload() }} />}
     </div>
   )
 }
