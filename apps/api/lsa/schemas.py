@@ -110,6 +110,41 @@ class HostResponse(BaseModel):
     finding_counts: dict[str, int]
 
 
+class HostCreate(BaseModel):
+    hostname: str = Field(min_length=1, max_length=253)
+    fqdn: str | None = Field(default=None, max_length=253)
+    os_family: Literal["debian", "ubuntu", "rhel"]
+    os_version: str = Field(min_length=1, max_length=40)
+    ip_addresses: list[str] = Field(default_factory=list, max_length=64)
+    tags: dict[str, str] = Field(default_factory=dict)
+
+
+class TokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    host_id: str | None = None
+    expires_at: datetime | None = None
+
+
+class TokenCreated(BaseModel):
+    id: str
+    name: str
+    host_id: str | None
+    token: str
+    token_prefix: str
+    expires_at: datetime | None
+
+
+class TokenResponse(BaseModel):
+    id: str
+    name: str
+    host_id: str | None
+    token_prefix: str
+    expires_at: datetime | None
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+
+
 class FindingResponse(BaseModel):
     id: str
     host_id: str
@@ -140,3 +175,32 @@ class DashboardResponse(BaseModel):
     finding_counts: dict[str, int]
     os_distribution: dict[str, int]
     highest_risk_hosts: list[HostResponse]
+
+
+class ReportResponse(BaseModel):
+    id: str
+    host_id: str
+    generated_at: datetime
+    received_at: datetime
+    scanner_version: str
+    profile: str
+    modules: list[str]
+    summary: dict[str, int | float | None]
+    compliance_score: float
+    security_score: float
+    artifact_name: str | None
+    finding_counts: dict[str, int]
+
+
+class FindingDelta(BaseModel):
+    control_id: str
+    title: str
+    severity: str
+
+
+class ReportComparison(BaseModel):
+    current_report_id: str
+    previous_report_id: str | None
+    new: list[FindingDelta]
+    persistent: list[FindingDelta]
+    resolved: list[FindingDelta]

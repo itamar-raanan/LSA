@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from lsa.config import Settings, get_settings
 from lsa.database import get_db
-from lsa.models import IngestionToken, User
+from lsa.models import IngestionToken, User, now_utc
 from lsa.security import decode_session_token, hash_ingestion_token
 
 
@@ -52,5 +52,11 @@ def ingestion_principal(
     )
     if token is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid ingestion token")
+    if token.expires_at is not None:
+        expires_at = token.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=now_utc().tzinfo)
+        if expires_at <= now_utc():
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Ingestion token expired")
+    token.last_used_at = now_utc()
     return IngestionPrincipal(token.id, token.tenant_id, token.host_id)
-

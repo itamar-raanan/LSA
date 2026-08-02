@@ -17,6 +17,25 @@
     lsa_generated_at: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
     lsa_machine_id_hash: "sha256:{{ ansible_machine_id | hash('sha256') }}"
 
+- name: Initialize normalized findings
+  ansible.builtin.set_fact:
+    lsa_findings: []
+
+- name: Run Debian 13 CIS baseline controls
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../plugins/debian/cis_13/tasks/main.yml"
+  when:
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_major_version == '13'
+
+- name: Calculate report summary
+  ansible.builtin.set_fact:
+    lsa_summary:
+      pass: "{{ lsa_findings | selectattr('status', 'equalto', 'pass') | list | length }}"
+      fail: "{{ lsa_findings | selectattr('status', 'equalto', 'fail') | list | length }}"
+      manual: "{{ lsa_findings | selectattr('status', 'equalto', 'manual') | list | length }}"
+      not_applicable: "{{ lsa_findings | selectattr('status', 'equalto', 'not_applicable') | list | length }}"
+      error: "{{ lsa_findings | selectattr('status', 'equalto', 'error') | list | length }}"
+
 - name: Create local report outbox
   ansible.builtin.file:
     path: "{{ lsa_output_root }}/{{ inventory_hostname }}/pending"
@@ -73,4 +92,3 @@
   when:
     - lsa_submission is not skipped
     - lsa_submission.status == 202
-

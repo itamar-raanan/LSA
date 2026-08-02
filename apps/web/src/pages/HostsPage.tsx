@@ -1,18 +1,20 @@
-import { MagnifyingGlass } from '@phosphor-icons/react'
+import { MagnifyingGlass, Plus } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
+import { EnrollHostPanel } from '../components/EnrollHostPanel'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
 
 export function HostsPage() {
   const [search, setSearch] = useState('')
+  const [enrolling, setEnrolling] = useState(false)
   const { data, error, loading, reload } = useApi(() => api.hosts(), [])
   const hosts = data?.filter((host) => host.hostname.toLowerCase().includes(search.toLowerCase())) ?? []
   return (
     <div className="page-reveal">
-      <PageHeader eyebrow="Asset inventory" title="Linux hosts" detail="Persistent identities and the most recent accepted posture for every reporting server." />
+      <PageHeader eyebrow="Asset inventory" title="Linux hosts" detail="Persistent identities and the most recent accepted posture for every reporting server." action={<button className="button-primary" onClick={() => setEnrolling(true)}><Plus size={16} /> Enroll host</button>} />
       {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !data?.length ? <EmptyState title="No hosts registered" detail="A host is registered automatically when its first authenticated report is accepted." /> : (
         <section className="panel overflow-hidden">
           <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between md:px-7">
@@ -37,7 +39,7 @@ export function HostsPage() {
           </div>
         </section>
       )}
+      {enrolling && <EnrollHostPanel close={() => setEnrolling(false)} created={() => void reload()} />}
     </div>
   )
 }
-

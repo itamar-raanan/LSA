@@ -56,3 +56,40 @@ export interface DashboardData {
   highest_risk_hosts: Host[]
 }
 
+export interface ReportSummary {
+  id: string
+  host_id: string
+  generated_at: string
+  received_at: string
+  scanner_version: string
+  profile: string
+  modules: string[]
+  summary: Record<string, number | null>
+  compliance_score: number
+  security_score: number
+  artifact_name: string | null
+  finding_counts: Record<Severity, number>
+}
+
+export interface FindingDelta {
+  control_id: string
+  title: string
+  severity: Severity
+}
+
+export interface ReportComparison {
+  current_report_id: string
+  previous_report_id: string | null
+  new: FindingDelta[]
+  persistent: FindingDelta[]
+  resolved: FindingDelta[]
+}
+
+export interface TokenCreated {
+  id: string
+  name: string
+  host_id: string | null
+  token: string
+  token_prefix: string
+  expires_at: string | null
+}

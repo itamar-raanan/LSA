@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 from lsa.database import get_db
 from lsa.dependencies import current_user
 from lsa.models import Finding, FindingStatus, Host, Report, User
-from lsa.schemas import DashboardResponse, FindingResponse, HostResponse
+from lsa.schemas import (
+    DashboardResponse,
+    FindingDelta,
+    FindingResponse,
+    HostResponse,
+    ReportComparison,
+    ReportResponse,
+)
 
 
 router = APIRouter(tags=["fleet"])
@@ -92,6 +99,96 @@ def get_host(
     if host is None or host.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="Host not found")
     return serialize_host(db, host)
+
+
+def serialize_report(db: Session, report: Report) -> ReportResponse:
+    counts = {severity: 0 for severity in ["critical", "high", "medium", "low", "info"]}
+    rows = db.execute(
+        select(Finding.severity, func.count(Finding.id))
+        .where(
+            Finding.report_id == report.id,
+            Finding.status.in_([FindingStatus.failed, FindingStatus.error]),
+        )
+        .group_by(Finding.severity)
+    ).all()
+    counts.update({severity.value: count for severity, count in rows})
+    return ReportResponse(
+        id=report.id,
+        host_id=report.host_id,
+        generated_at=report.generated_at,
+        received_at=report.received_at,
+        scanner_version=report.scanner_version,
+        profile=report.profile,
+        modules=report.modules,
+        summary=report.summary,
+        compliance_score=report.compliance_score,
+        security_score=report.security_score,
+        artifact_name=report.artifact_name,
+        finding_counts=counts,
+    )
+
+
+@router.get("/hosts/{host_id}/reports", response_model=list[ReportResponse])
+def list_host_reports(
+    host_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[ReportResponse]:
+    host = db.get(Host, host_id)
+    if host is None or host.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Host not found")
+    reports = db.scalars(
+        select(Report)
+        .where(Report.host_id == host_id)
+        .order_by(Report.generated_at.desc())
+        .limit(limit)
+    ).all()
+    return [serialize_report(db, report) for report in reports]
+
+
+def delta(finding: Finding) -> FindingDelta:
+    return FindingDelta(
+        control_id=finding.control_id,
+        title=finding.title,
+        severity=finding.severity.value,
+    )
+
+
+@router.get("/reports/{report_id}/compare", response_model=ReportComparison)
+def compare_report(
+    report_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> ReportComparison:
+    report = db.get(Report, report_id)
+    if report is None or report.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Report not found")
+    previous = db.scalar(
+        select(Report)
+        .where(Report.host_id == report.host_id, Report.generated_at < report.generated_at)
+        .order_by(Report.generated_at.desc())
+        .limit(1)
+    )
+    current_findings = {
+        finding.control_id: finding
+        for finding in report.findings
+        if finding.status in {FindingStatus.failed, FindingStatus.error}
+    }
+    previous_findings = {
+        finding.control_id: finding
+        for finding in (previous.findings if previous else [])
+        if finding.status in {FindingStatus.failed, FindingStatus.error}
+    }
+    current_ids = set(current_findings)
+    previous_ids = set(previous_findings)
+    return ReportComparison(
+        current_report_id=report.id,
+        previous_report_id=previous.id if previous else None,
+        new=[delta(current_findings[item]) for item in sorted(current_ids - previous_ids)],
+        persistent=[delta(current_findings[item]) for item in sorted(current_ids & previous_ids)],
+        resolved=[delta(previous_findings[item]) for item in sorted(previous_ids - current_ids)],
+    )
 
 
 @router.get("/findings", response_model=list[FindingResponse])

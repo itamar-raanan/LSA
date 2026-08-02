@@ -1,4 +1,12 @@
-import type { DashboardData, Finding, Host, User } from '../types'
+import type {
+  DashboardData,
+  Finding,
+  Host,
+  ReportComparison,
+  ReportSummary,
+  TokenCreated,
+  User,
+} from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
 
@@ -42,6 +50,24 @@ export const api = {
   host(id: string): Promise<Host> {
     return request(`/hosts/${id}`)
   },
+  reports(hostId: string): Promise<ReportSummary[]> {
+    return request(`/hosts/${hostId}/reports`)
+  },
+  compareReport(reportId: string): Promise<ReportComparison> {
+    return request(`/reports/${reportId}/compare`)
+  },
+  createHost(payload: {
+    hostname: string
+    fqdn?: string
+    os_family: string
+    os_version: string
+    tags: Record<string, string>
+  }): Promise<Host> {
+    return request('/hosts', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  createToken(payload: { name: string; host_id: string }): Promise<TokenCreated> {
+    return request('/ingestion-tokens', { method: 'POST', body: JSON.stringify(payload) })
+  },
   findings(filters: { severity?: string; lifecycle?: string; host_id?: string } = {}): Promise<Finding[]> {
     const params = new URLSearchParams()
     Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
@@ -60,4 +86,3 @@ export const api = {
     return payload
   },
 }
-

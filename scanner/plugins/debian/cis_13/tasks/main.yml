@@ -1,0 +1,150 @@
+---
+- name: Read permissions for identity files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/passwd
+    - /etc/shadow
+  register: lsa_identity_files
+
+- name: Check effective SSH configuration
+  ansible.builtin.command:
+    argv: [sshd, -T]
+  register: lsa_sshd_effective
+  changed_when: false
+  failed_when: false
+
+- name: Read IPv4 forwarding state
+  ansible.builtin.command:
+    argv: [sysctl, -n, net.ipv4.ip_forward]
+  register: lsa_ipv4_forward
+  changed_when: false
+  failed_when: false
+
+- name: Read setuid core-dump state
+  ansible.builtin.command:
+    argv: [sysctl, -n, fs.suid_dumpable]
+  register: lsa_suid_dumpable
+  changed_when: false
+  failed_when: false
+
+- name: Resolve control observations
+  ansible.builtin.set_fact:
+    lsa_passwd_stat: "{{ lsa_identity_files.results[0].stat }}"
+    lsa_shadow_stat: "{{ lsa_identity_files.results[1].stat }}"
+    lsa_sshd_text: "{{ lsa_sshd_effective.stdout | default('') }}"
+
+- name: Add identity-file controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'CIS-DEBIAN13-6.2.3',
+          'module': 'cis',
+          'category': 'filesystem',
+          'title': 'Ensure permissions on /etc/passwd are configured',
+          'severity': 'high',
+          'status': 'pass' if lsa_passwd_stat.exists and lsa_passwd_stat.mode == '0644' and lsa_passwd_stat.pw_name == 'root' and lsa_passwd_stat.gr_name == 'root' else 'fail',
+          'expected': '0644 root:root',
+          'actual': (lsa_passwd_stat.mode | default('missing')) ~ ' ' ~ (lsa_passwd_stat.pw_name | default('unknown')) ~ ':' ~ (lsa_passwd_stat.gr_name | default('unknown')),
+          'evidence': ['/etc/passwd'],
+          'remediation_summary': 'Restore root ownership and mode 0644 on /etc/passwd.',
+          'remediation_commands': ['chown root:root /etc/passwd', 'chmod 0644 /etc/passwd'],
+          'verification_commands': ["stat -c '%a %U:%G' /etc/passwd"],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'CIS-DEBIAN13-6.2.4',
+          'module': 'cis',
+          'category': 'filesystem',
+          'title': 'Ensure permissions on /etc/shadow are configured',
+          'severity': 'critical',
+          'status': 'pass' if lsa_shadow_stat.exists and lsa_shadow_stat.mode in ['0000', '0640'] and lsa_shadow_stat.pw_name == 'root' and lsa_shadow_stat.gr_name in ['root', 'shadow'] else 'fail',
+          'expected': '0000 root:root or 0640 root:shadow',
+          'actual': (lsa_shadow_stat.mode | default('missing')) ~ ' ' ~ (lsa_shadow_stat.pw_name | default('unknown')) ~ ':' ~ (lsa_shadow_stat.gr_name | default('unknown')),
+          'evidence': ['/etc/shadow'],
+          'remediation_summary': 'Restrict /etc/shadow to root and the shadow group.',
+          'remediation_commands': ['chown root:shadow /etc/shadow', 'chmod 0640 /etc/shadow'],
+          'verification_commands': ["stat -c '%a %U:%G' /etc/shadow"],
+          'reboot_required': false,
+          'service_restart': false
+        }
+      ] }}
+
+- name: Add SSH controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'CIS-DEBIAN13-4.2.7',
+          'module': 'cis',
+          'category': 'ssh',
+          'title': 'Ensure SSH root login is disabled',
+          'severity': 'high',
+          'status': 'error' if lsa_sshd_effective.rc != 0 else ('pass' if 'permitrootlogin no' in lsa_sshd_text else 'fail'),
+          'expected': 'permitrootlogin no',
+          'actual': (lsa_sshd_text.split('\n') | select('match', '^permitrootlogin ') | list | first | default('sshd unavailable')),
+          'evidence': ['sshd -T'],
+          'remediation_summary': 'Set PermitRootLogin no after validating delegated administrative access.',
+          'remediation_commands': ["printf '%s\\n' 'PermitRootLogin no' > /etc/ssh/sshd_config.d/10-lsa-root-login.conf"],
+          'verification_commands': ['sshd -T | grep ^permitrootlogin'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'CIS-DEBIAN13-4.2.10',
+          'module': 'cis',
+          'category': 'ssh',
+          'title': 'Ensure SSH password authentication is disabled',
+          'severity': 'high',
+          'status': 'error' if lsa_sshd_effective.rc != 0 else ('pass' if 'passwordauthentication no' in lsa_sshd_text else 'fail'),
+          'expected': 'passwordauthentication no',
+          'actual': (lsa_sshd_text.split('\n') | select('match', '^passwordauthentication ') | list | first | default('sshd unavailable')),
+          'evidence': ['sshd -T'],
+          'remediation_summary': 'Disable SSH password authentication after validating key-based access.',
+          'remediation_commands': ["printf '%s\\n' 'PasswordAuthentication no' > /etc/ssh/sshd_config.d/10-lsa-password-auth.conf"],
+          'verification_commands': ['sshd -T | grep ^passwordauthentication'],
+          'reboot_required': false,
+          'service_restart': true
+        }
+      ] }}
+
+- name: Add kernel controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'CIS-DEBIAN13-3.3.1',
+          'module': 'cis',
+          'category': 'network',
+          'title': 'Ensure IPv4 forwarding is disabled',
+          'severity': 'medium',
+          'status': 'error' if lsa_ipv4_forward.rc != 0 else ('pass' if lsa_ipv4_forward.stdout | trim == '0' else 'fail'),
+          'expected': 'net.ipv4.ip_forward = 0',
+          'actual': 'net.ipv4.ip_forward = ' ~ (lsa_ipv4_forward.stdout | default('unknown') | trim),
+          'evidence': ['sysctl -n net.ipv4.ip_forward'],
+          'remediation_summary': 'Disable IPv4 forwarding unless this system is an approved router.',
+          'remediation_commands': ["printf '%s\\n' 'net.ipv4.ip_forward = 0' > /etc/sysctl.d/60-lsa-network.conf", 'sysctl --system'],
+          'verification_commands': ['sysctl net.ipv4.ip_forward'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'CIS-DEBIAN13-1.5.1',
+          'module': 'cis',
+          'category': 'kernel',
+          'title': 'Ensure setuid programs do not produce core dumps',
+          'severity': 'medium',
+          'status': 'error' if lsa_suid_dumpable.rc != 0 else ('pass' if lsa_suid_dumpable.stdout | trim == '0' else 'fail'),
+          'expected': 'fs.suid_dumpable = 0',
+          'actual': 'fs.suid_dumpable = ' ~ (lsa_suid_dumpable.stdout | default('unknown') | trim),
+          'evidence': ['sysctl -n fs.suid_dumpable'],
+          'remediation_summary': 'Disable core dumps for setuid programs.',
+          'remediation_commands': ["printf '%s\\n' 'fs.suid_dumpable = 0' > /etc/sysctl.d/60-lsa-core-dumps.conf", 'sysctl --system'],
+          'verification_commands': ['sysctl fs.suid_dumpable'],
+          'reboot_required': false,
+          'service_restart': false
+        }
+      ] }}
+
