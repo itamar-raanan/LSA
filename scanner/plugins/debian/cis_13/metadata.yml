@@ -5,4 +5,4 @@ version: 0.4.0
 os_family: debian
 os_versions: ["13"]
 profiles: [production_server, minimal_server, router, container]
-description: Legacy compact control definitions retained for migration reference; the active scanner uses the complete 354-control audit roles.
+description: Legacy compact control definitions retained for migration reference; the active scanner uses the complete 334-control benchmark role plus deduplicated portable checks.

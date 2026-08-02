@@ -39,12 +39,13 @@ Deleting a host is a logical deletion: it removes the asset from active fleet, d
 - Ubuntu 22.04 and 24.04
 - RHEL family 8 and 9
 
-The v0.4 scanner implementation focuses on Debian 13 with 334 benchmark controls and 20 supplemental security-health controls. Of the benchmark controls, 322 are automated read-only checks and 12 are explicit manual reviews. Every report retains all 354 control IDs; controls outside the chosen profile are `not_applicable`. The shared contract and plugin boundaries already admit the other supported families.
+The v0.5 scanner runs on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9. Debian 13 combines 334 benchmark controls with 24 non-overlapping portable checks for 358 findings. The benchmark contains 322 automated read-only checks and 12 explicit manual reviews. The full portable catalog contains 62 controls; 38 controls declare an exact Debian benchmark overlap and are suppressed while that benchmark is active. Other supported systems execute all 62 portable controls.
 
 ## Security invariants
 
 - No SSH credentials or remote execution paths exist in the platform.
 - Scanner audit tasks may read privileged host state but cannot run package, service, account, permission, mount, firewall, kernel, or filesystem mutation commands; automated tests enforce this boundary.
+- Portable controls carry a unique semantic key, canonical finding category, and explicit benchmark-overlap metadata. Runtime and unit assertions reject duplicate IDs, duplicate semantics, unknown overlap references, and unmapped categories.
 - Ingestion token hashes—not raw tokens—are stored.
 - Expired or revoked ingestion tokens cannot submit evidence.
 - Report bundles must not contain API tokens.

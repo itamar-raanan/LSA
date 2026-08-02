@@ -3,12 +3,8 @@
   ansible.builtin.set_fact:
     lsa_health_category: >-
       {% set category = lsa_health_result.category | lower %}
-      {% if category == 'filesystem' %}filesystem
+      {% if category in lsa_canonical_categories %}{{ category }}
       {% elif category in ['users', 'privilege', 'authentication'] %}accounts
-      {% elif category == 'services' %}services
-      {% elif category == 'network' %}network
-      {% elif category == 'kernel' %}kernel
-      {% elif category == 'packages' %}packages
       {% else %}services
       {% endif %}
   changed_when: false

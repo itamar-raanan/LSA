@@ -1,8 +1,11 @@
 ---
 security_health_controls:
   - id: FS-001
+    semantic_key: filesystem.world_writable_files
     title: World-writable regular files
-    category: Filesystem
+    category: filesystem
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.1.11']
     severity: HIGH
     summary: Detect regular files writable by all users on local filesystems.
     risk: Any local user may alter data or configuration in a world-writable file.
@@ -19,8 +22,11 @@ security_health_controls:
       echo "No world-writable regular files found on assessed local filesystems."
 
   - id: FS-002
+    semantic_key: filesystem.world_writable_directories_without_sticky_bit
     title: World-writable directories without sticky bit
-    category: Filesystem
+    category: filesystem
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.1.11']
     severity: HIGH
     summary: Detect world-writable directories that do not have the sticky bit.
     risk: Users may delete or rename files owned by other users in these directories.
@@ -37,8 +43,11 @@ security_health_controls:
       echo "All world-writable directories have the sticky bit."
 
   - id: FS-003
+    semantic_key: filesystem.objects_without_owner
     title: Files or directories without an owner
-    category: Filesystem
+    category: filesystem
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.1.12']
     severity: HIGH
     summary: Detect filesystem objects whose UID no longer maps to an account.
     risk: Reused UIDs can unintentionally grant access to orphaned files.
@@ -55,8 +64,11 @@ security_health_controls:
       echo "No unowned files or directories found."
 
   - id: FS-004
+    semantic_key: filesystem.objects_without_group
     title: Files or directories without a group
-    category: Filesystem
+    category: filesystem
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.1.12']
     severity: HIGH
     summary: Detect filesystem objects whose GID no longer maps to a group.
     risk: Reused GIDs can unintentionally grant access to orphaned files.
@@ -73,8 +85,11 @@ security_health_controls:
       echo "No ungrouped files or directories found."
 
   - id: FS-005
+    semantic_key: filesystem.suid_executable_inventory
     title: SUID executable review
-    category: Filesystem
+    category: filesystem
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.1.13']
     severity: MEDIUM
     summary: Inventory SUID executables and identify entries outside a conservative Debian allowlist.
     risk: Unexpected SUID programs can provide a local privilege-escalation path.
@@ -92,8 +107,9 @@ security_health_controls:
       echo "No SUID files outside the built-in Debian review baseline."
 
   - id: FS-006
+    semantic_key: filesystem.file_capability_inventory
     title: Unexpected file capabilities
-    category: Filesystem
+    category: filesystem
     severity: MEDIUM
     summary: Inventory executables with Linux file capabilities.
     risk: Powerful capabilities can bypass normal discretionary access restrictions without SUID.
@@ -106,8 +122,11 @@ security_health_controls:
       echo "No file capabilities were found."
 
   - id: FS-007
+    semantic_key: accounts.root_path_integrity
     title: Writable directories in root PATH
-    category: Filesystem
+    category: accounts
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.4.2.5']
     severity: CRITICAL
     summary: Detect missing, relative, or non-root-writable directories in root's executable search path.
     risk: A writable PATH directory may allow command hijacking during privileged execution.
@@ -131,8 +150,11 @@ security_health_controls:
       exit "$bad"
 
   - id: USR-001
+    semantic_key: accounts.empty_shadow_passwords
     title: Accounts with empty password fields
-    category: Users
+    category: accounts
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.2.2']
     severity: CRITICAL
     summary: Detect accounts with an empty password field in /etc/shadow.
     risk: An account with an empty password may permit authentication without a secret.
@@ -144,8 +166,11 @@ security_health_controls:
       echo "No accounts have empty password fields."
 
   - id: USR-002
+    semantic_key: accounts.unique_uid_zero
     title: Additional UID 0 accounts
-    category: Users
+    category: accounts
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.4.2.1']
     severity: CRITICAL
     summary: Detect UID 0 accounts other than root.
     risk: Every UID 0 account has unrestricted administrative access.
@@ -157,8 +182,9 @@ security_health_controls:
       echo "root is the only UID 0 account."
 
   - id: USR-003
+    semantic_key: accounts.stale_interactive_accounts
     title: Stale interactive accounts
-    category: Users
+    category: accounts
     severity: MEDIUM
     summary: Identify interactive accounts that have not logged in within the configured age threshold.
     risk: Dormant accounts increase attack surface and are often overlooked during offboarding.
@@ -183,8 +209,9 @@ security_health_controls:
       echo "No stale interactive accounts detected using the ${days}-day threshold."
 
   - id: USR-004
+    semantic_key: accounts.ssh_private_key_permissions
     title: SSH private key permissions in home directories
-    category: Users
+    category: accounts
     severity: HIGH
     summary: Detect likely SSH private keys readable or writable by group or others.
     risk: Exposed private keys can allow account impersonation and lateral movement.
@@ -196,8 +223,11 @@ security_health_controls:
       echo "No SSH private keys with group/other permissions were found."
 
   - id: PRV-001
+    semantic_key: accounts.sudo_nopasswd_rules
     title: Passwordless sudo rules
-    category: Privilege
+    category: accounts
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.2.4']
     severity: HIGH
     summary: Identify active sudo rules using NOPASSWD.
     risk: Passwordless privilege escalation reduces protection against session hijacking and accidental execution.
@@ -210,8 +240,9 @@ security_health_controls:
       echo "No active NOPASSWD sudo rules found."
 
   - id: PRV-002
+    semantic_key: accounts.sudo_command_wildcards
     title: Broad sudo command wildcards
-    category: Privilege
+    category: accounts
     severity: HIGH
     summary: Identify sudo rules containing shell glob characters in command specifications.
     risk: Wildcard expansion may permit arguments or paths outside the administrator's intended scope.
@@ -224,8 +255,9 @@ security_health_controls:
       echo "No obvious command wildcards found in active sudo rules."
 
   - id: SVC-001
+    semantic_key: services.running_legacy_cleartext_services
     title: Legacy clear-text or high-risk services
-    category: Services
+    category: services
     severity: HIGH
     summary: Detect active legacy services commonly associated with clear-text authentication or unnecessary exposure.
     risk: Telnet, rsh, rexec, tftp and similar services can expose credentials or provide weakly controlled access.
@@ -238,8 +270,11 @@ security_health_controls:
       echo "No targeted legacy high-risk services are running."
 
   - id: NET-001
+    semantic_key: network.non_loopback_listener_inventory
     title: Services listening on non-loopback interfaces
-    category: Network
+    category: network
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['2.1.23']
     severity: INFO
     summary: Inventory TCP and UDP listeners exposed beyond loopback.
     risk: Every exposed listener increases reachable attack surface and should map to an approved service.
@@ -251,8 +286,9 @@ security_health_controls:
       echo "No non-loopback listeners detected."
 
   - id: NET-002
+    semantic_key: network.database_wildcard_listeners
     title: Database ports exposed on all interfaces
-    category: Network
+    category: network
     severity: HIGH
     summary: Detect common database ports bound to wildcard addresses.
     risk: Internet- or LAN-reachable database services are frequent targets for credential attacks and exploitation.
@@ -264,8 +300,9 @@ security_health_controls:
       echo "No common database ports are listening on wildcard addresses."
 
   - id: KRN-001
+    semantic_key: kernel.taint_state
     title: Kernel taint state
-    category: Kernel
+    category: kernel
     severity: MEDIUM
     summary: Detect whether the running kernel is tainted.
     risk: Kernel taint may indicate unsupported modules, forced module operations, hardware errors or prior kernel warnings.
@@ -278,8 +315,9 @@ security_health_controls:
       echo "Kernel is not tainted."
 
   - id: SVC-002
+    semantic_key: services.failed_systemd_units
     title: Failed systemd units
-    category: Services
+    category: services
     severity: MEDIUM
     summary: Detect systemd units currently in a failed state.
     risk: Failed security, logging, update or application units may reduce protection or indicate operational problems.
@@ -291,8 +329,9 @@ security_health_controls:
       echo "No failed systemd units."
 
   - id: PKG-001
+    semantic_key: updates.held_packages
     title: Held packages
-    category: Packages
+    category: updates
     severity: MEDIUM
     summary: Detect packages held back from normal upgrades.
     risk: Held security-sensitive packages may remain vulnerable after fixes are available.
@@ -305,8 +344,9 @@ security_health_controls:
       echo "No held packages."
 
   - id: LOG-001
+    semantic_key: audit.recent_failed_authentication
     title: Recent failed authentication activity
-    category: Authentication
+    category: audit
     severity: MEDIUM
     summary: Summarize failed authentication records from the previous 24 hours.
     risk: Repeated failures may indicate password spraying, brute force, expired automation credentials or account misuse.

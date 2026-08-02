@@ -81,3 +81,61 @@ jobs:
         working-directory: scanner
       - name: Validate and ingest generated bundle
         run: python3 scanner/tests/verify_debian13_integration.py /tmp/lsa-integration-reports
+
+  portable-scanner-integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: ubuntu24
+            image: ubuntu:24.04
+            inventory: inventory.ubuntu24.ini
+            hostname: ubuntu24-ci
+            family: ubuntu
+            version: "24.04"
+            python: python3
+          - target: rhel9
+            image: rockylinux:9
+            inventory: inventory.rhel9.ini
+            hostname: rhel9-ci
+            family: rhel
+            version: "9"
+            python: python3.12
+    container: ${{ matrix.image }}
+    steps:
+      - name: Prepare Ubuntu 24.04 target
+        if: matrix.target == 'ubuntu24'
+        run: |
+          set -eux
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv git openssh-server cron unattended-upgrades iproute2 procps nftables auditd sudo mokutil debsums
+          mkdir -p /run/sshd /var/log/journal
+          printf '%s\n' 'b3260a4725864f2183dd487d5f992024' > /etc/machine-id
+      - name: Prepare RHEL-family 9 target
+        if: matrix.target == 'rhel9'
+        run: |
+          set -eux
+          dnf install -y python3.12 python3.12-pip git openssh-server cronie iproute procps-ng nftables audit sudo policycoreutils chrony rpm
+          mkdir -p /run/sshd /var/log/journal
+          printf '%s\n' '9bac28c3449a4ca8b931b448ee279009' > /etc/machine-id
+      - uses: actions/checkout@v5
+      - name: Install scanner and API dependencies
+        run: |
+          set -eux
+          ${{ matrix.python }} -m venv /opt/lsa-venv
+          /opt/lsa-venv/bin/pip install -e ".[dev]"
+      - name: Execute portable scanner
+        run: |
+          set -eux
+          /opt/lsa-venv/bin/python scripts/generate_signing_key.py /tmp/lsa-integration-signing-key.pem
+          /opt/lsa-venv/bin/ansible-playbook -i tests/${{ matrix.inventory }} playbooks/scan.yml
+        working-directory: scanner
+      - name: Validate and ingest generated bundle
+        run: >-
+          /opt/lsa-venv/bin/python scanner/tests/verify_debian13_integration.py
+          /tmp/lsa-integration-reports
+          ${{ matrix.hostname }}
+          ${{ matrix.family }}
+          ${{ matrix.version }}
+          62

@@ -1,0 +1,664 @@
+---
+# Portable, read-only controls for Debian 12, Ubuntu 22.04/24.04, and RHEL-family 8/9.
+# A control superseded by an active benchmark is not executed or emitted twice.
+security_health_expanded_controls:
+  - id: ACC-001
+    semantic_key: accounts.duplicate_uids
+    title: Duplicate numeric user IDs
+    category: accounts
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.2.5']
+    summary: Ensure every local account has a unique numeric UID.
+    risk: Duplicate UIDs make ownership and accountability ambiguous.
+    remediation: Assign a unique UID to each account and repair affected file ownership after approval.
+    verification: Review duplicate values in `/etc/passwd`.
+    audit: !unsafe |
+      findings="$(cut -d: -f3 /etc/passwd | sort | uniq -d)"
+      [[ -z "$findings" ]] || { echo "Duplicate UIDs: $findings"; exit 1; }
+      echo "All local account UIDs are unique."
+
+  - id: ACC-002
+    semantic_key: accounts.duplicate_gids
+    title: Duplicate numeric group IDs
+    category: accounts
+    severity: MEDIUM
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.2.6']
+    summary: Ensure every local group has a unique numeric GID.
+    risk: Duplicate GIDs can grant unintended access to group-owned resources.
+    remediation: Assign unique GIDs and review group ownership after approval.
+    verification: Review duplicate values in `/etc/group`.
+    audit: !unsafe |
+      findings="$(cut -d: -f3 /etc/group | sort | uniq -d)"
+      [[ -z "$findings" ]] || { echo "Duplicate GIDs: $findings"; exit 1; }
+      echo "All local group GIDs are unique."
+
+  - id: ACC-003
+    semantic_key: accounts.passwd_primary_groups_exist
+    title: Account primary groups exist
+    category: accounts
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.2.3']
+    summary: Verify every primary GID referenced by `/etc/passwd` exists in `/etc/group`.
+    risk: Missing primary groups create inconsistent authorization behavior.
+    remediation: Restore the required group or assign the account to an existing approved primary group.
+    verification: Compare primary GIDs in the account and group databases.
+    audit: !unsafe |
+      findings="$(awk -F: 'NR==FNR {g[$3]=1; next} !($4 in g) {print $1 ": missing GID " $4}' /etc/group /etc/passwd)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "Every account primary group exists."
+
+  - id: ACC-004
+    semantic_key: accounts.duplicate_user_names
+    title: Duplicate local user names
+    category: accounts
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.2.7']
+    summary: Ensure every local account name is unique.
+    risk: Duplicate names cause ambiguous authentication and account administration.
+    remediation: Rename or remove the duplicate account after ownership review.
+    verification: Review duplicate names in `/etc/passwd`.
+    audit: !unsafe |
+      findings="$(cut -d: -f1 /etc/passwd | sort | uniq -d)"
+      [[ -z "$findings" ]] || { echo "Duplicate users: $findings"; exit 1; }
+      echo "All local user names are unique."
+
+  - id: ACC-005
+    semantic_key: accounts.duplicate_group_names
+    title: Duplicate local group names
+    category: accounts
+    severity: MEDIUM
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['7.2.8']
+    summary: Ensure every local group name is unique.
+    risk: Duplicate names make authorization policy difficult to evaluate reliably.
+    remediation: Rename or remove the duplicate group after membership review.
+    verification: Review duplicate names in `/etc/group`.
+    audit: !unsafe |
+      findings="$(cut -d: -f1 /etc/group | sort | uniq -d)"
+      [[ -z "$findings" ]] || { echo "Duplicate groups: $findings"; exit 1; }
+      echo "All local group names are unique."
+
+  - id: ACC-006
+    semantic_key: accounts.system_accounts_noninteractive
+    title: System accounts cannot log in interactively
+    category: accounts
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.4.2.8']
+    summary: Detect system accounts configured with an interactive login shell.
+    risk: Service identities with shells increase direct-login and lateral-movement risk.
+    remediation: Set an approved non-login shell unless interactive access is explicitly required.
+    verification: Review shells for accounts below UID_MIN.
+    audit: !unsafe |
+      uid_min="$(awk '/^[[:space:]]*UID_MIN[[:space:]]+/ {print $2}' /etc/login.defs | tail -1)"; uid_min="${uid_min:-1000}"
+      findings="$(awk -F: -v min="$uid_min" '$3 > 0 && $3 < min && $7 !~ /(nologin|false|sync|shutdown|halt)$/ {print $1 ":" $3 ":" $7}' /etc/passwd)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "System accounts use non-interactive shells."
+
+  - id: ACC-007
+    semantic_key: accounts.sudoers_syntax
+    title: Sudo policy parses successfully
+    category: accounts
+    severity: CRITICAL
+    summary: Validate the complete sudoers policy without changing it.
+    risk: Syntax errors can break administration or create unexpected authorization behavior.
+    remediation: Correct the reported file and line using `visudo` under an approved change.
+    verification: Run `visudo -c`.
+    audit: !unsafe |
+      command -v visudo >/dev/null 2>&1 || { echo "visudo is unavailable."; exit 3; }
+      output="$(visudo -c 2>&1)"; rc=$?; printf '%s\n' "$output"; [[ $rc -eq 0 ]]
+
+  - id: BOOT-001
+    semantic_key: kernel.uefi_secure_boot
+    title: UEFI Secure Boot state
+    category: kernel
+    severity: HIGH
+    summary: Verify Secure Boot is enabled when the host boots through UEFI.
+    risk: An unverified boot chain can permit persistent pre-kernel tampering.
+    remediation: Enable Secure Boot in firmware and enroll organization-approved keys.
+    verification: Run `mokutil --sb-state` after reboot.
+    audit: !unsafe |
+      [[ -d /sys/firmware/efi ]] || { echo "Host is not booted through UEFI."; exit 3; }
+      command -v mokutil >/dev/null 2>&1 || { echo "mokutil is unavailable."; exit 3; }
+      output="$(mokutil --sb-state 2>&1)"; printf '%s\n' "$output"
+      grep -qi 'SecureBoot enabled' <<< "$output"
+
+  - id: BOOT-002
+    semantic_key: filesystem.bootloader_configuration_permissions
+    title: Bootloader configuration permissions
+    category: filesystem
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['1.4.1', '1.4.2']
+    summary: Verify discovered GRUB configuration files are root-owned and not group/other writable.
+    risk: Writable boot configuration can alter kernel arguments or the boot path.
+    remediation: Restore root ownership and restrictive permissions under an approved maintenance window.
+    verification: Inspect discovered GRUB configuration files with `stat`.
+    audit: !unsafe |
+      files="$(find /boot /boot/efi -xdev -type f \( -name grub.cfg -o -name grubenv \) -print 2>/dev/null | sort -u)"
+      [[ -n "$files" ]] || { echo "No GRUB configuration files found."; exit 3; }
+      bad=0
+      while IFS= read -r file; do
+        read -r mode uid gid < <(stat -Lc '%a %u %g' "$file")
+        echo "$mode $uid:$gid $file"
+        (( 8#$mode & 0022 )) && bad=1
+        [[ "$uid" == 0 ]] || bad=1
+      done <<< "$files"
+      exit "$bad"
+
+  - id: BOOT-003
+    semantic_key: kernel.lockdown_mode
+    title: Kernel lockdown mode
+    category: kernel
+    severity: MEDIUM
+    summary: Report whether kernel lockdown is active on platforms that expose the state.
+    risk: Without lockdown, privileged processes can modify or inspect sensitive kernel state more freely.
+    remediation: Enable an integrity or confidentiality lockdown mode through the approved boot configuration.
+    verification: Read `/sys/kernel/security/lockdown`.
+    audit: !unsafe |
+      path=/sys/kernel/security/lockdown
+      [[ -r "$path" ]] || { echo "Kernel lockdown state is unavailable."; exit 3; }
+      state="$(cat "$path")"; echo "$state"
+      grep -Eq '\[(integrity|confidentiality)\]' <<< "$state"
+
+  - id: FS-008
+    semantic_key: filesystem.tmp_mount_options
+    title: Temporary filesystem mount protections
+    category: filesystem
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['1.1.2.1.2', '1.1.2.1.3', '1.1.2.1.4']
+    summary: Verify `/tmp` is mounted with nodev, nosuid, and noexec when it is a distinct mount.
+    risk: Permissive temporary storage can assist device, privilege, or code-execution attacks.
+    remediation: Add the missing mount options after application compatibility testing.
+    verification: Run `findmnt -no OPTIONS /tmp`.
+    audit: !unsafe |
+      mount="$(findmnt -n /tmp 2>/dev/null || true)"; [[ -n "$mount" ]] || { echo "/tmp is not a distinct mount."; exit 3; }
+      opts="$(findmnt -nro OPTIONS /tmp)"; echo "$opts"; bad=0
+      for opt in nodev nosuid noexec; do grep -qw "$opt" <<< "${opts//,/ }" || { echo "missing $opt"; bad=1; }; done
+      exit "$bad"
+
+  - id: FS-009
+    semantic_key: filesystem.dev_shm_mount_options
+    title: Shared-memory mount protections
+    category: filesystem
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['1.1.2.2.2', '1.1.2.2.3', '1.1.2.2.4']
+    summary: Verify `/dev/shm` is mounted with nodev, nosuid, and noexec.
+    risk: Executable or privileged shared-memory content can support local exploitation.
+    remediation: Add nodev, nosuid, and noexec after compatibility testing.
+    verification: Run `findmnt -no OPTIONS /dev/shm`.
+    audit: !unsafe |
+      opts="$(findmnt -nro OPTIONS /dev/shm 2>/dev/null)"; [[ -n "$opts" ]] || { echo "/dev/shm is not mounted."; exit 2; }
+      echo "$opts"; bad=0
+      for opt in nodev nosuid noexec; do grep -qw "$opt" <<< "${opts//,/ }" || { echo "missing $opt"; bad=1; }; done
+      exit "$bad"
+
+  - id: FS-010
+    semantic_key: filesystem.system_directory_writability
+    title: System executable and configuration directories are protected
+    category: filesystem
+    severity: CRITICAL
+    summary: Detect group/other-writable directories in `/etc`, `/usr/bin`, and `/usr/sbin`.
+    risk: Writable system paths permit configuration replacement or privileged command hijacking.
+    remediation: Review ownership and remove unauthorized write access from each reported directory.
+    verification: Repeat the read-only `find` query for the protected paths.
+    audit: !unsafe |
+      findings="$(find /etc /usr/bin /usr/sbin -xdev -type d -perm /0022 -printf '%m %u:%g %p\n' 2>/dev/null | sort -u)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "Protected system directories are not group/other writable."
+
+  - id: SSH-001
+    semantic_key: ssh.configuration_syntax
+    title: SSH daemon configuration syntax
+    category: ssh
+    severity: CRITICAL
+    summary: Validate the effective SSH daemon configuration parses successfully.
+    risk: Invalid SSH configuration may prevent access or bypass intended directives.
+    remediation: Correct the reported configuration error and validate before reloading sshd.
+    verification: Run `sshd -t`.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      output="$(sshd -t 2>&1)"; rc=$?; [[ -n "$output" ]] && printf '%s\n' "$output"
+      if [[ $rc -eq 0 ]]; then echo "sshd configuration syntax is valid."; exit 0; fi
+      exit 1
+
+  - id: SSH-002
+    semantic_key: ssh.root_login_disabled
+    title: SSH root login is disabled
+    category: ssh
+    severity: CRITICAL
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.1.21']
+    summary: Verify the effective PermitRootLogin value is `no`.
+    risk: Direct root login removes account-level attribution and increases credential impact.
+    remediation: Set `PermitRootLogin no` after validating an alternate administrative path.
+    verification: Run `sshd -T | grep permitrootlogin`.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      value="$(sshd -T 2>/dev/null | awk '$1=="permitrootlogin" {print $2; exit}')"; echo "permitrootlogin ${value:-unknown}"
+      [[ "$value" == no ]]
+
+  - id: SSH-003
+    semantic_key: ssh.password_authentication_disabled
+    title: SSH password authentication is disabled
+    category: ssh
+    severity: HIGH
+    summary: Verify the effective PasswordAuthentication value is disabled.
+    risk: Password authentication is more exposed to spraying, phishing, and reuse than managed keys or federated methods.
+    remediation: Deploy a working alternate authentication method, then disable password authentication.
+    verification: Run `sshd -T | grep passwordauthentication`.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      value="$(sshd -T 2>/dev/null | awk '$1=="passwordauthentication" {print $2; exit}')"; echo "passwordauthentication ${value:-unknown}"
+      [[ "$value" == no ]]
+
+  - id: SSH-004
+    semantic_key: ssh.empty_passwords_disabled
+    title: SSH empty-password authentication is disabled
+    category: ssh
+    severity: CRITICAL
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.1.20']
+    summary: Verify PermitEmptyPasswords is disabled in the effective configuration.
+    risk: Empty-password accounts could authenticate remotely.
+    remediation: Set `PermitEmptyPasswords no` and remove empty account passwords.
+    verification: Run `sshd -T | grep permitemptypasswords`.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      value="$(sshd -T 2>/dev/null | awk '$1=="permitemptypasswords" {print $2; exit}')"; echo "permitemptypasswords ${value:-unknown}"
+      [[ "$value" == no ]]
+
+  - id: SSH-005
+    semantic_key: ssh.authentication_attempt_limit
+    title: SSH authentication attempts are limited
+    category: ssh
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.1.17']
+    summary: Verify MaxAuthTries is no greater than four.
+    risk: Excess attempts increase online guessing opportunities per connection.
+    remediation: Set `MaxAuthTries 4` or lower after operational review.
+    verification: Run `sshd -T | grep maxauthtries`.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      value="$(sshd -T 2>/dev/null | awk '$1=="maxauthtries" {print $2; exit}')"; echo "maxauthtries ${value:-unknown}"
+      [[ "$value" =~ ^[0-9]+$ ]] && (( value <= 4 ))
+
+  - id: SSH-006
+    semantic_key: ssh.forwarding_disabled
+    title: SSH forwarding is disabled
+    category: ssh
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.1.8']
+    summary: Verify DisableForwarding is enabled in the effective configuration.
+    risk: Unrestricted forwarding can bypass network boundaries and enable lateral movement.
+    remediation: Set `DisableForwarding yes` or document narrowly scoped forwarding requirements.
+    verification: Run `sshd -T | grep disableforwarding`.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      value="$(sshd -T 2>/dev/null | awk '$1=="disableforwarding" {print $2; exit}')"; echo "disableforwarding ${value:-unknown}"
+      [[ "$value" == yes ]]
+
+  - id: SSH-007
+    semantic_key: ssh.idle_session_timeout
+    title: SSH idle sessions have a finite timeout
+    category: ssh
+    severity: MEDIUM
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.1.7']
+    summary: Verify ClientAliveInterval is positive and the total timeout does not exceed fifteen minutes.
+    risk: Abandoned authenticated sessions can be reused by an unauthorized person.
+    remediation: Configure ClientAliveInterval and ClientAliveCountMax for a timeout of 900 seconds or less.
+    verification: Inspect both effective sshd client-alive values.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      read -r interval count < <(sshd -T 2>/dev/null | awk '$1=="clientaliveinterval" {i=$2} $1=="clientalivecountmax" {c=$2} END {print i,c}')
+      echo "clientaliveinterval=$interval clientalivecountmax=$count"
+      [[ "$interval" =~ ^[0-9]+$ && "$count" =~ ^[0-9]+$ ]] && (( interval > 0 && interval * count <= 900 ))
+
+  - id: SSH-008
+    semantic_key: ssh.weak_cryptography_absent
+    title: SSH weak cryptography is absent
+    category: ssh
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['5.1.6', '5.1.12', '5.1.16']
+    summary: Detect weak effective SSH ciphers, MACs, and key-exchange algorithms.
+    risk: Legacy cryptography may permit downgrade, collision, or confidentiality attacks.
+    remediation: Remove the reported algorithms while retaining a tested modern compatibility set.
+    verification: Review effective ciphers, MACs, and KEX algorithms with `sshd -T`.
+    audit: !unsafe |
+      command -v sshd >/dev/null 2>&1 || { echo "sshd is not installed."; exit 3; }
+      values="$(sshd -T 2>/dev/null | awk '$1~/^(ciphers|macs|kexalgorithms)$/ {print}')"; printf '%s\n' "$values"
+      weak='3des|arcfour|blowfish|cast128|cbc|hmac-md5|hmac-sha1([^0-9]|$)|diffie-hellman-group1-sha1|diffie-hellman-group14-sha1'
+      ! grep -Eqi "$weak" <<< "$values"
+
+  - id: NET-003
+    semantic_key: network.ip_forwarding_disabled
+    title: IP forwarding is disabled
+    category: network
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['3.3.1.1', '3.3.1.2', '3.3.1.3', '3.3.2.1', '3.3.2.2']
+    summary: Verify IPv4 and IPv6 forwarding are disabled for non-router hosts.
+    risk: Forwarding can unintentionally turn a server into a path between network zones.
+    remediation: Disable forwarding unless the selected host role explicitly requires routing.
+    verification: Read the forwarding sysctls.
+    audit: !unsafe |
+      [[ "${SH_PROFILE:-production_server}" != router ]] || { echo "IP forwarding is allowed by the router profile."; exit 3; }
+      bad=0
+      for key in net.ipv4.ip_forward net.ipv4.conf.all.forwarding net.ipv6.conf.all.forwarding; do value="$(sysctl -n "$key" 2>/dev/null || echo unavailable)"; echo "$key=$value"; [[ "$value" == 0 || "$value" == unavailable ]] || bad=1; done
+      exit "$bad"
+
+  - id: NET-004
+    semantic_key: network.icmp_redirects_disabled
+    title: ICMP redirects are disabled
+    category: network
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['3.3.1.8', '3.3.1.9', '3.3.1.10', '3.3.1.11', '3.3.2.3', '3.3.2.4']
+    summary: Verify IPv4 and IPv6 redirect acceptance is disabled.
+    risk: Redirects can influence host routing and facilitate traffic interception.
+    remediation: Disable redirect acceptance through approved persistent sysctl configuration.
+    verification: Read all/default accept_redirects and secure_redirects values.
+    audit: !unsafe |
+      bad=0
+      for key in net.ipv4.conf.all.accept_redirects net.ipv4.conf.default.accept_redirects net.ipv4.conf.all.secure_redirects net.ipv4.conf.default.secure_redirects net.ipv6.conf.all.accept_redirects net.ipv6.conf.default.accept_redirects; do value="$(sysctl -n "$key" 2>/dev/null || echo unavailable)"; echo "$key=$value"; [[ "$value" == 0 || "$value" == unavailable ]] || bad=1; done
+      exit "$bad"
+
+  - id: NET-005
+    semantic_key: network.source_routing_disabled
+    title: Source-routed packets are rejected
+    category: network
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['3.3.1.14', '3.3.1.15', '3.3.2.5', '3.3.2.6']
+    summary: Verify IPv4 and IPv6 source-route acceptance is disabled.
+    risk: Source routing lets a sender influence the network path and bypass expected controls.
+    remediation: Disable source-route acceptance persistently.
+    verification: Read all/default accept_source_route sysctls.
+    audit: !unsafe |
+      bad=0
+      for key in net.ipv4.conf.all.accept_source_route net.ipv4.conf.default.accept_source_route net.ipv6.conf.all.accept_source_route net.ipv6.conf.default.accept_source_route; do value="$(sysctl -n "$key" 2>/dev/null || echo unavailable)"; echo "$key=$value"; [[ "$value" == 0 || "$value" == unavailable ]] || bad=1; done
+      exit "$bad"
+
+  - id: NET-006
+    semantic_key: network.martian_packet_logging
+    title: Martian packet logging is enabled
+    category: network
+    severity: MEDIUM
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['3.3.1.16', '3.3.1.17']
+    summary: Verify invalid-source packets are logged on all and default interfaces.
+    risk: Without these records, spoofing and routing anomalies are harder to investigate.
+    remediation: Enable log_martians through approved persistent sysctl configuration.
+    verification: Read the all/default log_martians values.
+    audit: !unsafe |
+      bad=0
+      for key in net.ipv4.conf.all.log_martians net.ipv4.conf.default.log_martians; do value="$(sysctl -n "$key" 2>/dev/null || echo unavailable)"; echo "$key=$value"; [[ "$value" == 1 ]] || bad=1; done
+      exit "$bad"
+
+  - id: NET-007
+    semantic_key: network.host_firewall_active
+    title: A host firewall has an active ruleset
+    category: network
+    severity: CRITICAL
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['4.1.1', '4.1.2', '4.1.3', '4.1.4', '4.1.5']
+    summary: Detect an active nftables, firewalld, or UFW policy.
+    risk: Hosts without local filtering rely entirely on upstream controls and expose unintended listeners.
+    remediation: Enable one approved firewall manager and deploy a reviewed deny-by-default policy.
+    verification: Inspect the active firewall manager and complete ruleset.
+    audit: !unsafe |
+      if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state 2>/dev/null | grep -qx running; then firewall-cmd --state; exit 0; fi
+      if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi '^Status: active'; then ufw status; exit 0; fi
+      if command -v nft >/dev/null 2>&1 && nft list ruleset 2>/dev/null | grep -qE '^[[:space:]]*(table|chain) '; then nft list ruleset; exit 0; fi
+      echo "No active host firewall ruleset detected."; exit 1
+
+  - id: NET-008
+    semantic_key: network.wireless_interfaces_disabled
+    title: Wireless interfaces are disabled on servers
+    category: network
+    severity: MEDIUM
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['3.1.2']
+    summary: Detect enabled wireless interfaces that may bypass managed network paths.
+    risk: Wireless connectivity can create an unmonitored path into a server.
+    remediation: Disable the interface or document the approved use and network controls.
+    verification: Inspect wireless interfaces and their operational state.
+    audit: !unsafe |
+      findings=""
+      for path in /sys/class/net/*/wireless; do [[ -d "$path" ]] || continue; iface="$(basename "$(dirname "$path")")"; state="$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo unknown)"; [[ "$state" == down ]] || findings+="$iface state=$state"$'\n'; done
+      [[ -z "$findings" ]] || { printf '%s' "$findings"; exit 1; }
+      echo "No enabled wireless interfaces detected."
+
+  - id: NET-009
+    semantic_key: network.uncommon_protocol_modules
+    title: Uncommon network protocol modules are not loaded
+    category: network
+    severity: MEDIUM
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['3.2.1', '3.2.2', '3.2.3', '3.2.4']
+    summary: Detect loaded DCCP, SCTP, RDS, and TIPC modules.
+    risk: Unneeded protocol stacks add remotely reachable kernel attack surface.
+    remediation: Validate business need, unload safely, and deny loading through approved module policy.
+    verification: Review `lsmod` for the targeted modules.
+    audit: !unsafe |
+      findings="$(lsmod 2>/dev/null | awk 'NR>1 && $1~/^(dccp|sctp|rds|tipc)$/ {print}')"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "No targeted uncommon protocol modules are loaded."
+
+  - id: AUD-001
+    semantic_key: audit.service_active
+    title: Linux audit service is active
+    category: audit
+    severity: CRITICAL
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['6.2.1.2']
+    summary: Verify auditd is enabled and currently active.
+    risk: Security-relevant system activity may not be recorded without auditd.
+    remediation: Install, enable, and start auditd under an approved change.
+    verification: Run `systemctl is-enabled auditd` and `systemctl is-active auditd`.
+    audit: !unsafe |
+      command -v auditctl >/dev/null 2>&1 || { echo "audit tools are unavailable."; exit 3; }
+      enabled="$(systemctl is-enabled auditd 2>/dev/null || true)"; active="$(systemctl is-active auditd 2>/dev/null || true)"
+      echo "enabled=$enabled active=$active"; [[ "$enabled" == enabled && "$active" == active ]]
+
+  - id: AUD-002
+    semantic_key: audit.early_boot_enabled
+    title: Early-boot process auditing is enabled
+    category: audit
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['6.2.1.3']
+    summary: Verify the running kernel command line includes `audit=1`.
+    risk: Processes started before auditd may otherwise escape audit coverage.
+    remediation: Add `audit=1` to the approved bootloader kernel arguments and reboot in a maintenance window.
+    verification: Inspect `/proc/cmdline` after reboot.
+    audit: !unsafe |
+      value="$(cat /proc/cmdline)"; echo "$value"; grep -Eq '(^|[[:space:]])audit=1([[:space:]]|$)' <<< "$value"
+
+  - id: AUD-003
+    semantic_key: audit.loaded_rules_present
+    title: Audit rules are loaded
+    category: audit
+    severity: HIGH
+    summary: Verify the kernel audit subsystem has at least one active rule.
+    risk: An active daemon without rules provides little security-event coverage.
+    remediation: Deploy an approved audit ruleset and load it using the platform-supported process.
+    verification: Run `auditctl -l`.
+    audit: !unsafe |
+      command -v auditctl >/dev/null 2>&1 || { echo "auditctl is unavailable."; exit 3; }
+      rules="$(auditctl -l 2>&1)"; rc=$?; printf '%s\n' "$rules"; [[ $rc -eq 0 ]] || exit 2
+      [[ -n "$rules" && "$rules" != "No rules" ]]
+
+  - id: AUD-004
+    semantic_key: audit.configuration_immutable
+    title: Audit configuration is immutable
+    category: audit
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['6.2.3.36']
+    summary: Verify the loaded audit configuration is locked until reboot.
+    risk: A privileged attacker can remove audit coverage if runtime rules remain mutable.
+    remediation: End the approved audit ruleset with `-e 2` after testing.
+    verification: Run `auditctl -s` and confirm enabled is 2.
+    audit: !unsafe |
+      command -v auditctl >/dev/null 2>&1 || { echo "auditctl is unavailable."; exit 3; }
+      output="$(auditctl -s 2>&1)"; printf '%s\n' "$output"; awk '$1=="enabled" {found=1; ok=($2==2)} END {exit !(found&&ok)}' <<< "$output"
+
+  - id: LOG-002
+    semantic_key: logging.journal_persistence
+    title: System journal is persistent
+    category: logging
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['6.1.2.3']
+    summary: Verify journald uses persistent storage or a persistent journal directory exists.
+    risk: Volatile logs disappear at reboot and weaken incident reconstruction.
+    remediation: Configure persistent journald storage with adequate retention and permissions.
+    verification: Inspect the effective journald Storage setting and `/var/log/journal`.
+    audit: !unsafe |
+      value="$(systemd-analyze cat-config systemd/journald.conf 2>/dev/null | awk -F= '/^[[:space:]]*Storage=/ {gsub(/[[:space:]]/,"",$2); v=tolower($2)} END {print v}')"
+      echo "Storage=${value:-auto} journal_dir=$([[ -d /var/log/journal ]] && echo present || echo absent)"
+      [[ "$value" == persistent || -d /var/log/journal ]]
+
+  - id: LOG-003
+    semantic_key: logging.remote_forwarding
+    title: Logs are forwarded to a remote collector
+    category: logging
+    severity: MEDIUM
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['6.1.1.2.3', '6.1.2.6']
+    summary: Detect active journald upload or configured rsyslog remote forwarding.
+    risk: Local-only logs can be altered or destroyed with the compromised host.
+    remediation: Configure authenticated encrypted forwarding to the approved collector.
+    verification: Review journal-upload and rsyslog forwarding configuration.
+    audit: !unsafe |
+      if systemctl is-active --quiet systemd-journal-upload 2>/dev/null; then echo "systemd-journal-upload is active"; exit 0; fi
+      findings="$(grep -RHE '^[[:space:]]*[^#].*(@@|omfwd)' /etc/rsyslog.conf /etc/rsyslog.d 2>/dev/null || true)"
+      [[ -n "$findings" ]] && { printf '%s\n' "$findings"; exit 0; }
+      echo "No remote log forwarding configuration detected."; exit 1
+
+  - id: LOG-004
+    semantic_key: logging.sensitive_log_permissions
+    title: Sensitive authentication logs are protected
+    category: logging
+    severity: HIGH
+    summary: Verify existing authentication and security logs are not accessible to other users.
+    risk: Broad log access can expose account names, source addresses, and security events.
+    remediation: Restrict ownership and permissions according to the distribution logging model.
+    verification: Inspect the reported log files with `stat`.
+    audit: !unsafe |
+      files="$(find /var/log -maxdepth 1 -type f \( -name auth.log -o -name secure -o -name audit.log \) -print 2>/dev/null)"
+      [[ -n "$files" ]] || { echo "No targeted authentication logs found."; exit 3; }
+      bad=0
+      while IFS= read -r file; do mode="$(stat -Lc '%a' "$file")"; echo "$mode $file"; (( 8#$mode & 0007 )) && bad=1; done <<< "$files"
+      exit "$bad"
+
+  - id: TIME-001
+    semantic_key: time.synchronization_healthy
+    title: Network time synchronization is healthy
+    category: time
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['2.3.2.2', '2.3.3.3']
+    summary: Verify the host reports synchronized system time.
+    risk: Clock drift undermines authentication, certificates, and event correlation.
+    remediation: Configure one approved time client and reachable trusted sources.
+    verification: Run `timedatectl show -p NTPSynchronized` or the active client's status command.
+    audit: !unsafe |
+      command -v timedatectl >/dev/null 2>&1 || { echo "timedatectl is unavailable."; exit 3; }
+      value="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)"; echo "NTPSynchronized=${value:-unknown}"
+      [[ "$value" == yes ]]
+
+  - id: PKG-002
+    semantic_key: updates.pending_security_advisories
+    title: No known security updates are pending
+    category: updates
+    severity: CRITICAL
+    summary: Query the local package manager for available security updates without installing them.
+    risk: Published vulnerabilities remain exploitable until fixed packages are applied.
+    remediation: Review and deploy security updates through the approved patch process.
+    verification: Repeat the distribution security-update query after patching.
+    audit: !unsafe |
+      if command -v dnf >/dev/null 2>&1; then output="$(dnf -q updateinfo list --security updates 2>/dev/null || true)"; [[ -z "$output" ]] || { printf '%s\n' "$output"; exit 1; }; echo "No DNF security advisories pending."; exit 0; fi
+      if command -v ubuntu-security-status >/dev/null 2>&1; then output="$(ubuntu-security-status 2>/dev/null | grep -Ei '[0-9]+ update.*security|security update.*available' || true)"; [[ -z "$output" ]] || { printf '%s\n' "$output"; exit 1; }; echo "No Ubuntu security updates reported."; exit 0; fi
+      if command -v debsecan >/dev/null 2>&1; then output="$(debsecan --only-fixed 2>/dev/null || true)"; [[ -z "$output" ]] || { printf '%s\n' "$output"; exit 1; }; echo "debsecan reports no fixed vulnerabilities pending."; exit 0; fi
+      echo "No supported local security-advisory provider is installed."; exit 3
+
+  - id: PKG-003
+    semantic_key: updates.reboot_required
+    title: No security-related reboot is pending
+    category: updates
+    severity: HIGH
+    summary: Detect distribution indicators that a reboot is required.
+    risk: A patched package may leave a vulnerable kernel or library active until restart.
+    remediation: Schedule and complete the required reboot under change control.
+    verification: Re-run the distribution reboot-required check after restart.
+    audit: !unsafe |
+      [[ ! -e /var/run/reboot-required ]] || { cat /var/run/reboot-required /var/run/reboot-required.pkgs 2>/dev/null; exit 1; }
+      if command -v needs-restarting >/dev/null 2>&1; then needs-restarting -r >/dev/null 2>&1; rc=$?; [[ $rc -eq 0 ]] || { echo "needs-restarting reports a reboot is required"; exit 1; }; fi
+      echo "No reboot-required indicator found."
+
+  - id: PKG-004
+    semantic_key: updates.automatic_security_updates
+    title: Automatic security update mechanism is enabled
+    category: updates
+    severity: HIGH
+    summary: Detect an enabled unattended-upgrades or DNF automatic update mechanism.
+    risk: Systems can remain exposed longer when security patches depend entirely on manual action.
+    remediation: Enable the distribution-supported security update mechanism with an approved maintenance policy.
+    verification: Inspect the relevant service/timer and package configuration.
+    audit: !unsafe |
+      if systemctl is-enabled --quiet unattended-upgrades.service 2>/dev/null; then echo "unattended-upgrades is enabled"; exit 0; fi
+      if systemctl is-enabled --quiet dnf-automatic.timer 2>/dev/null; then echo "dnf-automatic.timer is enabled"; exit 0; fi
+      echo "No enabled automatic security update mechanism detected."; exit 1
+
+  - id: PKG-005
+    semantic_key: packages.installed_file_integrity
+    title: Installed package file integrity
+    category: packages
+    severity: HIGH
+    summary: Use the installed distribution verifier to identify altered package-managed files.
+    risk: Unexpected changes can indicate tampering, corruption, or unmanaged configuration drift.
+    remediation: Review each difference against approved configuration management before restoring packages.
+    verification: Repeat `debsums -s` or `rpm -Va` and resolve unexplained differences.
+    audit: !unsafe |
+      if command -v debsums >/dev/null 2>&1; then output="$(debsums -s 2>&1 || true)"; [[ -z "$output" ]] || { printf '%s\n' "$output"; exit 4; }; echo "debsums found no modified package files."; exit 0; fi
+      if command -v rpm >/dev/null 2>&1; then output="$(rpm -Va --nomtime --nosize 2>/dev/null | head -n 250)"; [[ -z "$output" ]] || { printf '%s\n' "$output"; exit 4; }; echo "RPM verification found no relevant differences."; exit 0; fi
+      echo "No supported package file verifier is available."; exit 3
+
+  - id: SVC-003
+    semantic_key: services.enabled_legacy_socket_units
+    title: Legacy remote-access socket units are disabled
+    category: services
+    severity: HIGH
+    summary: Detect enabled telnet, rsh, rexec, or tftp socket activation units.
+    risk: A dormant but enabled socket can expose a legacy service without an always-running daemon.
+    remediation: Disable the unit and remove the package unless an approved exception exists.
+    verification: Review enabled socket units in systemd.
+    audit: !unsafe |
+      findings="$(systemctl list-unit-files --type=socket --state=enabled --no-legend --no-pager 2>/dev/null | grep -Ei 'telnet|rsh|rlogin|rexec|tftp' || true)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "No targeted legacy socket units are enabled."
+
+  - id: SVC-004
+    semantic_key: services.debug_shell_absent
+    title: Emergency debug shell is not enabled
+    category: services
+    severity: CRITICAL
+    summary: Detect enabled debug-shell.service, which provides an unauthenticated root shell on a console.
+    risk: An enabled debug shell grants direct privileged access to anyone with console reachability.
+    remediation: Disable and mask debug-shell.service immediately after validating recovery access.
+    verification: Run `systemctl is-enabled debug-shell.service`.
+    audit: !unsafe |
+      state="$(systemctl is-enabled debug-shell.service 2>/dev/null || true)"; echo "debug-shell.service=${state:-not-found}"
+      [[ "$state" != enabled && "$state" != enabled-runtime ]]

@@ -13,7 +13,8 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - Complete manifest, checksum, and optional Ed25519 signature verification for offline bundles
 - New, persistent, and resolved finding comparison
 - React fleet dashboard, enrollment, token lifecycle management, host profiles, report history, comparisons, findings, and upload
-- Complete 354-control Debian 13 audit surface: 334 benchmark controls plus 20 supplemental security-health checks, with no host remediation
+- Deduplicated 358-control Debian 13 audit surface: 334 benchmark controls plus 24 non-overlapping portable Linux checks, with no host remediation
+- A 62-control portable Linux audit for Debian 12, Ubuntu 22.04/24.04, and RHEL-family 8/9
 - Versioned report JSON Schema
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
@@ -82,7 +83,7 @@ ansible-playbook -i inventory.ini playbooks/scan.yml \
 
 Delivery modes are `offline`, `upload`, and `upload_and_keep`. The last mode is the production default because it preserves a local artifact even after successful submission.
 
-The current executable control pack targets Debian 13 and performs read-only checks. Every report contains the complete 354-control catalog; controls outside the selected profile are emitted as `not_applicable` instead of disappearing. Select an LSA deployment profile (`production_server`, `minimal_server`, `router`, or `container`) or a direct benchmark profile (`level1_server`, `level2_server`, `level1_workstation`, or `level2_workstation`) with `lsa_profile`. Other declared platform families remain accepted by the report contract but do not yet have executable control packs.
+The scanner performs read-only checks on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9. Debian 13 combines the complete 334-control benchmark with 24 portable controls that are not already covered by the benchmark. The other supported systems run the 62-control portable catalog. On Debian 13, 38 semantic overlaps are explicitly suppressed so the same posture is never checked or reported twice. Select an LSA deployment profile (`production_server`, `minimal_server`, `router`, or `container`) or a direct benchmark profile (`level1_server`, `level2_server`, `level1_workstation`, or `level2_workstation`) with `lsa_profile`.
 
 GitHub Actions also executes the complete scanner inside an official Debian 13 container, validates the normalized report, verifies the portable bundle, and ingests it through the API.
 
