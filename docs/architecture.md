@@ -17,6 +17,12 @@ Linux Security Auditor is an ingestion-only platform. Customer-controlled Linux 
 
 The canonical contract lives in `packages/contracts/report-v1.schema.json`. A report ID is immutable and globally unique. Host UUIDs are platform-generated; a hash of `/etc/machine-id` provides a secondary binding signal without exposing the raw machine identifier.
 
+## Container topology
+
+The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API and PostgreSQL communicate only on an internal Docker network; PostgreSQL has no published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.
+
+Only the web gateway publishes a host port, bound to `127.0.0.1:8080` by default. Production internet exposure belongs at a host-level TLS proxy or load balancer. Platform state lives in the named PostgreSQL volume; containers themselves are disposable.
+
 ## Supported systems
 
 - Debian 12 and 13

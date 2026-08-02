@@ -91,6 +91,10 @@ def test_health(client):
     assert client.get("/health").json()["status"] == "ok"
 
 
+def test_readiness_checks_database(client):
+    assert client.get("/ready").json() == {"status": "ready", "database": "connected"}
+
+
 def test_ingest_and_read_fleet(client):
     payload = report_payload()
     response = client.post(

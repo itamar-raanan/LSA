@@ -1,12 +1,14 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from lsa.api import admin, auth, fleet, ingest
 from lsa.config import get_settings
-from lsa.database import Base, SessionLocal, engine
+from lsa.database import Base, SessionLocal, engine, get_db
 from lsa.seed import bootstrap
 
 
@@ -43,3 +45,9 @@ app.include_router(fleet.router, prefix="/api/v1")
 @app.get("/health", tags=["operations"])
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "lsa-api", "version": "0.1.0"}
+
+
+@app.get("/ready", tags=["operations"])
+def readiness(db: Session = Depends(get_db)) -> dict[str, str]:
+    db.execute(text("SELECT 1"))
+    return {"status": "ready", "database": "connected"}

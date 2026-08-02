@@ -1,66 +1,80 @@
+name: lsa
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: lsa
-      POSTGRES_USER: lsa
-      POSTGRES_PASSWORD: lsa
+      POSTGRES_DB: ${LSA_POSTGRES_DB:-lsa}
+      POSTGRES_USER: ${LSA_POSTGRES_USER:-lsa}
+      POSTGRES_PASSWORD: ${LSA_POSTGRES_PASSWORD:?Set LSA_POSTGRES_PASSWORD in deploy/.env}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lsa"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 10s
     volumes:
       - lsa-postgres:/var/lib/postgresql/data
-
-  redis:
-    image: redis:8-alpine
-    command: redis-server --save 60 1 --loglevel warning
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: lsa
-      MINIO_ROOT_PASSWORD: lsa-development-only
-    ports:
-      - "9001:9001"
-    volumes:
-      - lsa-artifacts:/data
+    networks:
+      - backend
+    logging: *default-logging
 
   api:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
     environment:
-      LSA_DATABASE_URL: postgresql+psycopg://lsa:lsa@postgres:5432/lsa
-      LSA_CORS_ORIGINS: '["http://localhost:5173"]'
-      LSA_SESSION_SECRET: development-session-secret-change-in-production
-      LSA_BOOTSTRAP_PASSWORD: lsa-dev-password
-      LSA_SEED_DEMO: "true"
-    ports:
-      - "8000:8000"
+      LSA_ENVIRONMENT: production
+      LSA_DATABASE_URL: postgresql+psycopg://${LSA_POSTGRES_USER:-lsa}:${LSA_POSTGRES_PASSWORD}@postgres:5432/${LSA_POSTGRES_DB:-lsa}
+      LSA_CORS_ORIGINS: '[]'
+      LSA_SESSION_SECRET: ${LSA_SESSION_SECRET:?Set LSA_SESSION_SECRET in deploy/.env}
+      LSA_BOOTSTRAP_EMAIL: ${LSA_BOOTSTRAP_EMAIL:-admin@lsa.local}
+      LSA_BOOTSTRAP_PASSWORD: ${LSA_BOOTSTRAP_PASSWORD:?Set LSA_BOOTSTRAP_PASSWORD in deploy/.env}
+      LSA_SEED_DEMO: ${LSA_SEED_DEMO:-false}
+      LSA_REQUIRE_SIGNED_BUNDLES: ${LSA_REQUIRE_SIGNED_BUNDLES:-false}
+      LSA_WEB_CONCURRENCY: ${LSA_WEB_CONCURRENCY:-2}
+      LSA_MAX_UPLOAD_BYTES: ${LSA_MAX_UPLOAD_BYTES:-26214400}
     depends_on:
       postgres:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    networks:
+      - backend
+    logging: *default-logging
 
   web:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
-    environment:
-      VITE_API_URL: http://localhost:8000/api/v1
-    ports:
-      - "5173:5173"
+      args:
+        VITE_API_URL: /api/v1
+    restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    ports:
+      - "${LSA_HTTP_BIND:-127.0.0.1}:${LSA_HTTP_PORT:-8080}:8080"
+    networks:
+      - edge
+      - backend
+    logging: *default-logging
 
 volumes:
   lsa-postgres:
-  lsa-artifacts:
 
+networks:
+  edge:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
