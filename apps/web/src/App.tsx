@@ -7,6 +7,11 @@ import { HostDetailPage } from './pages/HostDetailPage'
 import { HostsPage } from './pages/HostsPage'
 import { LoginPage } from './pages/LoginPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { AuthenticationSettingsPage } from './pages/settings/AuthenticationSettingsPage'
+import { CertificatesSettingsPage } from './pages/settings/CertificatesSettingsPage'
+import { SettingsLayout } from './pages/settings/SettingsLayout'
+import { SettingsOverviewPage } from './pages/settings/SettingsOverviewPage'
+import { UsersSettingsPage } from './pages/settings/UsersSettingsPage'
 import { SigningKeysPage } from './pages/SigningKeysPage'
 import { TokensPage } from './pages/TokensPage'
 
@@ -25,8 +30,16 @@ export default function App() {
         <Route path="hosts/:hostId" element={<HostDetailPage />} />
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
-        <Route path="tokens" element={<TokensPage />} />
-        <Route path="signing-keys" element={<SigningKeysPage />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<SettingsOverviewPage />} />
+          <Route path="users" element={<UsersSettingsPage />} />
+          <Route path="authentication" element={<AuthenticationSettingsPage />} />
+          <Route path="tokens" element={<TokensPage />} />
+          <Route path="signing-keys" element={<SigningKeysPage />} />
+          <Route path="certificates" element={<CertificatesSettingsPage />} />
+        </Route>
+        <Route path="tokens" element={<Navigate to="/settings/tokens" replace />} />
+        <Route path="signing-keys" element={<Navigate to="/settings/signing-keys" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

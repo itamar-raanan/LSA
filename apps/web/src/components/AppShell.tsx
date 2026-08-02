@@ -1,9 +1,8 @@
 import {
   Bell,
   ChartDonut,
-  Certificate,
+  GearSix,
   HardDrives,
-  Key,
   ListMagnifyingGlass,
   SignOut,
   UploadSimple,
@@ -17,8 +16,7 @@ const navigation = [
   { to: '/hosts', label: 'Hosts', icon: HardDrives, adminOnly: false },
   { to: '/findings', label: 'Findings', icon: ListMagnifyingGlass, adminOnly: false },
   { to: '/reports', label: 'Reports', icon: UploadSimple, adminOnly: false },
-  { to: '/tokens', label: 'Tokens', icon: Key, adminOnly: true },
-  { to: '/signing-keys', label: 'Signing keys', icon: Certificate, adminOnly: true },
+  { to: '/settings', label: 'Settings', icon: GearSix, adminOnly: true },
 ]
 
 export function AppShell() {
