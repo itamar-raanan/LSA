@@ -6,6 +6,7 @@ import {
   FolderSimple,
   Key,
   MagnifyingGlass,
+  Play,
   Plus,
   ShieldCheck,
   SlidersHorizontal,
@@ -18,15 +19,29 @@ import { AgentDownloadPanel } from '../../components/AgentDownloadPanel'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../../components/StatePanel'
 import { useApi } from '../../hooks/useApi'
-import type { AgentGroup, AgentPolicy, ControlCatalogItem, LinuxAgent, PolicyMode } from '../../types'
+import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, LinuxAgent, PolicyMode } from '../../types'
 
 const modes: PolicyMode[] = ['audit', 'manual', 'remediate', 'disabled']
 type WorkspaceTab = 'hosts' | 'policy'
+type AgentStatus = 'online' | 'stale' | 'offline' | 'never' | 'revoked'
 
-function AgentTable({ agents, groups, submit }: {
+function agentStatus(agent: LinuxAgent): AgentStatus {
+  if (agent.revoked_at) return 'revoked'
+  if (!agent.last_seen_at) return 'never'
+  const age = Date.now() - new Date(agent.last_seen_at).getTime()
+  if (age <= 5 * 60_000) return 'online'
+  if (age <= 24 * 60 * 60_000) return 'stale'
+  return 'offline'
+}
+
+function AgentTable({ agents, groups, packageVersion, submit, selected, toggle, toggleAll }: {
   agents: LinuxAgent[]
   groups: AgentGroup[]
+  packageVersion?: string
   submit: (action: () => Promise<unknown>) => Promise<void>
+  selected: Set<string>
+  toggle: (id: string) => void
+  toggleAll: () => void
 }) {
   const [confirming, setConfirming] = useState<string | null>(null)
   if (!agents.length) {
@@ -35,12 +50,14 @@ function AgentTable({ agents, groups, submit }: {
 
   return <div className="overflow-x-auto">
     <table className="data-table min-w-[920px]">
-      <thead><tr><th>Host</th><th>Group</th><th>Effective policy</th><th>Last heartbeat</th><th>Identity</th><th /></tr></thead>
+      <thead><tr><th><input type="checkbox" aria-label="Select all visible agents" checked={agents.length > 0 && agents.every(agent => selected.has(agent.id))} onChange={toggleAll} /></th><th>Host</th><th>Status</th><th>Group</th><th>Effective policy</th><th>Last heartbeat</th><th /></tr></thead>
       <tbody>{agents.map(agent => <tr key={agent.id}>
+        <td><input type="checkbox" aria-label={`Select ${agent.hostname}`} checked={selected.has(agent.id)} disabled={!!agent.revoked_at} onChange={() => toggle(agent.id)} /></td>
         <td>
           <span className="font-medium text-stone-200">{agent.hostname}</span>
-          <span className="table-subtitle">agent {agent.agent_version} · {agent.capabilities.join(', ') || 'no capabilities'}</span>
+          <span className="table-subtitle">agent {agent.agent_version} · {packageVersion && agent.agent_version !== packageVersion ? `upgrade ${packageVersion} available` : agent.capabilities.join(', ') || 'no capabilities'}</span>
         </td>
+        <td><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">{agent.latest_task_status ? `audit ${agent.latest_task_status}` : 'no requested audit'}</span></td>
         <td>
           <select
             aria-label={`Group for ${agent.hostname}`}
@@ -51,8 +68,7 @@ function AgentTable({ agents, groups, submit }: {
           >{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select>
         </td>
         <td>{agent.policy_name}<span className="table-subtitle">v{agent.policy_version} · reported v{agent.last_policy_version ?? '—'}</span></td>
-        <td>{agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : 'Never'}<span className="table-subtitle">{agent.revoked_at ? 'Revoked' : 'Outbound HTTPS'}</span></td>
-        <td><span className="font-mono text-[10px] text-stone-500">{agent.fingerprint.slice(0, 16)}…</span></td>
+        <td>{agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : 'Never'}<span className="table-subtitle">{agent.last_scan_at ? `scan ${new Date(agent.last_scan_at).toLocaleString()}` : 'never scanned'}</span></td>
         <td>{confirming === agent.id ? <div className="flex justify-end gap-2">
           <button className="button-secondary min-h-9 px-3" onClick={() => setConfirming(null)}>Cancel</button>
           <button className="button-secondary min-h-9 border-rose-900/60 px-3 text-rose-300" onClick={() => void submit(() => api.revokeAgent(agent.id)).finally(() => setConfirming(null))}>Confirm</button>
@@ -107,7 +123,7 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
 }
 
 export function AgentsSettingsPage() {
-  const { data, error, loading, reload } = useApi(async () => {
+  const { data, error, loading, reload, refresh } = useApi(async () => {
     const [agents, groups, policies, controls, enrollmentTokens, packages] = await Promise.all([
       api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(),
     ])
@@ -116,6 +132,12 @@ export function AgentsSettingsPage() {
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('hosts')
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | AgentStatus>('all')
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set())
+  const [bulkGroupId, setBulkGroupId] = useState('')
+  const [confirmBulkRevoke, setConfirmBulkRevoke] = useState(false)
+  const [policyVersions, setPolicyVersions] = useState<AgentPolicyVersion[]>([])
+  const [historyError, setHistoryError] = useState('')
   const [showGroup, setShowGroup] = useState(false)
   const [showPolicy, setShowPolicy] = useState(false)
   const [showEnrollment, setShowEnrollment] = useState(false)
@@ -148,6 +170,29 @@ export function AgentsSettingsPage() {
     setDraftDefaultMode(assignedPolicy.default_mode)
     setDraftSchedule(Number(assignedPolicy.settings.schedule_minutes ?? 60))
     setSelectedCategory('overview')
+  }, [assignedPolicy])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => void refresh(), 30_000)
+    return () => window.clearInterval(timer)
+  }, [refresh])
+
+  useEffect(() => {
+    setSelectedAgents(new Set())
+    setConfirmBulkRevoke(false)
+  }, [selectedGroupId])
+
+  useEffect(() => {
+    if (!assignedPolicy) {
+      setPolicyVersions([])
+      return
+    }
+    let active = true
+    setHistoryError('')
+    api.agentPolicyVersions(assignedPolicy.id)
+      .then(versions => { if (active) setPolicyVersions(versions) })
+      .catch(caught => { if (active) setHistoryError(caught instanceof Error ? caught.message : 'Unable to load policy history') })
+    return () => { active = false }
   }, [assignedPolicy])
 
   async function submit(action: () => Promise<unknown>, close?: () => void) {
@@ -249,7 +294,7 @@ export function AgentsSettingsPage() {
   if (error || !data) return <ErrorState message={error ?? 'Unable to load agents'} retry={reload} />
 
   const scopedAgents = data.agents.filter(agent => selectedGroupId === 'all' || agent.group_id === selectedGroupId)
-  const visibleAgents = scopedAgents.filter(agent => agent.hostname.toLowerCase().includes(search.trim().toLowerCase()))
+  const visibleAgents = scopedAgents.filter(agent => agent.hostname.toLowerCase().includes(search.trim().toLowerCase()) && (statusFilter === 'all' || agentStatus(agent) === statusFilter))
   const activeCount = scopedAgents.filter(agent => !agent.revoked_at).length
   const categoryControls = selectedCategory === 'overview' ? [] : categories.find(([category]) => category === selectedCategory)?.[1] ?? []
 
@@ -323,9 +368,15 @@ export function AgentsSettingsPage() {
           {activeTab === 'hosts' && <div>
             <div className="flex flex-col gap-3 border-b border-stone-800 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
               <div className="relative w-full max-w-md"><MagnifyingGlass size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-600" /><input className="search-input" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search hostname" aria-label="Search agents" /></div>
-              <span className="font-mono text-[10px] text-stone-600">{visibleAgents.length} of {scopedAgents.length} hosts</span>
+              <div className="flex items-center gap-3"><select className="select-input min-h-9" aria-label="Filter agent status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | AgentStatus)}><option value="all">All statuses</option><option value="online">Online</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="never">Never connected</option><option value="revoked">Revoked</option></select><span className="font-mono text-[10px] text-stone-600">{visibleAgents.length} of {scopedAgents.length} hosts</span></div>
             </div>
-            <AgentTable agents={visibleAgents} groups={data.groups} submit={action => submit(action)} />
+            {selectedAgents.size > 0 && <div className="flex flex-col gap-3 border-b border-emerald-900/30 bg-emerald-950/10 px-5 py-4 sm:px-7 xl:flex-row xl:items-center">
+              <strong className="mr-auto text-xs text-emerald-200">{selectedAgents.size} selected</strong>
+              <button className="button-secondary min-h-9" disabled={saving} onClick={() => void submit(() => api.runAgentAudits([...selectedAgents])).then(() => setSelectedAgents(new Set()))}><Play size={14} /> Run audit now</button>
+              <div className="flex gap-2"><select className="select-input min-h-9" aria-label="Bulk destination group" value={bulkGroupId} onChange={event => setBulkGroupId(event.target.value)}><option value="">Move to group…</option>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button-secondary min-h-9" disabled={saving || !bulkGroupId} onClick={() => void submit(() => api.bulkAssignAgentGroup([...selectedAgents], bulkGroupId)).then(() => { setSelectedAgents(new Set()); setBulkGroupId('') })}>Apply</button></div>
+              {confirmBulkRevoke ? <div className="flex gap-2"><button className="button-secondary min-h-9" onClick={() => setConfirmBulkRevoke(false)}>Cancel</button><button className="button-secondary min-h-9 border-rose-900/60 text-rose-300" disabled={saving} onClick={() => void submit(() => api.bulkRevokeAgents([...selectedAgents])).then(() => { setSelectedAgents(new Set()); setConfirmBulkRevoke(false) })}>Confirm revoke</button></div> : <button className="button-secondary min-h-9 text-rose-300" onClick={() => setConfirmBulkRevoke(true)}>Revoke selected</button>}
+            </div>}
+            <AgentTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} toggle={id => setSelectedAgents(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} toggleAll={() => setSelectedAgents(current => { const selectable = visibleAgents.filter(agent => !agent.revoked_at); const allSelected = selectable.length > 0 && selectable.every(agent => current.has(agent.id)); const next = new Set(current); selectable.forEach(agent => allSelected ? next.delete(agent.id) : next.add(agent.id)); return next })} />
           </div>}
 
           {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] md:grid-cols-[210px_minmax(0,1fr)]">
@@ -373,6 +424,14 @@ export function AgentsSettingsPage() {
                   <label className="form-field">Schedule<select name="schedule_minutes" className="select-input w-full" defaultValue="60"><option value="15">15 minutes</option><option value="60">Hourly</option><option value="1440">Daily</option></select></label>
                   <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="button-secondary" onClick={() => setShowPolicy(false)}>Cancel</button><button className="button-primary" disabled={saving}>Create and apply</button></div>
                 </form>}
+
+                <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
+                  <div className="flex items-end justify-between gap-4"><div><p className="section-label">Version history</p><p className="mt-2 text-xs text-stone-500">Every publication is immutable. Restoring publishes a new version from the selected snapshot.</p></div><span className="font-mono text-[10px] text-stone-600">{policyVersions.length} versions</span></div>
+                  {historyError ? <p className="mt-4 text-xs text-rose-300">{historyError}</p> : <div className="mt-4 divide-y divide-stone-800 border-y border-stone-800">{policyVersions.map(version => <div key={version.version} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
+                    <div className="min-w-0 flex-1"><strong className="text-xs text-stone-300">Version {version.version}{version.version === assignedPolicy.version ? ' · current' : ''}</strong><span className="table-subtitle">{version.default_mode} default · {Object.keys(version.control_modes).length} overrides · {version.created_by_name ?? 'system'} · {new Date(version.created_at).toLocaleString()}</span></div>
+                    {version.version !== assignedPolicy.version && <button className="button-secondary min-h-9 shrink-0" disabled={saving || assignedPolicy.assigned_groups > 1} onClick={() => void submit(() => api.restoreAgentPolicy(assignedPolicy.id, version.version))}>Restore as v{assignedPolicy.version + 1}</button>}
+                  </div>)}</div>}
+                </div>
 
                 <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-7">
                   <span className="flex items-center gap-2 text-xs text-stone-600"><CheckCircle size={16} /> Saving publishes immutable version {assignedPolicy.version + 1}</span>

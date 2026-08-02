@@ -11,7 +11,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from lsa.models import (
     AgentGroup,
     AgentPolicy,
     AgentPolicyVersion,
+    AgentTask,
     AuditEvent,
     Finding,
     Host,
@@ -35,6 +36,9 @@ from lsa.models import (
 )
 from lsa.schemas import (
     AgentEffectivePolicyResponse,
+    AgentBulkGroupAssignment,
+    AgentBulkResult,
+    AgentBulkSelection,
     AgentEnrollmentRequest,
     AgentEnrollmentResponse,
     AgentEnrollmentTokenCreate,
@@ -48,7 +52,11 @@ from lsa.schemas import (
     AgentHeartbeatResponse,
     AgentPolicyCreate,
     AgentPolicyResponse,
+    AgentPolicyRestoreRequest,
+    AgentPolicyVersionResponse,
     AgentPolicyUpdate,
+    AgentTaskCompletion,
+    AgentTaskResponse,
     ControlCatalogItem,
     LinuxAgentResponse,
 )
@@ -57,6 +65,7 @@ from lsa.security import hash_ingestion_token
 
 router = APIRouter(tags=["agents"])
 AGENT_CLOCK_SKEW_SECONDS = 300
+AGENT_TASK_LEASE_SECONDS = 3600
 
 
 @dataclass(frozen=True)
@@ -179,6 +188,11 @@ def _agent_response(db: Session, agent: LinuxAgent) -> LinuxAgentResponse:
     if policy is None:
         raise HTTPException(status_code=409, detail="Assigned policy no longer exists")
     version = _latest_policy_version(db, policy.id)
+    latest_task = db.scalar(
+        select(AgentTask)
+        .where(AgentTask.agent_id == agent.id)
+        .order_by(AgentTask.created_at.desc())
+    )
     return LinuxAgentResponse(
         id=agent.id,
         host_id=agent.host_id,
@@ -192,6 +206,9 @@ def _agent_response(db: Session, agent: LinuxAgent) -> LinuxAgentResponse:
         fingerprint=agent.fingerprint,
         last_seen_at=agent.last_seen_at,
         last_policy_version=agent.last_policy_version,
+        last_scan_at=host.last_scan_at,
+        latest_task_status=latest_task.status if latest_task else None,
+        latest_task_created_at=latest_task.created_at if latest_task else None,
         revoked_at=agent.revoked_at,
         created_at=agent.created_at,
     )
@@ -288,6 +305,52 @@ def update_policy(policy_id: str, request: AgentPolicyUpdate, user: User = Depen
     return _policy_response(db, policy)
 
 
+@router.get("/agent-policies/{policy_id}/versions", response_model=list[AgentPolicyVersionResponse])
+def list_policy_versions(policy_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_admin(user)
+    _require_policy(db, user.tenant_id, policy_id)
+    versions = db.scalars(
+        select(AgentPolicyVersion)
+        .where(AgentPolicyVersion.policy_id == policy_id, AgentPolicyVersion.tenant_id == user.tenant_id)
+        .order_by(AgentPolicyVersion.version.desc())
+    ).all()
+    return [
+        AgentPolicyVersionResponse(
+            version=item.version,
+            default_mode=item.default_mode.value,
+            control_modes=item.control_modes or {},
+            settings=item.settings or {},
+            created_by_name=(db.get(User, item.created_by).display_name if item.created_by and db.get(User, item.created_by) else None),
+            created_at=item.created_at,
+        )
+        for item in versions
+    ]
+
+
+@router.post("/agent-policies/{policy_id}/restore", response_model=AgentPolicyResponse)
+def restore_policy_version(policy_id: str, request: AgentPolicyRestoreRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_admin(user)
+    policy = _require_policy(db, user.tenant_id, policy_id)
+    source = db.scalar(select(AgentPolicyVersion).where(AgentPolicyVersion.policy_id == policy.id, AgentPolicyVersion.version == request.version))
+    if source is None:
+        raise HTTPException(status_code=404, detail="Policy version not found")
+    latest = _latest_policy_version(db, policy.id)
+    restored = AgentPolicyVersion(
+        tenant_id=user.tenant_id,
+        policy_id=policy.id,
+        version=latest.version + 1,
+        default_mode=source.default_mode,
+        control_modes=dict(source.control_modes or {}),
+        settings=dict(source.settings or {}),
+        created_by=user.id,
+    )
+    policy.updated_at = now_utc()
+    db.add(restored)
+    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_policy.version_restored", target_type="agent_policy", target_id=policy.id, details={"source_version": source.version, "version": restored.version, "enforcement_enabled": False}))
+    db.commit()
+    return _policy_response(db, policy)
+
+
 @router.get("/agent-groups", response_model=list[AgentGroupResponse])
 def list_groups(user: User = Depends(current_user), db: Session = Depends(get_db)):
     require_admin(user)
@@ -340,6 +403,76 @@ def list_agents(user: User = Depends(current_user), db: Session = Depends(get_db
     return [_agent_response(db, agent) for agent in agents]
 
 
+def _selected_agents(db: Session, tenant_id: str, agent_ids: list[str], *, active_only: bool = True) -> list[LinuxAgent]:
+    unique_ids = list(dict.fromkeys(agent_ids))
+    agents = db.scalars(
+        select(LinuxAgent)
+        .where(LinuxAgent.tenant_id == tenant_id, LinuxAgent.id.in_(unique_ids))
+        .with_for_update()
+    ).all()
+    if len(agents) != len(unique_ids):
+        raise HTTPException(status_code=404, detail="One or more agents were not found")
+    if active_only and any(agent.revoked_at is not None for agent in agents):
+        raise HTTPException(status_code=409, detail="Revoked agents cannot be changed")
+    return agents
+
+
+@router.post("/agents/actions/run-audit", response_model=list[AgentTaskResponse], status_code=202)
+def queue_agent_audits(request: AgentBulkSelection, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_admin(user)
+    agents = _selected_agents(db, user.tenant_id, request.agent_ids)
+    tasks: list[AgentTask] = []
+    for agent in agents:
+        existing = db.scalar(select(AgentTask).where(AgentTask.agent_id == agent.id, AgentTask.status.in_(["queued", "dispatched"])).order_by(AgentTask.created_at.desc()))
+        if existing:
+            tasks.append(existing)
+            continue
+        task = AgentTask(tenant_id=user.tenant_id, agent_id=agent.id, task_type="audit", status="queued", requested_by=user.id)
+        db.add(task)
+        tasks.append(task)
+    db.flush()
+    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.audit_queued", target_type="linux_agent", target_id="bulk", details={"agent_ids": [agent.id for agent in agents], "task_ids": [task.id for task in tasks]}))
+    db.commit()
+    return tasks
+
+
+@router.post("/agents/actions/assign-group", response_model=AgentBulkResult)
+def bulk_assign_agent_group(request: AgentBulkGroupAssignment, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_admin(user)
+    _require_group(db, user.tenant_id, request.group_id)
+    agents = _selected_agents(db, user.tenant_id, request.agent_ids)
+    for agent in agents:
+        agent.group_id = request.group_id
+    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.group_bulk_assigned", target_type="agent_group", target_id=request.group_id, details={"agent_ids": [agent.id for agent in agents]}))
+    db.commit()
+    return AgentBulkResult(affected=len(agents))
+
+
+def _revoke_agent_credentials(db: Session, agent: LinuxAgent, revoked_at) -> None:
+    agent.revoked_at = revoked_at
+    token = db.get(IngestionToken, agent.ingestion_token_id)
+    key = db.get(SigningKey, agent.signing_key_id)
+    if token is not None:
+        token.revoked_at = revoked_at
+    if key is not None:
+        key.revoked_at = revoked_at
+    for task in db.scalars(select(AgentTask).where(AgentTask.agent_id == agent.id, AgentTask.status.in_(["queued", "dispatched"]))).all():
+        task.status = "cancelled"
+        task.completed_at = revoked_at
+
+
+@router.post("/agents/actions/revoke", response_model=AgentBulkResult)
+def bulk_revoke_agents(request: AgentBulkSelection, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_admin(user)
+    agents = _selected_agents(db, user.tenant_id, request.agent_ids)
+    revoked_at = now_utc()
+    for agent in agents:
+        _revoke_agent_credentials(db, agent, revoked_at)
+    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.bulk_revoked", target_type="linux_agent", target_id="bulk", details={"agent_ids": [agent.id for agent in agents]}))
+    db.commit()
+    return AgentBulkResult(affected=len(agents))
+
+
 @router.patch("/agents/{agent_id}/group", response_model=LinuxAgentResponse)
 def assign_agent_group(agent_id: str, request: AgentGroupAssignment, user: User = Depends(current_user), db: Session = Depends(get_db)):
     require_admin(user)
@@ -363,13 +496,7 @@ def revoke_agent(agent_id: str, user: User = Depends(current_user), db: Session 
     if agent.revoked_at is not None:
         raise HTTPException(status_code=409, detail="Agent is already revoked")
     revoked_at = now_utc()
-    agent.revoked_at = revoked_at
-    token = db.get(IngestionToken, agent.ingestion_token_id)
-    key = db.get(SigningKey, agent.signing_key_id)
-    if token is not None:
-        token.revoked_at = revoked_at
-    if key is not None:
-        key.revoked_at = revoked_at
+    _revoke_agent_credentials(db, agent, revoked_at)
     db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.revoked", target_type="linux_agent", target_id=agent.id, details={"host_id": agent.host_id}))
     db.commit()
     return Response(status_code=204)
@@ -539,3 +666,45 @@ def agent_heartbeat(request: AgentHeartbeatRequest, principal: AgentPrincipal = 
     agent.last_policy_version = request.policy_version
     db.commit()
     return AgentHeartbeatResponse(accepted_at=agent.last_seen_at, policy_changed=request.policy_version != policy.policy_version, policy_version=policy.policy_version)
+
+
+@router.get("/agent/tasks/next", response_model=AgentTaskResponse | None)
+def next_agent_task(principal: AgentPrincipal = Depends(signed_agent_principal), db: Session = Depends(get_db)):
+    agent = principal.agent
+    stale_lease = now_utc() - timedelta(seconds=AGENT_TASK_LEASE_SECONDS)
+    task = db.scalar(
+        select(AgentTask)
+        .where(
+            AgentTask.agent_id == agent.id,
+            AgentTask.tenant_id == agent.tenant_id,
+            or_(
+                AgentTask.status == "queued",
+                (AgentTask.status == "dispatched") & (AgentTask.dispatched_at < stale_lease),
+            ),
+        )
+        .order_by(AgentTask.created_at)
+        .with_for_update()
+    )
+    agent.last_seen_at = now_utc()
+    if task is not None:
+        task.status = "dispatched"
+        task.dispatched_at = now_utc()
+    db.commit()
+    return task
+
+
+@router.post("/agent/tasks/{task_id}/complete", response_model=AgentTaskResponse)
+def complete_agent_task(task_id: str, request: AgentTaskCompletion, principal: AgentPrincipal = Depends(signed_agent_principal), db: Session = Depends(get_db)):
+    task = db.get(AgentTask, task_id)
+    if task is None or task.agent_id != principal.agent.id or task.tenant_id != principal.agent.tenant_id:
+        raise HTTPException(status_code=404, detail="Agent task not found")
+    if task.status != "dispatched":
+        raise HTTPException(status_code=409, detail="Agent task is not in progress")
+    task.status = request.status
+    task.result = request.result
+    task.error = request.error
+    task.completed_at = now_utc()
+    principal.agent.last_seen_at = task.completed_at
+    db.add(AuditEvent(tenant_id=task.tenant_id, actor_type="agent", actor_id=principal.agent.id, action=f"agent.audit_{request.status}", target_type="agent_task", target_id=task.id, details={"error": request.error}))
+    db.commit()
+    return task

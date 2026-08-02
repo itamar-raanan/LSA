@@ -476,12 +476,58 @@ class LinuxAgentResponse(BaseModel):
     fingerprint: str
     last_seen_at: datetime | None
     last_policy_version: int | None
+    last_scan_at: datetime | None
+    latest_task_status: str | None
+    latest_task_created_at: datetime | None
     revoked_at: datetime | None
     created_at: datetime
 
 
 class AgentGroupAssignment(BaseModel):
     group_id: str
+
+
+class AgentBulkSelection(BaseModel):
+    agent_ids: list[str] = Field(min_length=1, max_length=1000)
+
+
+class AgentBulkGroupAssignment(AgentBulkSelection):
+    group_id: str
+
+
+class AgentBulkResult(BaseModel):
+    affected: int
+
+
+class AgentTaskResponse(BaseModel):
+    id: str
+    agent_id: str
+    task_type: Literal["audit"]
+    status: Literal["queued", "dispatched", "completed", "failed", "cancelled"]
+    result: dict[str, object]
+    error: str | None
+    created_at: datetime
+    dispatched_at: datetime | None
+    completed_at: datetime | None
+
+
+class AgentTaskCompletion(BaseModel):
+    status: Literal["completed", "failed"]
+    result: dict[str, object] = Field(default_factory=dict)
+    error: str | None = Field(default=None, max_length=4000)
+
+
+class AgentPolicyVersionResponse(BaseModel):
+    version: int
+    default_mode: PolicyModeValue
+    control_modes: dict[str, PolicyModeValue]
+    settings: dict[str, object]
+    created_by_name: str | None
+    created_at: datetime
+
+
+class AgentPolicyRestoreRequest(BaseModel):
+    version: int = Field(ge=1)
 
 
 class ControlCatalogItem(BaseModel):

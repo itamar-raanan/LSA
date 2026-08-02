@@ -23,6 +23,13 @@ vi.mock('../api/client', () => ({
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
     agentPackages: vi.fn().mockResolvedValue([{ id: 'linux-universal', version: '0.1.0', filename: 'lsa-agent-0.1.0-linux-universal.tar.gz', content_type: 'application/gzip', operating_system: 'Linux (Debian, Ubuntu, RHEL)', architecture: 'x86_64 / arm64', size_bytes: 204800, sha256: 'a'.repeat(64) }]),
     downloadAgentPackage: vi.fn(),
+    agentPolicyVersions: vi.fn().mockResolvedValue([
+      { version: 1, default_mode: 'audit', control_modes: {}, settings: { schedule_minutes: 60 }, created_by_name: 'Security Administrator', created_at: '2026-01-01T00:00:00Z' },
+    ]),
+    restoreAgentPolicy: vi.fn(),
+    runAgentAudits: vi.fn(),
+    bulkAssignAgentGroup: vi.fn(),
+    bulkRevokeAgents: vi.fn(),
   },
 }))
 

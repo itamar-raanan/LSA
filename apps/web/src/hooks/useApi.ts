@@ -5,8 +5,8 @@ export function useApi<T>(loader: () => Promise<T>, dependencies: unknown[] = []
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     setError(null)
     try {
       setData(await loader())
@@ -23,6 +23,8 @@ export function useApi<T>(loader: () => Promise<T>, dependencies: unknown[] = []
     void load()
   }, [load])
 
-  return { data, error, loading, reload: load }
-}
+  const reload = useCallback(() => load(true), [load])
+  const refresh = useCallback(() => load(false), [load])
 
+  return { data, error, loading, reload, refresh }
+}

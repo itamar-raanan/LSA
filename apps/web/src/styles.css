@@ -51,6 +51,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .settings-nav-item small { display: none; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: #5f645f; }
 .settings-nav-item-active { border-color: rgba(104,160,127,.14); color: #dff6e8; background: #202a23; box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
 .settings-state { display: inline-flex; width: fit-content; align-items: center; border: 1px solid #3b423c; border-radius: 999px; padding: 6px 9px; font-family: "Geist Mono", monospace; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: #838883; background: #171c18; }
+.status-pill { display: inline-flex; align-items: center; border: 1px solid #3b423c; border-radius: 999px; padding: 4px 8px; font-family: "Geist Mono", monospace; font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
+.status-pill-online { border-color: rgb(6 78 59 / .75); background: rgb(2 44 34 / .35); color: #6ee7b7; }
+.status-pill-stale { border-color: rgb(120 53 15 / .7); background: rgb(69 26 3 / .3); color: #fcd34d; }
+.status-pill-offline, .status-pill-never { color: #a8a29e; }
+.status-pill-revoked { border-color: rgb(127 29 29 / .65); background: rgb(69 10 10 / .25); color: #fda4af; }
 .icon-button { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #303631; border-radius: 10px; color: #898d88; background: #171c18; transition: transform .15s ease, color .2s ease, border-color .2s ease; }
 .icon-button:hover { color: #e7e5e4; border-color: #4b554d; }
 .icon-button:active { transform: scale(.96); }

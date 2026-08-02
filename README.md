@@ -11,7 +11,7 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - Online JSON and offline ZIP report ingestion
 - Admin-managed host enrollment, revocable host-scoped tokens, and machine-identity binding
 - Outbound-only unified Linux agent with one-time enrollment and local Ed25519 identity
-- Single-group agent assignment, immutable policy versions, heartbeat, and per-control audit scope
+- Single-group agent assignment, immutable policy versions and restore history, heartbeat, per-control audit scope, and signed on-demand audits
 - Monitor and staged Remediation policy templates with server and agent enforcement locked to audit-only
 - Complete manifest, checksum, and optional Ed25519 signature verification for offline bundles
 - New, persistent, and resolved finding comparison
@@ -69,14 +69,16 @@ For cryptographic report provenance, generate an Ed25519 key on the controller w
 Open **Agents** in the primary console navigation, choose **Install agent**, and download the versioned universal Linux package. The console displays the package SHA-256 and an installation command for the current platform URL. Assign a policy to a group and create a short-lived one-time enrollment token, then transfer the package to the host and run:
 
 ```bash
-tar -xzf lsa-agent-0.1.0-linux-universal.tar.gz
-cd lsa-agent-0.1.0
+tar -xzf lsa-agent-0.2.0-linux-universal.tar.gz
+cd lsa-agent-0.2.0
 sudo ./install.sh --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
 ```
 
 The installer places the runtime and audit controls under `/opt/lsa-agent`, creates an isolated Python environment, writes the root-only configuration, enrolls the host, and enables the systemd service. The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for installation and trust details.
 
-The **Agents** workspace opens on **All hosts**. Select a group from the left fleet rail to see only its hosts and its effective policy. Every group can apply a different policy, create a group-owned policy, or copy a shared policy before changing categorized control overrides. Publishing policy changes creates a new immutable version.
+The **Agents** workspace opens on **All hosts**. Select a group from the left fleet rail to see only its hosts and its effective policy. Every group can apply a different policy, create a group-owned policy, or copy a shared policy before changing categorized control overrides. Publishing policy changes creates a new immutable version; an earlier snapshot can be restored only by publishing another new version.
+
+Fleet status is derived from signed outbound heartbeats: online within five minutes, stale within 24 hours, then offline. Select one or more active agents to request an audit, move them to another group, or revoke them. An on-demand audit is a persisted, allow-listed task—not a remote shell command—and is consumed by the agent on its next poll.
 
 ## Submit a JSON report
 
