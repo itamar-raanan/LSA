@@ -1,4 +1,6 @@
-.PHONY: dev install test lint build up down
+.PHONY: dev install test lint build docker-config docker-env up down logs ps
+
+COMPOSE = docker compose --env-file deploy/.env -f deploy/docker-compose.yml
 
 install:
 	python3 -m venv .venv
@@ -6,7 +8,8 @@ install:
 	npm install
 
 dev:
-	docker compose -f deploy/docker-compose.yml up --build
+	$(MAKE) docker-env
+	$(COMPOSE) up --build
 
 test:
 	.venv/bin/pytest
@@ -19,9 +22,20 @@ lint:
 build:
 	npm run build
 
-up:
-	docker compose -f deploy/docker-compose.yml up --build -d
+docker-env:
+	@test -f deploy/.env || { echo "Missing deploy/.env. Copy deploy/.env.example and replace every placeholder secret."; exit 1; }
 
-down:
-	docker compose -f deploy/docker-compose.yml down
+docker-config: docker-env
+	$(COMPOSE) config --quiet
 
+up: docker-env
+	$(COMPOSE) up --build -d --wait --wait-timeout 180
+
+down: docker-env
+	$(COMPOSE) down
+
+logs: docker-env
+	$(COMPOSE) logs -f --tail=200
+
+ps: docker-env
+	$(COMPOSE) ps

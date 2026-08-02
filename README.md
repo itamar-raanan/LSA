@@ -18,30 +18,34 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
 - Admin-managed signing-key registration, host scoping, expiry, revocation, and provenance history
-- Docker Compose development stack
+- Production-style Docker Compose stack with PostgreSQL, automatic migrations, health checks, and a same-origin web gateway
 - Backend and frontend tests plus GitHub Actions CI
 
 ## Quick start
 
-Requirements: Python 3.12+, Node.js 22+, and optionally Docker.
+Requirements: Docker Engine with the Compose plugin.
+
+```bash
+cp deploy/.env.example deploy/.env
+# Replace every placeholder secret in deploy/.env.
+make up
+```
+
+Open `http://localhost:8080` and sign in with the bootstrap email and password from `deploy/.env`. The API documentation is available at `http://localhost:8080/docs`.
+
+The database is stored in the named `lsa-postgres` volume. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
+
+For direct local development and testing, install Python 3.12+ and Node.js 22+:
 
 ```bash
 make install
 cp .env.example .env
 make test
-make dev
-```
-
-Open `http://localhost:5173`. Development login:
-
-```text
-admin@lsa.local
-lsa-dev-password
 ```
 
 The seeded development ingestion token is `lsa_ingest_demo_secret`. It is intentionally local-only and must never be used in production.
 
-API documentation is available at `http://localhost:8000/docs`.
+See [docs/docker-deployment.md](docs/docker-deployment.md) for production exposure, TLS, backup, restore, upgrades, and troubleshooting.
 
 ## Enroll a host
 
@@ -60,7 +64,7 @@ curl --fail-with-body \
   -H "Authorization: Bearer ${LSA_INGEST_TOKEN}" \
   -H "Content-Type: application/json" \
   --data-binary @report.json \
-  http://localhost:8000/api/v1/ingest/reports
+  http://localhost:8080/api/v1/ingest/reports
 ```
 
 ## Run the scanner
