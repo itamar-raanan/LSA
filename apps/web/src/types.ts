@@ -187,6 +187,15 @@ export interface AgentPolicy {
   updated_at: string
 }
 
+export interface AgentPolicyVersion {
+  version: number
+  default_mode: PolicyMode
+  control_modes: Record<string, PolicyMode>
+  settings: Record<string, unknown>
+  created_by_name: string | null
+  created_at: string
+}
+
 export interface AgentGroup {
   id: string
   name: string
@@ -212,8 +221,23 @@ export interface LinuxAgent {
   fingerprint: string
   last_seen_at: string | null
   last_policy_version: number | null
+  last_scan_at: string | null
+  latest_task_status: 'queued' | 'dispatched' | 'completed' | 'failed' | 'cancelled' | null
+  latest_task_created_at: string | null
   revoked_at: string | null
   created_at: string
+}
+
+export interface AgentTask {
+  id: string
+  agent_id: string
+  task_type: 'audit'
+  status: 'queued' | 'dispatched' | 'completed' | 'failed' | 'cancelled'
+  result: Record<string, unknown>
+  error: string | null
+  created_at: string
+  dispatched_at: string | null
+  completed_at: string | null
 }
 
 export interface ControlCatalogItem {

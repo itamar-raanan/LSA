@@ -254,6 +254,25 @@ class LinuxAgent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class AgentTask(Base):
+    __tablename__ = "agent_tasks"
+    __table_args__ = (
+        Index("ix_agent_tasks_agent_status_created", "agent_id", "status", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("linux_agents.id"), index=True)
+    task_type: Mapped[str] = mapped_column(String(30), default="audit")
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    requested_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    result: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AgentEnrollmentToken(Base):
     __tablename__ = "agent_enrollment_tokens"
 

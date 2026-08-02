@@ -235,6 +235,57 @@ def test_agent_enrollment_and_signed_policy_poll(client):
     assert agents.status_code == 200
     assert agents.json()[0]["hostname"] == "test-agent-01"
 
+    queued = client.post(
+        "/api/v1/agents/actions/run-audit",
+        headers=headers,
+        json={"agent_ids": [agent_id]},
+    )
+    assert queued.status_code == 202, queued.text
+    assert queued.json()[0]["status"] == "queued"
+
+    task_path = "/api/v1/agent/tasks/next"
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    task_message = f"GET\n{task_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}".encode()
+    claimed = client.get(
+        task_path,
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(private_key.sign(task_message)).decode(),
+        },
+    )
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["status"] == "dispatched"
+
+    completion_path = f"/api/v1/agent/tasks/{claimed.json()['id']}/complete"
+    completion_body = json.dumps(
+        {"status": "completed", "result": {"policy_version": 1}, "error": None},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    completion_message = (
+        f"POST\n{completion_path}\n{timestamp}\n{hashlib.sha256(completion_body).hexdigest()}"
+    ).encode()
+    completed = client.post(
+        completion_path,
+        content=completion_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(private_key.sign(completion_message)).decode(),
+        },
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "completed"
+    assert client.get(task_path, headers={
+        "X-LSA-Agent-ID": agent_id,
+        "X-LSA-Agent-Timestamp": timestamp,
+        "X-LSA-Agent-Signature": b64encode(private_key.sign(
+            f"GET\n{task_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}".encode()
+        )).decode(),
+    }).json() is None
+
 
 def test_policy_updates_are_immutable_versions(client):
     headers = {"Authorization": f"Bearer {login(client)}"}
@@ -263,6 +314,19 @@ def test_policy_updates_are_immutable_versions(client):
     assert updated.status_code == 200, updated.text
     assert updated.json()["version"] == 2
     assert updated.json()["control_modes"]["CIS-DEBIAN13-1.1.1"] == "manual"
+
+    history = client.get(f"/api/v1/agent-policies/{policy_id}/versions", headers=headers)
+    assert history.status_code == 200, history.text
+    assert [item["version"] for item in history.json()] == [2, 1]
+
+    restored = client.post(
+        f"/api/v1/agent-policies/{policy_id}/restore",
+        headers=headers,
+        json={"version": 1},
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["version"] == 3
+    assert restored.json()["control_modes"]["CIS-DEBIAN13-1.1.1"] == "disabled"
 
 
 def test_control_catalog_is_available_before_first_report(client):

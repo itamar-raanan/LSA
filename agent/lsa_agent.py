@@ -30,7 +30,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 
@@ -220,7 +220,7 @@ def enroll(config: dict[str, Any], token: str) -> None:
     print(f"Enrolled agent {state['agent_id']} for host {state['host_id']}")
 
 
-def signed_get(config: dict[str, Any], state: dict[str, Any], key: Ed25519PrivateKey, path: str) -> dict[str, Any]:
+def signed_get(config: dict[str, Any], state: dict[str, Any], key: Ed25519PrivateKey, path: str) -> Any:
     with http_client(config) as client:
         response = client.get(path, headers=signed_headers(key, state["agent_id"], "GET", path, b""))
         response.raise_for_status()
@@ -282,7 +282,17 @@ def run_scanner(config: dict[str, Any], state: dict[str, Any], key_path: Path, p
         subprocess.run(command, cwd=scanner_dir, env=environment, check=True)
 
 
-def run_once(config: dict[str, Any]) -> dict[str, Any]:
+def _scan_due(state: dict[str, Any]) -> bool:
+    value = state.get("next_scan_at")
+    if not value:
+        return True
+    try:
+        return datetime.now(UTC) >= datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+
+
+def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[str, Any]:
     if os.geteuid() != 0 and not config.get("allow_unprivileged_development", False):
         raise RuntimeError("LSA agent must run as root to read protected audit evidence")
     state_path, key_path = state_paths(config)
@@ -300,24 +310,52 @@ def run_once(config: dict[str, Any]) -> dict[str, Any]:
             "policy_version": state.get("policy_version"),
         },
     )
-    run_scanner(config, state, key_path, policy)
     state["policy_version"] = policy["policy_version"]
-    state["last_scan_at"] = datetime.now(UTC).isoformat()
+    task = signed_get(config, state, key, "/api/v1/agent/tasks/next")
+    should_scan = always_scan or task is not None or _scan_due(state)
+    if should_scan:
+        try:
+            run_scanner(config, state, key_path, policy)
+            completed_at = datetime.now(UTC)
+            state["last_scan_at"] = completed_at.isoformat()
+            settings = policy.get("settings", {})
+            interval = int(settings.get("schedule_minutes", 60)) * 60
+            jitter = random.randint(0, max(0, int(settings.get("jitter_seconds", 300))))
+            state["next_scan_at"] = datetime.fromtimestamp(completed_at.timestamp() + interval + jitter, UTC).isoformat()
+            if task is not None:
+                signed_post(config, state, key, f"/api/v1/agent/tasks/{task['id']}/complete", {
+                    "status": "completed",
+                    "result": {"completed_at": completed_at.isoformat(), "policy_version": policy["policy_version"]},
+                    "error": None,
+                })
+        except Exception as exc:
+            if task is not None:
+                try:
+                    signed_post(config, state, key, f"/api/v1/agent/tasks/{task['id']}/complete", {
+                        "status": "failed",
+                        "result": {},
+                        "error": str(exc)[:4000],
+                    })
+                except httpx.HTTPError as report_error:
+                    print(f"LSA agent could not report failed audit task: {report_error}", file=sys.stderr, flush=True)
+            raise
     atomic_json(state_path, state)
-    return {"policy": policy, "heartbeat": heartbeat}
+    return {"policy": policy, "heartbeat": heartbeat, "task": task, "scanned": should_scan}
+
+
+def run_once(config: dict[str, Any]) -> dict[str, Any]:
+    return agent_cycle(config, always_scan=True)
 
 
 def daemon(config: dict[str, Any]) -> None:
     while True:
         try:
-            result = run_once(config)
-            settings = result["policy"].get("settings", {})
-            interval = int(settings.get("schedule_minutes", 60)) * 60
-            jitter = int(settings.get("jitter_seconds", 300))
+            agent_cycle(config)
+            interval = max(15, int(config.get("poll_seconds", 60)))
         except Exception as exc:  # keep a supervised agent alive across transient failures
             print(f"LSA agent cycle failed: {exc}", file=sys.stderr, flush=True)
-            interval, jitter = 300, 30
-        time.sleep(max(60, interval + random.randint(0, max(0, jitter))))
+            interval = 60
+        time.sleep(interval)
 
 
 def main() -> int:

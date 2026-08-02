@@ -22,6 +22,8 @@ import type {
   AgentEnrollmentToken,
   PolicyMode,
   AgentPackage,
+  AgentPolicyVersion,
+  AgentTask,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -158,6 +160,12 @@ export const api = {
   updateAgentPolicy(id: string, payload: { description: string; default_mode: PolicyMode; control_modes: Record<string, PolicyMode>; settings: Record<string, unknown> }): Promise<AgentPolicy> {
     return request(`/agent-policies/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   },
+  agentPolicyVersions(id: string): Promise<AgentPolicyVersion[]> {
+    return request(`/agent-policies/${id}/versions`)
+  },
+  restoreAgentPolicy(id: string, version: number): Promise<AgentPolicy> {
+    return request(`/agent-policies/${id}/restore`, { method: 'POST', body: JSON.stringify({ version }) })
+  },
   agentGroups(): Promise<AgentGroup[]> {
     return request('/agent-groups')
   },
@@ -175,6 +183,15 @@ export const api = {
   },
   revokeAgent(id: string): Promise<void> {
     return request(`/agents/${id}`, { method: 'DELETE' })
+  },
+  runAgentAudits(agentIds: string[]): Promise<AgentTask[]> {
+    return request('/agents/actions/run-audit', { method: 'POST', body: JSON.stringify({ agent_ids: agentIds }) })
+  },
+  bulkAssignAgentGroup(agentIds: string[], groupId: string): Promise<{ affected: number }> {
+    return request('/agents/actions/assign-group', { method: 'POST', body: JSON.stringify({ agent_ids: agentIds, group_id: groupId }) })
+  },
+  bulkRevokeAgents(agentIds: string[]): Promise<{ affected: number }> {
+    return request('/agents/actions/revoke', { method: 'POST', body: JSON.stringify({ agent_ids: agentIds }) })
   },
   createAgentEnrollmentToken(payload: { name: string; group_id: string; expires_at: string }): Promise<AgentEnrollmentTokenCreated> {
     return request('/agent-enrollment-tokens', { method: 'POST', body: JSON.stringify(payload) })
