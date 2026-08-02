@@ -47,6 +47,7 @@
   when:
     - security_health_enabled | bool
     - security_health_active_benchmark not in (health_control.superseded_by | default([]))
+    - security_health_policy_control_modes.get('LSA-HEALTH-' ~ health_control.id, security_health_policy_default_mode) != 'disabled'
 
 - name: Generate security health reports
   ansible.builtin.include_tasks: report.yml

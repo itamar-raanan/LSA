@@ -328,3 +328,164 @@ class ReportComparison(BaseModel):
 
 class ArtifactPurgeResponse(BaseModel):
     deleted: int
+
+
+PolicyModeValue = Literal["disabled", "audit", "manual", "remediate"]
+
+
+class AgentPolicyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=4000)
+    default_mode: PolicyModeValue = "audit"
+    control_modes: dict[str, PolicyModeValue] = Field(default_factory=dict, max_length=5000)
+    settings: dict[str, object] = Field(default_factory=dict)
+
+
+class AgentPolicyUpdate(BaseModel):
+    description: str = Field(default="", max_length=4000)
+    default_mode: PolicyModeValue
+    control_modes: dict[str, PolicyModeValue] = Field(default_factory=dict, max_length=5000)
+    settings: dict[str, object] = Field(default_factory=dict)
+
+
+class AgentPolicyResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    version: int
+    default_mode: PolicyModeValue
+    control_modes: dict[str, PolicyModeValue]
+    settings: dict[str, object]
+    assigned_groups: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentGroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=4000)
+    policy_id: str
+
+
+class AgentGroupUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=4000)
+    policy_id: str
+
+
+class AgentGroupResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    policy_id: str
+    policy_name: str
+    policy_version: int
+    agent_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentEnrollmentTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    group_id: str
+    expires_at: datetime
+
+
+class AgentEnrollmentTokenCreated(BaseModel):
+    id: str
+    name: str
+    group_id: str
+    token: str
+    token_prefix: str
+    expires_at: datetime
+
+
+class AgentEnrollmentTokenResponse(BaseModel):
+    id: str
+    name: str
+    group_id: str
+    group_name: str
+    token_prefix: str
+    expires_at: datetime
+    used_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+
+
+class AgentEnrollmentRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=253)
+    public_key: str = Field(min_length=1, max_length=128)
+    agent_version: str = Field(min_length=1, max_length=40)
+    capabilities: list[str] = Field(default_factory=lambda: ["audit"], max_length=32)
+    hostname: str = Field(min_length=1, max_length=253)
+    fqdn: str | None = Field(default=None, max_length=253)
+    machine_id_hash: str = Field(pattern=r"^sha256:[a-fA-F0-9]{64}$")
+    operating_system: str = Field(min_length=1, max_length=100)
+    os_family: Literal["debian", "ubuntu", "rhel"]
+    os_version: str = Field(min_length=1, max_length=40)
+    kernel: str = Field(min_length=1, max_length=100)
+    architecture: str = Field(min_length=1, max_length=40)
+    ip_addresses: list[str] = Field(default_factory=list, max_length=64)
+    tags: dict[str, str] = Field(default_factory=dict)
+    system_info: dict[str, object] = Field(default_factory=dict)
+
+
+class AgentEnrollmentResponse(BaseModel):
+    agent_id: str
+    host_id: str
+    group_id: str
+    ingestion_token: str
+    signing_key_id: str
+    policy_version: int
+
+
+class AgentHeartbeatRequest(BaseModel):
+    agent_version: str = Field(min_length=1, max_length=40)
+    capabilities: list[str] = Field(default_factory=list, max_length=32)
+    policy_version: int | None = Field(default=None, ge=1)
+
+
+class AgentHeartbeatResponse(BaseModel):
+    accepted_at: datetime
+    policy_changed: bool
+    policy_version: int
+
+
+class AgentEffectivePolicyResponse(BaseModel):
+    policy_id: str
+    policy_name: str
+    policy_version: int
+    group_id: str
+    group_name: str
+    default_mode: PolicyModeValue
+    control_modes: dict[str, PolicyModeValue]
+    settings: dict[str, object]
+    enforcement_enabled: bool = False
+
+
+class LinuxAgentResponse(BaseModel):
+    id: str
+    host_id: str
+    hostname: str
+    group_id: str
+    group_name: str
+    policy_name: str
+    policy_version: int
+    agent_version: str
+    capabilities: list[str]
+    fingerprint: str
+    last_seen_at: datetime | None
+    last_policy_version: int | None
+    revoked_at: datetime | None
+    created_at: datetime
+
+
+class AgentGroupAssignment(BaseModel):
+    group_id: str
+
+
+class ControlCatalogItem(BaseModel):
+    control_id: str
+    title: str
+    category: str
+    module: str

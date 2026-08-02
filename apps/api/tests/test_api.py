@@ -107,6 +107,162 @@ def test_health(client):
     assert client.get("/health").json()["status"] == "ok"
 
 
+def test_agent_enrollment_and_signed_policy_poll(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    policies = client.get("/api/v1/agent-policies", headers=headers)
+    assert policies.status_code == 200
+    monitor = next(policy for policy in policies.json() if policy["name"] == "Monitor (Audit Only)")
+    assert monitor["default_mode"] == "audit"
+
+    groups = client.get("/api/v1/agent-groups", headers=headers)
+    assert groups.status_code == 200
+    group = groups.json()[0]
+    token_response = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "test enrollment",
+            "group_id": group["id"],
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+    )
+    assert token_response.status_code == 201, token_response.text
+
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    enrollment = client.post(
+        "/api/v1/agent/enroll",
+        headers={"Authorization": f"Bearer {token_response.json()['token']}"},
+        json={
+            "name": "test-agent-01",
+            "public_key": b64encode(public_key).decode(),
+            "agent_version": "0.1.0",
+            "capabilities": ["audit"],
+            "hostname": "test-agent-01",
+            "fqdn": "test-agent-01.example.test",
+            "machine_id_hash": f"sha256:{hashlib.sha256(b'test-agent-01').hexdigest()}",
+            "operating_system": "Debian GNU/Linux",
+            "os_family": "debian",
+            "os_version": "13",
+            "kernel": "6.12.0",
+            "architecture": "x86_64",
+            "ip_addresses": ["192.0.2.10"],
+            "system_info": {"cpu_cores": 4},
+        },
+    )
+    assert enrollment.status_code == 201, enrollment.text
+    agent_id = enrollment.json()["agent_id"]
+
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    body_hash = hashlib.sha256(b"").hexdigest()
+    signed = f"GET\n/api/v1/agent/policy\n{timestamp}\n{body_hash}".encode()
+    policy = client.get(
+        "/api/v1/agent/policy",
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(private_key.sign(signed)).decode(),
+        },
+    )
+    assert policy.status_code == 200, policy.text
+    assert policy.json()["policy_name"] == "Monitor (Audit Only)"
+    assert policy.json()["enforcement_enabled"] is False
+
+    heartbeat_body = json.dumps(
+        {"agent_version": "0.1.1", "capabilities": ["audit"], "policy_version": 1},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    heartbeat_message = (
+        f"POST\n/api/v1/agent/heartbeat\n{timestamp}\n"
+        f"{hashlib.sha256(heartbeat_body).hexdigest()}"
+    ).encode()
+    heartbeat = client.post(
+        "/api/v1/agent/heartbeat",
+        content=heartbeat_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(private_key.sign(heartbeat_message)).decode(),
+        },
+    )
+    assert heartbeat.status_code == 200, heartbeat.text
+    assert heartbeat.json()["policy_version"] == 1
+
+    agents = client.get("/api/v1/agents", headers=headers)
+    assert agents.status_code == 200
+    assert agents.json()[0]["hostname"] == "test-agent-01"
+
+
+def test_policy_updates_are_immutable_versions(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    created = client.post(
+        "/api/v1/agent-policies",
+        headers=headers,
+        json={
+            "name": "Database baseline",
+            "default_mode": "audit",
+            "control_modes": {"CIS-DEBIAN13-1.1.1": "disabled"},
+            "settings": {"schedule_minutes": 30},
+        },
+    )
+    assert created.status_code == 201, created.text
+    policy_id = created.json()["id"]
+    updated = client.put(
+        f"/api/v1/agent-policies/{policy_id}",
+        headers=headers,
+        json={
+            "description": "Second version",
+            "default_mode": "audit",
+            "control_modes": {"CIS-DEBIAN13-1.1.1": "manual"},
+            "settings": {"schedule_minutes": 45},
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["version"] == 2
+    assert updated.json()["control_modes"]["CIS-DEBIAN13-1.1.1"] == "manual"
+
+
+def test_control_catalog_is_available_before_first_report(client):
+    response = client.get(
+        "/api/v1/control-catalog",
+        headers={"Authorization": f"Bearer {login(client)}"},
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 396
+    assert len({item["control_id"] for item in response.json()}) == 396
+
+
+def test_unused_agent_enrollment_token_can_be_revoked(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    group = client.get("/api/v1/agent-groups", headers=headers).json()[0]
+    created = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "temporary enrollment",
+            "group_id": group["id"],
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+    )
+    assert created.status_code == 201
+
+    listed = client.get("/api/v1/agent-enrollment-tokens", headers=headers)
+    assert listed.status_code == 200
+    assert listed.json()[0]["token_prefix"] == created.json()["token_prefix"]
+    assert "token" not in listed.json()[0]
+
+    revoked = client.delete(
+        f"/api/v1/agent-enrollment-tokens/{created.json()['id']}", headers=headers
+    )
+    assert revoked.status_code == 204
+
+
 def test_production_bootstrap_does_not_create_demo_token():
     with SessionLocal() as db:
         bootstrap(

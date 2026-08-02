@@ -5,6 +5,7 @@ import {
   Key,
   LockKey,
   UsersThree,
+  DesktopTower,
 } from '@phosphor-icons/react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
@@ -13,6 +14,7 @@ import { ErrorState } from '../../components/StatePanel'
 const sections = [
   { to: '/settings', label: 'Overview', detail: 'Platform configuration', icon: GearSix, end: true },
   { to: '/settings/users', label: 'Users & access', detail: 'Roles and permissions', icon: UsersThree },
+  { to: '/settings/agents', label: 'Agents & policies', detail: 'Groups and audit scope', icon: DesktopTower },
   { to: '/settings/authentication', label: 'Authentication', detail: 'SSO and RADIUS', icon: LockKey },
   { to: '/settings/tokens', label: 'Tokens', detail: 'Scanner credentials', icon: Key },
   { to: '/settings/signing-keys', label: 'Signing keys', detail: 'Evidence trust', icon: Fingerprint },

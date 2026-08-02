@@ -1,6 +1,18 @@
 # Architecture
 
-Linux Security Auditor is an ingestion-only platform. Customer-controlled Linux hosts or Ansible controllers collect evidence, create a portable report, and optionally submit it over HTTPS. The platform never opens connections to audited servers.
+Linux Security Auditor is an ingestion-only platform with two collection approaches. Ansible controllers can create portable offline reports, while the unified Linux agent can periodically collect and submit evidence. Both use the same normalized control engine and report contract. The platform never opens connections to audited servers.
+
+## Collection approaches
+
+### Offline report
+
+An operator runs the Ansible scanner from a customer-controlled controller. The result can remain offline as a signed ZIP or be submitted through the ingestion API. This mode is suitable for isolated hosts, approval-driven assessments, and environments that prohibit resident agents.
+
+### Managed agent
+
+The unified agent runs on the audited host and makes outbound HTTPS connections to the platform on TCP 8443. Enrollment consumes a one-time, expiring group token. The agent generates an Ed25519 private key locally; the platform stores only its public key and returns host-scoped ingestion credentials. The agent then signs policy and heartbeat requests, executes the locally installed scanner, signs its evidence bundle, and uploads it through the existing ingestion boundary.
+
+Each agent belongs to exactly one group. Each group points to one policy, and every policy update creates an immutable version. A policy has a default mode and optional per-control modes: `disabled`, `audit`, `manual`, or `remediate`. In the current foundation, `manual` and `remediate` are staged intent only: the API returns `enforcement_enabled: false`, the agent requires that lock, and every enabled control remains read-only.
 
 ## Trust boundaries
 
@@ -10,6 +22,8 @@ Linux Security Auditor is an ingestion-only platform. Customer-controlled Linux 
 4. The API validates identity, structure, size, checksums, signatures, duplicates, and safe archive paths before persistence.
 5. Original artifacts are conceptually immutable. Normalized findings are projections used by the console.
 6. Human sessions and ingestion credentials use separate authentication paths.
+7. Agent policy and heartbeat calls require a timestamped Ed25519 signature from the enrolled host identity.
+8. Policy documents contain identifiers, modes, and bounded scheduling settings—not commands or executable content.
 
 ## Report processing
 
@@ -44,6 +58,11 @@ The v0.5 scanner runs on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux
 ## Security invariants
 
 - No SSH credentials or remote execution paths exist in the platform.
+- Agents initiate every connection; the server has no host connection mechanism.
+- One-time enrollment tokens expire within 30 days and cannot be reused.
+- Agent private keys remain local with mode `0600`; revoking an agent also revokes its exact ingestion token and signing key.
+- Policy versions are immutable, and one effective group eliminates policy precedence ambiguity.
+- Remediation enforcement is hard-disabled in this release even when remediation intent is staged in a policy.
 - Scanner audit tasks may read privileged host state but cannot run package, service, account, permission, mount, firewall, kernel, or filesystem mutation commands; automated tests enforce this boundary.
 - Portable controls carry a unique semantic key, canonical finding category, and explicit benchmark-overlap metadata. Runtime and unit assertions reject duplicate IDs, duplicate semantics, unknown overlap references, and unmapped categories.
 - Ingestion token hashes—not raw tokens—are stored.

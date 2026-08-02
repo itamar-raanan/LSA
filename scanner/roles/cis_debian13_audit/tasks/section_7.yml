@@ -10,7 +10,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_7]
 
 - name: Section 7 manual controls
@@ -19,5 +19,5 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_7]

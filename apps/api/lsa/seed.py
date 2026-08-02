@@ -7,7 +7,16 @@ from sqlalchemy.orm import Session
 
 from lsa.config import Settings
 from lsa.dependencies import IngestionPrincipal
-from lsa.models import IngestionToken, Report, Tenant, User
+from lsa.models import (
+    AgentGroup,
+    AgentPolicy,
+    AgentPolicyVersion,
+    IngestionToken,
+    PolicyMode,
+    Report,
+    Tenant,
+    User,
+)
 from lsa.schemas import ReportInput
 from lsa.security import hash_ingestion_token, hash_password
 from lsa.services.ingestion import ingest_report
@@ -35,13 +44,84 @@ def bootstrap(db: Session, settings: Settings) -> None:
         db.flush()
     user = db.scalar(select(User).where(User.email == settings.bootstrap_email))
     if user is None:
+        user = User(
+            tenant_id=tenant.id,
+            email=settings.bootstrap_email,
+            display_name="Security Administrator",
+            password_hash=hash_password(settings.bootstrap_password),
+            role="admin",
+        )
+        db.add(user)
+        db.flush()
+    monitor_policy = db.scalar(
+        select(AgentPolicy).where(
+            AgentPolicy.tenant_id == tenant.id, AgentPolicy.name == "Monitor (Audit Only)"
+        )
+    )
+    if monitor_policy is None:
+        monitor_policy = AgentPolicy(
+            tenant_id=tenant.id,
+            name="Monitor (Audit Only)",
+            description="Collect and report posture without changing host configuration.",
+        )
+        db.add(monitor_policy)
+        db.flush()
         db.add(
-            User(
+            AgentPolicyVersion(
                 tenant_id=tenant.id,
-                email=settings.bootstrap_email,
-                display_name="Security Administrator",
-                password_hash=hash_password(settings.bootstrap_password),
-                role="admin",
+                policy_id=monitor_policy.id,
+                version=1,
+                default_mode=PolicyMode.audit,
+                settings={
+                    "schedule_minutes": 60,
+                    "jitter_seconds": 300,
+                    "profile": "level2_server",
+                    "remediation_approval": "required",
+                },
+                created_by=user.id,
+            )
+        )
+    remediation_policy = db.scalar(
+        select(AgentPolicy).where(
+            AgentPolicy.tenant_id == tenant.id,
+            AgentPolicy.name == "Remediation (Approval Required)",
+        )
+    )
+    if remediation_policy is None:
+        remediation_policy = AgentPolicy(
+            tenant_id=tenant.id,
+            name="Remediation (Approval Required)",
+            description="Staged remediation policy; enforcement is locked off in this release.",
+        )
+        db.add(remediation_policy)
+        db.flush()
+        db.add(
+            AgentPolicyVersion(
+                tenant_id=tenant.id,
+                policy_id=remediation_policy.id,
+                version=1,
+                default_mode=PolicyMode.remediate,
+                settings={
+                    "schedule_minutes": 60,
+                    "jitter_seconds": 300,
+                    "profile": "level2_server",
+                    "remediation_approval": "required",
+                },
+                created_by=user.id,
+            )
+        )
+    default_group = db.scalar(
+        select(AgentGroup).where(
+            AgentGroup.tenant_id == tenant.id, AgentGroup.name == "Default Linux Fleet"
+        )
+    )
+    if default_group is None:
+        db.add(
+            AgentGroup(
+                tenant_id=tenant.id,
+                policy_id=monitor_policy.id,
+                name="Default Linux Fleet",
+                description="Default enrollment group for monitored Linux hosts.",
             )
         )
     token = None

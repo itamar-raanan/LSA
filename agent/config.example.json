@@ -1,0 +1,11 @@
+{
+  "platform_url": "https://lsa.example.com:8443",
+  "scanner_dir": "/opt/lsa-agent/scanner",
+  "state_dir": "/var/lib/lsa-agent",
+  "ansible_playbook": "ansible-playbook",
+  "ca_bundle": "/etc/ssl/certs/ca-certificates.crt",
+  "tags": {
+    "environment": "production",
+    "owner": "platform"
+  }
+}

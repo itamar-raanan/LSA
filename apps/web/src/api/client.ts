@@ -14,6 +14,13 @@ import type {
   ProviderType,
   PublicIdentityProvider,
   TlsCertificate,
+  AgentPolicy,
+  AgentGroup,
+  LinuxAgent,
+  ControlCatalogItem,
+  AgentEnrollmentTokenCreated,
+  AgentEnrollmentToken,
+  PolicyMode,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -140,6 +147,45 @@ export const api = {
   },
   revokeSigningKey(keyId: string): Promise<void> {
     return request(`/signing-keys/${keyId}`, { method: 'DELETE' })
+  },
+  agentPolicies(): Promise<AgentPolicy[]> {
+    return request('/agent-policies')
+  },
+  createAgentPolicy(payload: { name: string; description: string; default_mode: PolicyMode; control_modes: Record<string, PolicyMode>; settings: Record<string, unknown> }): Promise<AgentPolicy> {
+    return request('/agent-policies', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  updateAgentPolicy(id: string, payload: { description: string; default_mode: PolicyMode; control_modes: Record<string, PolicyMode>; settings: Record<string, unknown> }): Promise<AgentPolicy> {
+    return request(`/agent-policies/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  },
+  agentGroups(): Promise<AgentGroup[]> {
+    return request('/agent-groups')
+  },
+  createAgentGroup(payload: { name: string; description: string; policy_id: string }): Promise<AgentGroup> {
+    return request('/agent-groups', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  updateAgentGroup(id: string, payload: { name: string; description: string; policy_id: string }): Promise<AgentGroup> {
+    return request(`/agent-groups/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  },
+  agents(): Promise<LinuxAgent[]> {
+    return request('/agents')
+  },
+  assignAgentGroup(id: string, groupId: string): Promise<LinuxAgent> {
+    return request(`/agents/${id}/group`, { method: 'PATCH', body: JSON.stringify({ group_id: groupId }) })
+  },
+  revokeAgent(id: string): Promise<void> {
+    return request(`/agents/${id}`, { method: 'DELETE' })
+  },
+  createAgentEnrollmentToken(payload: { name: string; group_id: string; expires_at: string }): Promise<AgentEnrollmentTokenCreated> {
+    return request('/agent-enrollment-tokens', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  agentEnrollmentTokens(): Promise<AgentEnrollmentToken[]> {
+    return request('/agent-enrollment-tokens')
+  },
+  revokeAgentEnrollmentToken(id: string): Promise<void> {
+    return request(`/agent-enrollment-tokens/${id}`, { method: 'DELETE' })
+  },
+  controlCatalog(): Promise<ControlCatalogItem[]> {
+    return request('/control-catalog')
   },
   async downloadArtifact(reportId: string): Promise<{ blob: Blob; filename: string; checksum: string | null }> {
     const token = localStorage.getItem('lsa_session')

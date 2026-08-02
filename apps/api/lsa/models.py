@@ -43,6 +43,13 @@ class FindingStatus(StrEnum):
     error = "error"
 
 
+class PolicyMode(StrEnum):
+    disabled = "disabled"
+    audit = "audit"
+    manual = "manual"
+    remediate = "remediate"
+
+
 class Tenant(Base):
     __tablename__ = "tenants"
 
@@ -173,6 +180,93 @@ class Host(Base):
 
     tenant: Mapped[Tenant] = relationship(back_populates="hosts")
     reports: Mapped[list["Report"]] = relationship(back_populates="host")
+
+
+class AgentPolicy(Base):
+    __tablename__ = "agent_policies"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_agent_policy_name"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    versions: Mapped[list["AgentPolicyVersion"]] = relationship(
+        back_populates="policy", cascade="all, delete-orphan"
+    )
+
+
+class AgentPolicyVersion(Base):
+    __tablename__ = "agent_policy_versions"
+    __table_args__ = (
+        UniqueConstraint("policy_id", "version", name="uq_agent_policy_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    policy_id: Mapped[str] = mapped_column(ForeignKey("agent_policies.id"), index=True)
+    version: Mapped[int] = mapped_column()
+    default_mode: Mapped[PolicyMode] = mapped_column(Enum(PolicyMode), default=PolicyMode.audit)
+    control_modes: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    settings: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    policy: Mapped[AgentPolicy] = relationship(back_populates="versions")
+
+
+class AgentGroup(Base):
+    __tablename__ = "agent_groups"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_agent_group_name"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    policy_id: Mapped[str] = mapped_column(ForeignKey("agent_policies.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class LinuxAgent(Base):
+    __tablename__ = "linux_agents"
+    __table_args__ = (
+        Index("ix_linux_agents_tenant_fingerprint", "tenant_id", "fingerprint", unique=True),
+        UniqueConstraint("host_id", name="uq_linux_agent_host"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    host_id: Mapped[str] = mapped_column(ForeignKey("hosts.id"), index=True)
+    group_id: Mapped[str] = mapped_column(ForeignKey("agent_groups.id"), index=True)
+    ingestion_token_id: Mapped[str] = mapped_column(ForeignKey("ingestion_tokens.id"), unique=True)
+    signing_key_id: Mapped[str] = mapped_column(ForeignKey("signing_keys.id"), unique=True)
+    name: Mapped[str] = mapped_column(String(253))
+    public_key: Mapped[str] = mapped_column(String(64))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    agent_version: Mapped[str] = mapped_column(String(40), default="0.1.0")
+    capabilities: Mapped[list[str]] = mapped_column(JSON, default=list)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_policy_version: Mapped[int | None] = mapped_column(nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class AgentEnrollmentToken(Base):
+    __tablename__ = "agent_enrollment_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    group_id: Mapped[str] = mapped_column(ForeignKey("agent_groups.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    token_prefix: Mapped[str] = mapped_column(String(24), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
 class IngestionToken(Base):
