@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Build a deterministic, portable LSA report bundle using the standard library."""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import html
+import io
+import json
+import sys
+import zipfile
+from pathlib import Path
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def render_html(report: dict) -> bytes:
+    host = report["host"]
+    summary = report["summary"]
+    rows = "".join(
+        f"<tr><td>{html.escape(f['control_id'])}</td><td>{html.escape(f['title'])}</td>"
+        f"<td>{html.escape(f['severity'])}</td><td>{html.escape(f['status'])}</td></tr>"
+        for f in report["findings"]
+    )
+    document = f"""<!doctype html><html><head><meta charset=\"utf-8\"><title>LSA report — {html.escape(host['hostname'])}</title>
+<style>body{{font:15px system-ui;max-width:1100px;margin:48px auto;padding:0 24px;color:#202622}}table{{width:100%;border-collapse:collapse}}th,td{{padding:12px;border-bottom:1px solid #d9dedb;text-align:left}}code{{font-family:monospace}}</style></head>
+<body><p>Linux Security Auditor</p><h1>{html.escape(host['hostname'])}</h1><p>{html.escape(host['operating_system'])} {html.escape(host['os_version'])}</p>
+<h2>Summary</h2><p>Pass <strong>{summary['pass']}</strong> · Fail <strong>{summary['fail']}</strong> · Manual <strong>{summary['manual']}</strong></p>
+<h2>Findings</h2><table><thead><tr><th>Control</th><th>Title</th><th>Severity</th><th>Status</th></tr></thead><tbody>{rows}</tbody></table></body></html>"""
+    return document.encode()
+
+
+def render_csv(report: dict) -> bytes:
+    output = io.StringIO()
+    fieldnames = ["control_id", "module", "category", "title", "severity", "status", "expected", "actual"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows({key: finding.get(key, "") for key in fieldnames} for finding in report["findings"])
+    return output.getvalue().encode()
+
+
+def build(report_path: Path, output_dir: Path) -> Path:
+    report_bytes = report_path.read_bytes()
+    report = json.loads(report_bytes)
+    files = {
+        "report.json": report_bytes,
+        "report.html": render_html(report),
+        "report.csv": render_csv(report),
+        "metadata/host.json": json.dumps(report["host"], indent=2).encode(),
+        "metadata/scanner.json": json.dumps(report["scanner"], indent=2).encode(),
+    }
+    manifest = {
+        "schema_version": "1.0",
+        "report_id": report["report_id"],
+        "generated_at": report["generated_at"],
+        "files": {name: sha256(content) for name, content in files.items()},
+        "signature": None,
+    }
+    files["manifest.json"] = json.dumps(manifest, indent=2, sort_keys=True).encode()
+    files["checksums.sha256"] = "".join(f"{sha256(content)}  {name}\n" for name, content in sorted(files.items())).encode()
+    safe_time = report["generated_at"].replace(":", "").replace("-", "")
+    bundle_path = output_dir / f"lsa-report-{report['host']['hostname']}-{safe_time}.zip"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        for name, content in files.items():
+            bundle.writestr(name, content)
+    return bundle_path
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        raise SystemExit("usage: build_bundle.py REPORT_JSON OUTPUT_DIRECTORY")
+    print(build(Path(sys.argv[1]), Path(sys.argv[2])))
+

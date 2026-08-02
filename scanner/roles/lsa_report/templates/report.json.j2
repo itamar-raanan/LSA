@@ -1,0 +1,23 @@
+{
+  "schema_version": {{ lsa_schema_version | to_json }},
+  "report_id": {{ lsa_report_id | to_json }},
+  "generated_at": {{ lsa_generated_at | to_json }},
+  "scanner": {"name": "Linux Security Auditor", "version": {{ lsa_scanner_version | to_json }}},
+  "host": {
+    "host_id": {{ lsa_host_id | to_json }},
+    "hostname": {{ ansible_facts.hostname | to_json }},
+    "fqdn": {{ ansible_facts.fqdn | default(none) | to_json }},
+    "machine_id_hash": {{ lsa_machine_id_hash | to_json }},
+    "operating_system": {{ ansible_facts.distribution | to_json }},
+    "os_family": {{ lsa_os_family | to_json }},
+    "os_version": {{ ansible_facts.distribution_version | to_json }},
+    "kernel": {{ ansible_facts.kernel | to_json }},
+    "architecture": {{ ansible_facts.architecture | to_json }},
+    "ip_addresses": {{ ansible_facts.all_ipv4_addresses | default([]) | to_json }},
+    "tags": {{ lsa_host_tags | default({}) | to_json }}
+  },
+  "scan": {"profile": {{ lsa_profile | to_json }}, "modules": {{ lsa_modules | to_json }}},
+  "summary": {{ lsa_summary | to_json }},
+  "findings": {{ lsa_findings | to_json }}
+}
+

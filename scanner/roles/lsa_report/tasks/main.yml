@@ -1,0 +1,76 @@
+---
+- name: Validate supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family in ['Debian', 'RedHat']
+      - lsa_host_id | length > 0
+      - lsa_delivery_mode in ['offline', 'upload', 'upload_and_keep']
+    fail_msg: LSA requires Debian, Ubuntu, or RHEL family Linux and a platform host UUID.
+
+- name: Resolve normalized operating-system family
+  ansible.builtin.set_fact:
+    lsa_os_family: >-
+      {{ 'ubuntu' if ansible_facts.distribution == 'Ubuntu'
+         else 'debian' if ansible_facts.os_family == 'Debian'
+         else 'rhel' }}
+    lsa_report_id: "{{ lookup('pipe', 'python3 -c \"import uuid; print(uuid.uuid4())\"') }}"
+    lsa_generated_at: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+    lsa_machine_id_hash: "sha256:{{ ansible_machine_id | hash('sha256') }}"
+
+- name: Create local report outbox
+  ansible.builtin.file:
+    path: "{{ lsa_output_root }}/{{ inventory_hostname }}/pending"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Render normalized report JSON
+  ansible.builtin.template:
+    src: report.json.j2
+    dest: "{{ lsa_output_root }}/{{ inventory_hostname }}/pending/report.json"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+
+- name: Build portable offline bundle
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ role_path }}/../../scripts/build_bundle.py"
+      - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending/report.json"
+      - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending"
+  delegate_to: localhost
+  become: false
+  register: lsa_bundle_build
+  changed_when: true
+
+- name: Submit normalized report
+  ansible.builtin.uri:
+    url: "{{ lsa_platform_url }}/api/v1/ingest/reports"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ lookup('file', lsa_ingest_token_file) | trim }}"
+      Content-Type: application/json
+    body: "{{ lookup('file', lsa_output_root + '/' + inventory_hostname + '/pending/report.json') | from_json }}"
+    body_format: json
+    status_code: 202
+    timeout: 120
+    validate_certs: true
+  delegate_to: localhost
+  become: false
+  no_log: true
+  register: lsa_submission
+  when: lsa_delivery_mode in ['upload', 'upload_and_keep']
+
+- name: Record accepted upload
+  ansible.builtin.copy:
+    content: "{{ lsa_submission.json | to_nice_json }}"
+    dest: "{{ lsa_output_root }}/{{ inventory_hostname }}/pending/submission.json"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  when:
+    - lsa_submission is not skipped
+    - lsa_submission.status == 202
+

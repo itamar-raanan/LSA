@@ -1,0 +1,24 @@
+---
+- name: Submit an existing Linux Security Auditor report
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_prompt:
+    - name: lsa_report_json_path
+      prompt: Path to report.json
+      private: false
+  tasks:
+    - name: Submit report to LSA
+      ansible.builtin.uri:
+        url: "{{ lsa_platform_url }}/api/v1/ingest/reports"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ lookup('file', lsa_ingest_token_file) | trim }}"
+          Content-Type: application/json
+        body: "{{ lookup('file', lsa_report_json_path) | from_json }}"
+        body_format: json
+        status_code: 202
+        timeout: 120
+        validate_certs: true
+      no_log: true
+

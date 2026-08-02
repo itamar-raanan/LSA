@@ -1,0 +1,20 @@
+---
+lsa_schema_version: "1.0"
+lsa_scanner_version: "0.1.0"
+lsa_delivery_mode: upload_and_keep
+lsa_output_root: "{{ playbook_dir }}/../reports"
+lsa_platform_url: "https://lsa.example.com"
+lsa_ingest_token_file: "{{ lookup('env', 'HOME') }}/.lsa/token"
+lsa_host_id: ""
+lsa_profile: cis_level1_server
+lsa_modules:
+  - cis
+  - security_health
+lsa_findings: []
+lsa_summary:
+  pass: 0
+  fail: 0
+  manual: 0
+  not_applicable: 0
+  error: 0
+
