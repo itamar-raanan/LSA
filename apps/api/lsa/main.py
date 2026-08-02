@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from lsa.api import auth, fleet, ingest
+from lsa.api import admin, auth, fleet, ingest
 from lsa.config import get_settings
 from lsa.database import Base, SessionLocal, engine
 from lsa.seed import bootstrap
@@ -31,10 +31,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["DELETE", "GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
 app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
 
@@ -42,4 +43,3 @@ app.include_router(fleet.router, prefix="/api/v1")
 @app.get("/health", tags=["operations"])
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "lsa-api", "version": "0.1.0"}
-

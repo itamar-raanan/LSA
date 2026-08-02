@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
 import { SeverityBadge } from '../components/SeverityBadge'
+import { ReportHistory } from '../components/ReportHistory'
 import { ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
 
@@ -46,6 +47,7 @@ export function HostDetailPage() {
           </div>
         </div>
       </section>
+      <ReportHistory hostId={host.id} />
       <section className="panel mt-4 overflow-hidden">
         <div className="px-6 py-5 md:px-8"><p className="section-label">Open findings</p></div>
         {findingState.loading ? <div className="skeleton m-6 h-40 rounded-2xl" /> : findingState.error ? <div className="p-6 text-sm text-rose-300">{findingState.error}</div> : !findingState.data?.length ? <div className="border-t border-stone-800 p-10 text-center text-sm text-stone-500">No open findings in the latest report.</div> : (
@@ -61,4 +63,3 @@ export function HostDetailPage() {
     </div>
   )
 }
-

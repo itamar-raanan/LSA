@@ -1,0 +1,9 @@
+---
+id: cis_debian_13
+name: CIS Debian Linux 13 baseline
+version: 0.1.0
+os_family: debian
+os_versions: ["13"]
+profile: cis_level1_server
+description: Read-only foundational controls for Debian 13 servers.
+

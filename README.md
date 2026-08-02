@@ -9,9 +9,11 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - FastAPI ingestion and fleet API
 - PostgreSQL-compatible tenant, host, report, finding, token, and audit models
 - Online JSON and offline ZIP report ingestion
-- Duplicate detection and host-scoped token enforcement
+- Admin-managed host enrollment, revocable host-scoped tokens, and machine-identity binding
+- Complete manifest and checksum verification for offline bundles
 - New, persistent, and resolved finding comparison
-- React fleet dashboard, host profiles, findings queue, and report upload
+- React fleet dashboard, enrollment, host profiles, report history, comparisons, findings, and upload
+- Read-only Debian 13 baseline controls for identity files, SSH, networking, and core dumps
 - Versioned report JSON Schema
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
@@ -40,6 +42,12 @@ The seeded development ingestion token is `lsa_ingest_demo_secret`. It is intent
 
 API documentation is available at `http://localhost:8000/docs`.
 
+## Enroll a host
+
+Sign in as an administrator, open **Linux hosts**, and choose **Enroll host**. LSA creates a persistent host UUID and a scoped ingestion token. The raw token is shown once; store it in a mode-0600 file on the Ansible controller and assign the displayed host UUID to `lsa_host_id` in inventory.
+
+The first accepted report binds that platform identity to the host's hashed machine ID. Later reports with a different machine ID are rejected. Tokens can also be issued, listed, and revoked through the `/api/v1/ingestion-tokens` endpoints.
+
 ## Submit a JSON report
 
 ```bash
@@ -62,6 +70,8 @@ ansible-playbook -i inventory.ini playbooks/scan.yml \
 
 Delivery modes are `offline`, `upload`, and `upload_and_keep`. The last mode is the production default because it preserves a local artifact even after successful submission.
 
+The current executable control pack targets Debian 13 and performs read-only checks. Other declared platform families remain accepted by the report contract but do not yet have executable control packs.
+
 ## Repository map
 
 - `apps/api` — API, data model, ingestion, migrations, tests
@@ -72,4 +82,3 @@ Delivery modes are `offline`, `upload`, and `upload_and_keep`. The last mode is 
 - `docs` — architecture and report-format documentation
 
 See [docs/architecture.md](docs/architecture.md) for trust boundaries and design decisions.
-

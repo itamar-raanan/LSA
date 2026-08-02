@@ -62,6 +62,13 @@ def ingest_report(
             tags=report_data.host.tags,
         )
         db.add(host)
+    elif host.machine_id_hash.startswith("pending:"):
+        host.machine_id_hash = report_data.host.machine_id_hash
+    elif host.machine_id_hash != report_data.host.machine_id_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Machine identity does not match the enrolled host",
+        )
 
     previous = db.scalar(
         select(Report)

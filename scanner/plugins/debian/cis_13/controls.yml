@@ -1,0 +1,21 @@
+---
+controls:
+  - id: CIS-DEBIAN13-6.2.3
+    title: Ensure permissions on /etc/passwd are configured
+    severity: high
+  - id: CIS-DEBIAN13-6.2.4
+    title: Ensure permissions on /etc/shadow are configured
+    severity: critical
+  - id: CIS-DEBIAN13-4.2.7
+    title: Ensure SSH root login is disabled
+    severity: high
+  - id: CIS-DEBIAN13-4.2.10
+    title: Ensure SSH password authentication is disabled
+    severity: high
+  - id: CIS-DEBIAN13-3.3.1
+    title: Ensure IPv4 forwarding is disabled
+    severity: medium
+  - id: CIS-DEBIAN13-1.5.1
+    title: Ensure setuid programs do not produce core dumps
+    severity: medium
+

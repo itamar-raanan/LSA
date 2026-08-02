@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "codex/**"]
   pull_request:
 
 permissions:
@@ -19,6 +19,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check apps scanner
       - run: pytest --cov=lsa --cov-report=term-missing
+      - run: ansible-playbook --syntax-check -i inventory.example.ini playbooks/scan.yml
+        working-directory: scanner
 
   frontend:
     runs-on: ubuntu-latest
@@ -27,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - run: npm install
+      - run: npm ci
       - run: npm run lint
       - run: npm test
       - run: npm run build
