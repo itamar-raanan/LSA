@@ -12,8 +12,8 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - Admin-managed host enrollment, revocable host-scoped tokens, and machine-identity binding
 - Complete manifest and checksum verification for offline bundles
 - New, persistent, and resolved finding comparison
-- React fleet dashboard, enrollment, host profiles, report history, comparisons, findings, and upload
-- Read-only Debian 13 baseline controls for identity files, SSH, networking, and core dumps
+- React fleet dashboard, enrollment, token lifecycle management, host profiles, report history, comparisons, findings, and upload
+- Twelve read-only Debian 13 controls for identity files, accounts, SSH, networking, packages, services, and core dumps
 - Versioned report JSON Schema
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
@@ -47,6 +47,8 @@ API documentation is available at `http://localhost:8000/docs`.
 Sign in as an administrator, open **Linux hosts**, and choose **Enroll host**. LSA creates a persistent host UUID and a scoped ingestion token. The raw token is shown once; store it in a mode-0600 file on the Ansible controller and assign the displayed host UUID to `lsa_host_id` in inventory.
 
 The first accepted report binds that platform identity to the host's hashed machine ID. Later reports with a different machine ID are rejected. Tokens can also be issued, listed, and revoked through the `/api/v1/ingestion-tokens` endpoints.
+
+Administrators can manage scanner credentials from **Ingestion tokens**. Prefer host-scoped tokens with an expiry. Revocation is immediate, while accepted reports and host history remain immutable.
 
 ## Submit a JSON report
 

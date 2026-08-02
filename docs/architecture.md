@@ -5,7 +5,7 @@ Linux Security Auditor is an ingestion-only platform. Customer-controlled Linux 
 ## Trust boundaries
 
 1. The scanner is trusted to collect local evidence but not to read platform data.
-2. Ingestion tokens can submit reports only. A per-host token is restricted to its bound host; a controller token is tenant-scoped.
+2. Ingestion tokens can submit reports only. A per-host token is restricted to its bound host; a controller token is tenant-scoped. Administrators can set expirations and revoke credentials immediately.
 3. The API validates identity, structure, size, duplicates, and safe archive paths before persistence.
 4. Original artifacts are conceptually immutable. Normalized findings are projections used by the console.
 5. Human sessions and ingestion credentials use separate authentication paths.
@@ -28,9 +28,9 @@ The v0.1 scanner implementation focuses on Debian 13. The shared contract and pl
 
 - No SSH credentials or remote execution paths exist in the platform.
 - Ingestion token hashes—not raw tokens—are stored.
+- Expired or revoked ingestion tokens cannot submit evidence.
 - Report bundles must not contain API tokens.
 - Duplicate report IDs are rejected.
-- ZIP paths are checked before reading content.
+- ZIP paths, expanded size, manifest declarations, and every listed checksum are validated before ingestion.
 - Every accepted report creates an audit event.
 - Production deployments must replace all development secrets and terminate TLS before the API.
-

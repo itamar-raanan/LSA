@@ -7,6 +7,7 @@ import { HostDetailPage } from './pages/HostDetailPage'
 import { HostsPage } from './pages/HostsPage'
 import { LoginPage } from './pages/LoginPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { TokensPage } from './pages/TokensPage'
 
 function ProtectedShell() {
   const { user } = useAuth()
@@ -23,9 +24,9 @@ export default function App() {
         <Route path="hosts/:hostId" element={<HostDetailPage />} />
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="tokens" element={<TokensPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
-

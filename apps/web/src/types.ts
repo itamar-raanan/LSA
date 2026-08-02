@@ -93,3 +93,14 @@ export interface TokenCreated {
   token_prefix: string
   expires_at: string | null
 }
+
+export interface IngestionToken {
+  id: string
+  name: string
+  host_id: string | null
+  token_prefix: string
+  expires_at: string | null
+  last_used_at: string | null
+  revoked_at: string | null
+  created_at: string
+}

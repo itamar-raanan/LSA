@@ -2,6 +2,7 @@ import type {
   DashboardData,
   Finding,
   Host,
+  IngestionToken,
   ReportComparison,
   ReportSummary,
   TokenCreated,
@@ -34,6 +35,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await response.json().catch(() => ({ detail: 'Request failed' }))
     throw new ApiError(body.detail ?? 'Request failed', response.status)
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -65,8 +67,14 @@ export const api = {
   }): Promise<Host> {
     return request('/hosts', { method: 'POST', body: JSON.stringify(payload) })
   },
-  createToken(payload: { name: string; host_id: string }): Promise<TokenCreated> {
+  createToken(payload: { name: string; host_id?: string; expires_at?: string }): Promise<TokenCreated> {
     return request('/ingestion-tokens', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  tokens(): Promise<IngestionToken[]> {
+    return request('/ingestion-tokens')
+  },
+  revokeToken(tokenId: string): Promise<void> {
+    return request(`/ingestion-tokens/${tokenId}`, { method: 'DELETE' })
   },
   findings(filters: { severity?: string; lifecycle?: string; host_id?: string } = {}): Promise<Finding[]> {
     const params = new URLSearchParams()
