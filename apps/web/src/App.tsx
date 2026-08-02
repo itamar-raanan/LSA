@@ -31,10 +31,11 @@ export default function App() {
         <Route path="hosts/:hostId" element={<HostDetailPage />} />
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="agents" element={<AgentsSettingsPage />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<SettingsOverviewPage />} />
           <Route path="users" element={<UsersSettingsPage />} />
-          <Route path="agents" element={<AgentsSettingsPage />} />
+          <Route path="agents" element={<Navigate to="/agents" replace />} />
           <Route path="authentication" element={<AuthenticationSettingsPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="signing-keys" element={<SigningKeysPage />} />

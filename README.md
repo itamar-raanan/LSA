@@ -66,7 +66,7 @@ For cryptographic report provenance, generate an Ed25519 key on the controller w
 
 ## Enroll a managed agent
 
-Open **Settings → Agents & policies**, assign a policy to a group, and create a short-lived one-time enrollment token. Install the repository and Python environment on the host, copy `agent/config.example.json` to `/etc/lsa-agent/config.json`, then enroll and start the service:
+Open **Agents** in the primary console navigation, assign a policy to a group, and create a short-lived one-time enrollment token. Install the repository and Python environment on the host, copy `agent/config.example.json` to `/etc/lsa-agent/config.json`, then enroll and start the service:
 
 ```bash
 sudo /opt/lsa-agent/venv/bin/python /opt/lsa-agent/agent/lsa_agent.py \
