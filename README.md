@@ -76,6 +76,8 @@ sudo ./install.sh --platform-url 'https://lsa.example.com:8443' --token 'lsa_enr
 
 The installer places the runtime and audit controls under `/opt/lsa-agent`, creates an isolated Python environment, writes the root-only configuration, enrolls the host, and enables the systemd service. The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for installation and trust details.
 
+The **Agents** workspace opens on **All hosts**. Select a group from the left fleet rail to see only its hosts and its effective policy. Every group can apply a different policy, create a group-owned policy, or copy a shared policy before changing categorized control overrides. Publishing policy changes creates a new immutable version.
+
 ## Submit a JSON report
 
 ```bash
