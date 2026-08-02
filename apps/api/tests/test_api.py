@@ -3,9 +3,14 @@ import io
 import json
 import uuid
 import zipfile
+from base64 import b64encode
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from lsa.config import Settings, get_settings
+from lsa.main import app
 from lsa.seed import DEMO_TOKEN
 from scanner.scripts.build_bundle import build
 
@@ -55,6 +60,33 @@ def login(client) -> str:
     return response.json()["access_token"]
 
 
+def register_signing_key(client, tmp_path: Path, host_id: str | None = None) -> tuple[Path, dict]:
+    private_key = Ed25519PrivateKey.generate()
+    private_key_path = tmp_path / f"{uuid.uuid4()}.pem"
+    private_key_path.write_bytes(
+        private_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    response = client.post(
+        "/api/v1/signing-keys",
+        headers={"Authorization": f"Bearer {login(client)}"},
+        json={
+            "name": "test controller",
+            "public_key": b64encode(public_key).decode(),
+            "host_id": host_id,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return private_key_path, response.json()
+
+
 def test_health(client):
     assert client.get("/health").json()["status"] == "ok"
 
@@ -87,6 +119,20 @@ def test_duplicate_report_rejected(client):
 
 def test_ingestion_requires_token(client):
     assert client.post("/api/v1/ingest/reports", json=report_payload()).status_code == 401
+
+
+def test_signature_policy_closes_raw_json_ingestion(client):
+    app.dependency_overrides[get_settings] = lambda: Settings(require_signed_bundles=True)
+    try:
+        response = client.post(
+            "/api/v1/ingest/reports",
+            headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+            json=report_payload(),
+        )
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Signed bundle required"
 
 
 def test_admin_can_enroll_host_and_issue_scoped_token(client):
@@ -225,6 +271,92 @@ def test_offline_bundle_rejects_tampered_declared_file(client, tmp_path: Path):
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "Checksum mismatch: metadata/host.json"
+
+
+def test_signed_bundle_records_verified_provenance(client, tmp_path: Path):
+    private_key_path, registered = register_signing_key(client, tmp_path)
+    bundle_path = build(
+        Path("tests/fixtures/report.json"),
+        tmp_path,
+        private_key_path,
+        registered["id"],
+    )
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+    assert response.status_code == 202, response.text
+    history = client.get(
+        f"/api/v1/hosts/{response.json()['host_id']}/reports",
+        headers={"Authorization": f"Bearer {login(client)}"},
+    ).json()
+    assert history[0]["signature_verified"] is True
+    assert history[0]["signing_key_id"] == registered["id"]
+
+
+def test_signed_bundle_rejects_cryptographic_tampering(client, tmp_path: Path):
+    private_key_path, registered = register_signing_key(client, tmp_path)
+    bundle_path = build(
+        Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"]
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(bundle_path) as source:
+        files = {name: source.read(name) for name in source.namelist()}
+    signature = bytearray(files["signature.sig"])
+    signature[0] = ord("A") if signature[0] != ord("A") else ord("B")
+    files["signature.sig"] = bytes(signature)
+    checksum_lines = []
+    for line in files["checksums.sha256"].decode().splitlines():
+        digest, _, name = line.partition("  ")
+        checksum_lines.append(f"{hashlib.sha256(files[name]).hexdigest() if name == 'signature.sig' else digest}  {name}\n")
+    files["checksums.sha256"] = "".join(checksum_lines).encode()
+    with zipfile.ZipFile(output, "w") as target:
+        for name, data in files.items():
+            target.writestr(name, data)
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": ("tampered-signature.zip", output.getvalue(), "application/zip")},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Bundle signature verification failed"
+
+
+def test_revoked_signing_key_cannot_submit_bundle(client, tmp_path: Path):
+    private_key_path, registered = register_signing_key(client, tmp_path)
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    assert client.delete(f"/api/v1/signing-keys/{registered['id']}", headers=headers).status_code == 204
+    bundle_path = build(
+        Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"]
+    )
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Signing key is revoked"
+
+
+def test_host_scoped_signing_key_rejects_another_host(client, tmp_path: Path):
+    admin_headers = {"Authorization": f"Bearer {login(client)}"}
+    host = client.post(
+        "/api/v1/hosts",
+        headers=admin_headers,
+        json={"hostname": "scoped-host", "os_family": "debian", "os_version": "13"},
+    ).json()
+    private_key_path, registered = register_signing_key(client, tmp_path, host["id"])
+    bundle_path = build(
+        Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"]
+    )
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Signing key cannot sign for this host"
 
 
 def test_report_history_compares_new_and_resolved_findings(client):

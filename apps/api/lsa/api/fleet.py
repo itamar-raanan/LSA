@@ -124,6 +124,8 @@ def serialize_report(db: Session, report: Report) -> ReportResponse:
         compliance_score=report.compliance_score,
         security_score=report.security_score,
         artifact_name=report.artifact_name,
+        signing_key_id=report.signing_key_id,
+        signature_verified=report.signature_verified,
         finding_counts=counts,
     )
 

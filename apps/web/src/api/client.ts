@@ -5,6 +5,7 @@ import type {
   IngestionToken,
   ReportComparison,
   ReportSummary,
+  SigningKey,
   TokenCreated,
   User,
 } from '../types'
@@ -75,6 +76,15 @@ export const api = {
   },
   revokeToken(tokenId: string): Promise<void> {
     return request(`/ingestion-tokens/${tokenId}`, { method: 'DELETE' })
+  },
+  createSigningKey(payload: { name: string; public_key: string; host_id?: string; expires_at?: string }): Promise<SigningKey> {
+    return request('/signing-keys', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  signingKeys(): Promise<SigningKey[]> {
+    return request('/signing-keys')
+  },
+  revokeSigningKey(keyId: string): Promise<void> {
+    return request(`/signing-keys/${keyId}`, { method: 'DELETE' })
   },
   findings(filters: { severity?: string; lifecycle?: string; host_id?: string } = {}): Promise<Finding[]> {
     const params = new URLSearchParams()

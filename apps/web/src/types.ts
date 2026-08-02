@@ -68,6 +68,8 @@ export interface ReportSummary {
   compliance_score: number
   security_score: number
   artifact_name: string | null
+  signing_key_id: string | null
+  signature_verified: boolean
   finding_counts: Record<Severity, number>
 }
 
@@ -101,6 +103,17 @@ export interface IngestionToken {
   token_prefix: string
   expires_at: string | null
   last_used_at: string | null
+  revoked_at: string | null
+  created_at: string
+}
+
+export interface SigningKey {
+  id: string
+  name: string
+  host_id: string | null
+  public_key: string
+  fingerprint: string
+  expires_at: string | null
   revoked_at: string | null
   created_at: string
 }

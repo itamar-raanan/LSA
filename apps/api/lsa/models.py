@@ -99,6 +99,21 @@ class IngestionToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class SigningKey(Base):
+    __tablename__ = "signing_keys"
+    __table_args__ = (Index("ix_signing_keys_tenant_fingerprint", "tenant_id", "fingerprint", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    host_id: Mapped[str | None] = mapped_column(ForeignKey("hosts.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    public_key: Mapped[str] = mapped_column(String(64))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class Report(Base):
     __tablename__ = "reports"
 
@@ -117,6 +132,8 @@ class Report(Base):
     security_score: Mapped[float] = mapped_column(Float)
     artifact_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    signing_key_id: Mapped[str | None] = mapped_column(ForeignKey("signing_keys.id"), nullable=True)
+    signature_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     host: Mapped[Host] = relationship(back_populates="reports")
     findings: Mapped[list["Finding"]] = relationship(back_populates="report", cascade="all, delete-orphan")
