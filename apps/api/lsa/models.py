@@ -2,7 +2,18 @@ import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Index, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from lsa.database import Base
@@ -46,22 +57,99 @@ class Tenant(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "identity_provider_id",
+            "external_subject",
+            name="uq_user_external_identity",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(160))
-    password_hash: Mapped[str] = mapped_column(String(300))
+    password_hash: Mapped[str | None] = mapped_column(String(300), nullable=True)
     role: Mapped[str] = mapped_column(String(30), default="admin")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    auth_source: Mapped[str] = mapped_column(String(30), default="local", index=True)
+    identity_provider_id: Mapped[str | None] = mapped_column(
+        ForeignKey("identity_providers.id"), nullable=True, index=True
+    )
+    external_subject: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     tenant: Mapped[Tenant] = relationship(back_populates="users")
 
 
+class IdentityProvider(Base):
+    __tablename__ = "identity_providers"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_identity_provider_name"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    provider_type: Mapped[str] = mapped_column(String(30), index=True)
+    issuer_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    client_id: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    secret_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class AuthTransaction(Base):
+    __tablename__ = "auth_transactions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    provider_id: Mapped[str] = mapped_column(ForeignKey("identity_providers.id"), index=True)
+    nonce: Mapped[str] = mapped_column(String(160))
+    code_verifier: Mapped[str] = mapped_column(String(160))
+    redirect_uri: Mapped[str] = mapped_column(String(1000))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class TlsCertificate(Base):
+    __tablename__ = "tls_certificates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    certificate_chain_pem: Mapped[str] = mapped_column(Text)
+    private_key_ciphertext: Mapped[str] = mapped_column(Text)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    subject: Mapped[str] = mapped_column(String(500))
+    issuer: Mapped[str] = mapped_column(String(500))
+    hostnames: Mapped[list[str]] = mapped_column(JSON, default=list)
+    not_valid_before: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    not_valid_after: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    uploaded_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class Host(Base):
     __tablename__ = "hosts"
-    __table_args__ = (Index("ix_hosts_tenant_machine", "tenant_id", "machine_id_hash", unique=True),)
+    __table_args__ = (
+        Index("ix_hosts_tenant_machine", "tenant_id", "machine_id_hash", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
@@ -101,7 +189,9 @@ class IngestionToken(Base):
 
 class SigningKey(Base):
     __tablename__ = "signing_keys"
-    __table_args__ = (Index("ix_signing_keys_tenant_fingerprint", "tenant_id", "fingerprint", unique=True),)
+    __table_args__ = (
+        Index("ix_signing_keys_tenant_fingerprint", "tenant_id", "fingerprint", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
@@ -137,14 +227,22 @@ class Report(Base):
     artifact_object_version: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     artifact_size_bytes: Mapped[int | None] = mapped_column(nullable=True)
     artifact_content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    artifact_stored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    artifact_retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    artifact_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    artifact_stored_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    artifact_retention_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    artifact_deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     signing_key_id: Mapped[str | None] = mapped_column(ForeignKey("signing_keys.id"), nullable=True)
     signature_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     host: Mapped[Host] = relationship(back_populates="reports")
-    findings: Mapped[list["Finding"]] = relationship(back_populates="report", cascade="all, delete-orphan")
+    findings: Mapped[list["Finding"]] = relationship(
+        back_populates="report", cascade="all, delete-orphan"
+    )
 
 
 class Finding(Base):

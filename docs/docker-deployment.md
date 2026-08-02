@@ -1,6 +1,6 @@
 # Docker deployment
 
-LSA runs as four containers:
+LSA runs as four long-lived containers plus a one-shot TLS-volume initializer:
 
 - `web` serves the compiled React console and reverse-proxies API traffic.
 - `api` applies database migrations and runs the FastAPI application as a non-root user.
@@ -30,13 +30,13 @@ make up
 make ps
 ```
 
-The default bind address is `127.0.0.1:8080`. This is deliberate: it prevents accidental internet exposure. Open `http://localhost:8080`, then sign in with `LSA_BOOTSTRAP_EMAIL` and `LSA_BOOTSTRAP_PASSWORD`.
+The only published service is TLS on `127.0.0.1:8443`; no plaintext HTTP port is exposed. Open `https://localhost:8443`, then sign in with `LSA_BOOTSTRAP_EMAIL` and `LSA_BOOTSTRAP_PASSWORD`.
 
-## Internet exposure and TLS
+## TLS certificates and internet exposure
 
-Keep `LSA_HTTP_BIND=127.0.0.1` and place a TLS reverse proxy or load balancer on the host in front of port 8080. Forward the original `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto` headers. Do not expose the PostgreSQL or API containers directly.
+The first boot generates a 30-day self-signed certificate for `localhost`, so the platform remains HTTPS-only during initial setup. The expected browser warning disappears after an administrator uploads the organization PEM certificate chain and matching private key under **Settings → TLS certificates**.
 
-If the host firewall and an external TLS proxy already protect the service, `LSA_HTTP_BIND=0.0.0.0` permits remote connections. HTTPS is required for production ingestion tokens and administrator sessions.
+The private key is encrypted in PostgreSQL, materialized into an internal restricted volume, and reloaded atomically by the gateway. Set `LSA_TLS_HOST` to the externally visible DNS name before configuring OpenID Connect because it forms the callback URL. Set `LSA_TLS_BIND=0.0.0.0` only when the host firewall permits the intended clients. Do not expose PostgreSQL, MinIO, or the API container directly.
 
 ## Signed evidence policy
 
@@ -96,4 +96,4 @@ The external health endpoints are:
 - `/health` checks the API process.
 - `/ready` checks the API and its live PostgreSQL connection. Compose uses this endpoint for API health gating.
 
-If startup fails, inspect `make logs`. Common causes are unchanged placeholder secrets, an invalid database password in the connection URL, or port 8080 already being in use.
+If startup fails, inspect `make logs`. Common causes are unchanged placeholder secrets, an invalid database password in the connection URL, or port 8443 already being in use.

@@ -32,7 +32,7 @@ cp deploy/.env.example deploy/.env
 make up
 ```
 
-Open `http://localhost:8080` and sign in with the bootstrap email and password from `deploy/.env`. The API documentation is available at `http://localhost:8080/docs`.
+Open `https://localhost:8443` and sign in with the bootstrap email and password from `deploy/.env`. The first boot uses a self-signed localhost certificate. The API documentation is available at `https://localhost:8443/docs`.
 
 The database and immutable evidence objects are stored in named Docker volumes. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, MinIO, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
 
@@ -67,7 +67,7 @@ curl --fail-with-body \
   -H "Authorization: Bearer ${LSA_INGEST_TOKEN}" \
   -H "Content-Type: application/json" \
   --data-binary @report.json \
-  http://localhost:8080/api/v1/ingest/reports
+  https://localhost:8443/api/v1/ingest/reports
 ```
 
 ## Run the scanner

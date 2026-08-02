@@ -5,6 +5,8 @@ import json
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from cryptography.fernet import Fernet
+
 
 def _b64_encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
@@ -36,12 +38,18 @@ def hash_ingestion_token(token: str) -> str:
 
 
 def create_session_token(
-    user_id: str, tenant_id: str, role: str, secret: str, ttl_minutes: int
+    user_id: str,
+    tenant_id: str,
+    role: str,
+    secret: str,
+    ttl_minutes: int,
+    session_id: str | None = None,
 ) -> str:
     payload = {
         "sub": user_id,
         "tenant_id": tenant_id,
         "role": role,
+        "sid": session_id,
         "exp": int((datetime.now(UTC) + timedelta(minutes=ttl_minutes)).timestamp()),
     }
     encoded = _b64_encode(json.dumps(payload, separators=(",", ":")).encode())
@@ -62,3 +70,19 @@ def decode_session_token(token: str, secret: str) -> dict[str, str | int]:
     except (ValueError, KeyError, json.JSONDecodeError) as exc:
         raise ValueError("invalid session") from exc
 
+
+def settings_cipher(session_secret: str, encryption_key: str | None = None) -> Fernet:
+    if encryption_key:
+        return Fernet(encryption_key.encode())
+    key = base64.urlsafe_b64encode(
+        hashlib.sha256(f"lsa-settings:{session_secret}".encode()).digest()
+    )
+    return Fernet(key)
+
+
+def encrypt_secret(value: str, session_secret: str, encryption_key: str | None = None) -> str:
+    return settings_cipher(session_secret, encryption_key).encrypt(value.encode()).decode()
+
+
+def decrypt_secret(value: str, session_secret: str, encryption_key: str | None = None) -> str:
+    return settings_cipher(session_secret, encryption_key).decrypt(value.encode()).decode()

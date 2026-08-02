@@ -1,6 +1,9 @@
-import { Check, Minus, ShieldCheck, UserCircle, UsersThree } from '@phosphor-icons/react'
+import { Check, Minus, ShieldCheck, UsersThree } from '@phosphor-icons/react'
+import { api } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/PageHeader'
+import { EmptyState, ErrorState, LoadingState } from '../../components/StatePanel'
+import { useApi } from '../../hooks/useApi'
 
 const permissions = [
   { capability: 'View hosts, findings, and reports', admin: true, analyst: true, auditor: true },
@@ -12,29 +15,27 @@ const permissions = [
 
 export function UsersSettingsPage() {
   const { user } = useAuth()
-  return (
-    <div className="page-reveal">
-      <PageHeader eyebrow="Identity governance" title="Users, roles & permissions" detail="Define least-privilege access for administrators, security analysts, and audit reviewers." action={<span className="settings-state">Backend required</span>} />
+  const { data: users, error, loading, reload } = useApi(() => api.users(), [])
 
-      <section className="panel overflow-hidden">
-        <div className="flex items-center gap-4 border-b border-stone-800 px-6 py-5 md:px-7">
-          <span className="grid size-10 place-items-center rounded-full bg-emerald-900/40 text-emerald-200"><UserCircle size={22} weight="duotone" /></span>
-          <div className="min-w-0"><p className="truncate text-sm text-stone-200">{user?.name}</p><p className="mt-1 truncate font-mono text-[10px] text-stone-600">{user?.email}</p></div>
-          <span className="ml-auto font-mono text-[9px] uppercase tracking-wider text-emerald-300">Current administrator</span>
-        </div>
-        <div className="flex items-start gap-3 bg-[#121613] px-6 py-4 text-xs leading-5 text-stone-600 md:px-7"><UsersThree size={17} className="mt-0.5 shrink-0" />User invitations, lifecycle state, password resets, and session revocation require tenant-scoped user-management APIs before these controls can be enabled.</div>
-      </section>
+  async function changeRole(id: string, role: string) { await api.updateUserRole(id, role); await reload() }
+  async function changeStatus(id: string, active: boolean) { await api.updateUserStatus(id, active); await reload() }
 
-      <section className="mt-8 overflow-hidden rounded-[22px] border border-stone-800 bg-[#151916]">
-        <div className="border-b border-stone-800 px-6 py-5 md:px-7"><p className="section-label">Proposed permission model</p><p className="mt-2 text-xs leading-5 text-stone-600">Permissions must be enforced by the API on every request; hiding a console button is not authorization.</p></div>
-        <div className="overflow-x-auto">
-          <table className="data-table min-w-[680px]">
-            <thead><tr><th>Capability</th><th>Administrator</th><th>Analyst</th><th>Auditor</th></tr></thead>
-            <tbody>{permissions.map((permission) => <tr key={permission.capability}><td>{permission.capability}</td>{(['admin', 'analyst', 'auditor'] as const).map((role) => <td key={role}>{permission[role] ? <Check size={16} className="text-emerald-400" aria-label="Allowed" /> : <Minus size={16} className="text-stone-700" aria-label="Not allowed" />}</td>)}</tr>)}</tbody>
-          </table>
-        </div>
-        <div className="flex items-start gap-3 border-t border-stone-800 bg-[#121613] px-6 py-4 text-xs leading-5 text-stone-600 md:px-7"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-500" />Recommended additions: custom roles, emergency-access accounts, active-session revocation, and quarterly access-review exports.</div>
-      </section>
-    </div>
-  )
+  return <div className="page-reveal">
+    <PageHeader eyebrow="Identity governance" title="Users, roles & permissions" detail="Users appear automatically after successful organization authentication; administrators govern role and lifecycle here." action={<span className="settings-state">JIT provisioning</span>} />
+    {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !users?.length ? <EmptyState title="No users" detail="Enable an identity provider and complete the first organization sign-in." /> : <section className="panel overflow-hidden">
+      <div className="overflow-x-auto"><table className="data-table min-w-[900px]"><thead><tr><th>User</th><th>Identity source</th><th>Role</th><th>Status</th><th>Last login</th></tr></thead><tbody>{users.map((managed) => <tr key={managed.id}>
+        <td><span className="font-medium text-stone-200">{managed.name}</span><span className="table-subtitle">{managed.email}{managed.id === user?.id ? ' · current user' : ''}</span></td>
+        <td>{managed.provider_name ?? (managed.auth_source === 'local' ? 'Emergency local' : managed.auth_source)}<span className="table-subtitle">{managed.auth_source}</span></td>
+        <td><select className="select-input min-h-9" value={managed.role} disabled={managed.id === user?.id} onChange={(event) => void changeRole(managed.id, event.target.value)}><option value="admin">Administrator</option><option value="analyst">Analyst</option><option value="auditor">Auditor</option></select></td>
+        <td><button className="button-secondary min-h-9 px-3" disabled={managed.id === user?.id} onClick={() => void changeStatus(managed.id, !managed.is_active)}>{managed.is_active ? 'Active' : 'Disabled'}</button></td>
+        <td>{managed.last_login_at ? new Date(managed.last_login_at).toLocaleString() : 'Never'}</td>
+      </tr>)}</tbody></table></div>
+      <div className="flex items-start gap-3 border-t border-stone-800 bg-[#121613] px-6 py-4 text-xs leading-5 text-stone-600"><UsersThree size={17} className="mt-0.5 shrink-0" />Disabling a user immediately revokes every active browser session. User identities remain linked to their provider subject.</div>
+    </section>}
+    <section className="mt-8 overflow-hidden rounded-[22px] border border-stone-800 bg-[#151916]">
+      <div className="border-b border-stone-800 px-6 py-5"><p className="section-label">Enforced permission model</p><p className="mt-2 text-xs leading-5 text-stone-600">Administrative APIs enforce these role boundaries independently of the console.</p></div>
+      <div className="overflow-x-auto"><table className="data-table min-w-[680px]"><thead><tr><th>Capability</th><th>Administrator</th><th>Analyst</th><th>Auditor</th></tr></thead><tbody>{permissions.map((permission) => <tr key={permission.capability}><td>{permission.capability}</td>{(['admin', 'analyst', 'auditor'] as const).map((role) => <td key={role}>{permission[role] ? <Check size={16} className="text-emerald-400" aria-label="Allowed" /> : <Minus size={16} className="text-stone-700" aria-label="Not allowed" />}</td>)}</tr>)}</tbody></table></div>
+      <div className="flex items-start gap-3 border-t border-stone-800 bg-[#121613] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-500" />Role mapping originates in OIDC groups or the configured RADIUS reply attribute and can be corrected here.</div>
+    </section>
+  </div>
 }

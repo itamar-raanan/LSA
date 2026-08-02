@@ -11,6 +11,14 @@ vi.mock('../../auth/useAuth', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'admin@lsa.local', name: 'Security Administrator', role: 'admin' } }),
 }))
 
+vi.mock('../../api/client', () => ({
+  api: {
+    providers: vi.fn().mockResolvedValue([]),
+    users: vi.fn().mockResolvedValue([{ id: 'user-1', email: 'admin@lsa.local', name: 'Security Administrator', role: 'admin', is_active: true, auth_source: 'local', provider_name: null, last_login_at: null, created_at: '2026-01-01T00:00:00Z' }]),
+    tlsCertificate: vi.fn().mockResolvedValue({ id: 'cert-1', fingerprint: 'ab'.repeat(32), subject: 'CN=localhost', issuer: 'CN=localhost', hostnames: ['localhost'], not_valid_before: '2026-01-01T00:00:00Z', not_valid_after: '2027-01-01T00:00:00Z', is_active: true, created_at: '2026-01-01T00:00:00Z' }),
+  },
+}))
+
 function renderSettings() {
   return render(
     <MemoryRouter initialEntries={['/settings']}>
@@ -31,7 +39,7 @@ function settingsNavigation() {
 }
 
 describe('Settings', () => {
-  it('organizes administration controls and navigates to authentication', () => {
+  it('organizes administration controls and navigates to authentication', async () => {
     renderSettings()
 
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
@@ -39,24 +47,25 @@ describe('Settings', () => {
     fireEvent.click(settingsNavigation().getByRole('link', { name: /Authentication/ }))
 
     expect(screen.getByRole('heading', { name: 'Authentication' })).toBeInTheDocument()
-    expect(screen.getByText('OpenID Connect / SAML SSO')).toBeInTheDocument()
-    expect(screen.getByText('RADIUS')).toBeInTheDocument()
+    expect(await screen.findByText('No identity providers')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add provider/ })).toBeInTheDocument()
   })
 
-  it('shows the proposed role model without presenting it as active', () => {
+  it('shows JIT users and the enforced role model', async () => {
     renderSettings()
     fireEvent.click(settingsNavigation().getByRole('link', { name: /Users & access/ }))
 
     expect(screen.getByRole('heading', { name: 'Users, roles & permissions' })).toBeInTheDocument()
-    expect(screen.getAllByText('Backend required').length).toBeGreaterThan(0)
-    expect(screen.getByText('Proposed permission model')).toBeInTheDocument()
+    expect(await screen.findByText('Emergency local')).toBeInTheDocument()
+    expect(screen.getByText('Enforced permission model')).toBeInTheDocument()
   })
 
-  it('keeps certificate upload disabled until secure storage exists', () => {
+  it('shows the active certificate and enables secure rotation', async () => {
     renderSettings()
     fireEvent.click(settingsNavigation().getByRole('link', { name: /TLS certificates/ }))
 
     expect(screen.getByRole('heading', { name: 'TLS certificates' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Choose certificate files' })).toBeDisabled()
+    expect(await screen.findByText('Active certificate')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Install certificate' })).toBeEnabled()
   })
 })

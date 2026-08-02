@@ -121,3 +121,44 @@ export interface SigningKey {
   revoked_at: string | null
   created_at: string
 }
+
+export type ProviderType = 'entra' | 'okta' | 'google' | 'adfs' | 'openid' | 'radius'
+
+export interface IdentityProvider {
+  id: string
+  name: string
+  provider_type: ProviderType
+  issuer_url: string | null
+  client_id: string | null
+  config: Record<string, unknown>
+  is_enabled: boolean
+  secret_configured: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PublicIdentityProvider {
+  id: string
+  name: string
+  provider_type: ProviderType
+}
+
+export interface ManagedUser extends User {
+  is_active: boolean
+  auth_source: string
+  provider_name: string | null
+  last_login_at: string | null
+  created_at: string
+}
+
+export interface TlsCertificate {
+  id: string
+  fingerprint: string
+  subject: string
+  issuer: string
+  hostnames: string[]
+  not_valid_before: string
+  not_valid_after: string
+  is_active: boolean
+  created_at: string
+}

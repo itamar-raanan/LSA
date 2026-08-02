@@ -21,7 +21,15 @@ The canonical contract lives in `packages/contracts/report-v1.schema.json`. A re
 
 The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API, PostgreSQL, and MinIO communicate only on an internal Docker network; neither data service has a published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.
 
-Only the web gateway publishes a host port, bound to `127.0.0.1:8080` by default. Production internet exposure belongs at a host-level TLS proxy or load balancer. Platform state lives in named PostgreSQL and evidence-object volumes; containers themselves are disposable.
+Only the TLS web gateway publishes a host port, bound to `127.0.0.1:8443` by default. No plaintext HTTP listener is published. Platform state lives in named PostgreSQL and evidence-object volumes; certificate keys are encrypted in PostgreSQL and materialized into a restricted gateway volume.
+
+## Identity and access
+
+LSA keeps one local bootstrap administrator as a break-glass account. All regular console users are created just in time after successful OpenID Connect or RADIUS authentication. Supported OIDC presets are Microsoft Entra ID, Okta, Google Workspace, and ADFS; generic standards-based OpenID Connect is also available.
+
+OIDC uses authorization code flow with PKCE, state, and nonce. The callback validates token signature, issuer, audience, expiry, and nonce before binding a user to the provider subject. Group claims map to `admin`, `analyst`, or `auditor`, defaulting to `auditor`. RADIUS maps a configured Access-Accept reply attribute to the same roles and belongs on a trusted internal network or protected tunnel.
+
+Browser tokens carry a database-backed session ID. Disabling a user or logging out revokes active sessions immediately. Provider secrets and TLS private keys are encrypted with `LSA_SETTINGS_ENCRYPTION_KEY`; settings APIs and audit events never return their values.
 
 ## Supported systems
 
@@ -42,4 +50,4 @@ The v0.3 scanner implementation focuses on Debian 13 with 32 executable controls
 - Signed bundles are accepted only when the referenced key is trusted, active, unexpired, correctly scoped, and cryptographically verifies the exact manifest bytes.
 - Private signing keys remain on customer-controlled scanner controllers; LSA stores only public keys and fingerprints.
 - Every accepted report creates an audit event.
-- Production deployments must replace all development secrets and terminate TLS before the API.
+- Production deployments must replace all development secrets and install a trusted TLS certificate before exposure.

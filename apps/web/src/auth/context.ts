@@ -4,6 +4,8 @@ import type { User } from '../types'
 export interface AuthValue {
   user: User | null
   login: (email: string, password: string) => Promise<void>
+  radiusLogin: (username: string, password: string) => Promise<void>
+  acceptSession: (token: string, user: User) => void
   logout: () => void
 }
 
