@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowsCounterClockwise, SealCheck } from '@phosphor-icons/react'
+import { ArrowDown, ArrowUp, ArrowsCounterClockwise, DownloadSimple, SealCheck } from '@phosphor-icons/react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api/client'
@@ -11,6 +11,7 @@ export function ReportHistory({ hostId }: { hostId: string }) {
   const [comparison, setComparison] = useState<ReportComparison | null>(null)
   const [comparing, setComparing] = useState<string | null>(null)
   const [comparisonError, setComparisonError] = useState('')
+  const [downloading, setDownloading] = useState<string | null>(null)
 
   async function compare(reportId: string) {
     setComparing(reportId)
@@ -21,6 +22,24 @@ export function ReportHistory({ hostId }: { hostId: string }) {
       setComparisonError(reason instanceof Error ? reason.message : 'Comparison failed')
     } finally {
       setComparing(null)
+    }
+  }
+
+  async function download(reportId: string) {
+    setDownloading(reportId)
+    setComparisonError('')
+    try {
+      const artifact = await api.downloadArtifact(reportId)
+      const url = URL.createObjectURL(artifact.blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = artifact.filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (reason) {
+      setComparisonError(reason instanceof Error ? reason.message : 'Artifact download failed')
+    } finally {
+      setDownloading(null)
     }
   }
 
@@ -37,9 +56,9 @@ export function ReportHistory({ hostId }: { hostId: string }) {
       <div className="divide-y divide-stone-800 border-t border-stone-800">
         {data.slice(0, 8).map((report, index) => (
           <div key={report.id} className="grid items-center gap-4 px-6 py-4 sm:grid-cols-[1fr_auto_auto] md:px-8">
-            <div><div className="flex flex-wrap items-center gap-3"><p className="text-sm text-stone-300">{new Date(report.generated_at).toLocaleString()}</p>{report.signature_verified && <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400"><SealCheck size={13} weight="fill" /> Signed evidence</span>}</div><p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-stone-600">{report.profile} · scanner {report.scanner_version}</p></div>
+            <div><div className="flex flex-wrap items-center gap-3"><p className="text-sm text-stone-300">{new Date(report.generated_at).toLocaleString()}</p>{report.signature_verified && <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400"><SealCheck size={13} weight="fill" /> Signed evidence</span>}{report.artifact_available && <span className="font-mono text-[9px] uppercase tracking-wider text-sky-300">Vaulted · {formatBytes(report.artifact_size_bytes)}</span>}</div><p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-stone-600">{report.profile} · scanner {report.scanner_version}{report.artifact_retention_until ? ` · retained until ${new Date(report.artifact_retention_until).toLocaleDateString()}` : ''}</p></div>
             <div className="flex gap-6"><div><span className="font-mono text-sm text-stone-200">{report.security_score.toFixed(1)}</span><p className="text-[9px] uppercase tracking-wider text-stone-700">Security</p></div><div><span className="font-mono text-sm text-stone-200">{report.compliance_score.toFixed(1)}</span><p className="text-[9px] uppercase tracking-wider text-stone-700">Compliance</p></div></div>
-            <button className="button-secondary min-h-9 px-3" disabled={comparing === report.id} onClick={() => void compare(report.id)}><ArrowsCounterClockwise size={14} />{index === data.length - 1 ? 'Baseline' : 'Compare'}</button>
+            <div className="flex justify-end gap-2">{report.artifact_available && <button className="button-secondary min-h-9 px-3" disabled={downloading === report.id} onClick={() => void download(report.id)}><DownloadSimple size={14} />{downloading === report.id ? 'Verifying' : 'Evidence'}</button>}<button className="button-secondary min-h-9 px-3" disabled={comparing === report.id} onClick={() => void compare(report.id)}><ArrowsCounterClockwise size={14} />{index === data.length - 1 ? 'Baseline' : 'Compare'}</button></div>
           </div>
         ))}
       </div>
@@ -53,6 +72,12 @@ export function ReportHistory({ hostId }: { hostId: string }) {
       )}
     </section>
   )
+}
+
+function formatBytes(value: number | null): string {
+  if (value === null) return 'Stored'
+  if (value < 1024) return `${value} B`
+  return `${(value / 1024).toFixed(1)} KB`
 }
 
 function DeltaColumn({ label, items, icon, color }: { label: string; items: ReportComparison['new']; icon: ReactNode; color: string }) {

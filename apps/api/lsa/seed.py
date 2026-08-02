@@ -33,18 +33,20 @@ def bootstrap(db: Session, settings: Settings) -> None:
                 role="admin",
             )
         )
-    token_hash = hash_ingestion_token(DEMO_TOKEN)
-    token = db.scalar(select(IngestionToken).where(IngestionToken.token_hash == token_hash))
-    if token is None:
-        token = IngestionToken(
-            tenant_id=tenant.id,
-            name="Development controller",
-            token_prefix=DEMO_TOKEN[:12],
-            token_hash=token_hash,
-        )
-        db.add(token)
+    token = None
+    if settings.environment != "production":
+        token_hash = hash_ingestion_token(DEMO_TOKEN)
+        token = db.scalar(select(IngestionToken).where(IngestionToken.token_hash == token_hash))
+        if token is None:
+            token = IngestionToken(
+                tenant_id=tenant.id,
+                name="Development controller",
+                token_prefix=DEMO_TOKEN[:12],
+                token_hash=token_hash,
+            )
+            db.add(token)
     db.commit()
-    if settings.seed_demo:
+    if settings.seed_demo and token is not None:
         seed_demo_reports(db, tenant.id, token.id)
 
 

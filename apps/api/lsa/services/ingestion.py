@@ -1,3 +1,4 @@
+from datetime import datetime
 from hashlib import sha256
 
 from fastapi import HTTPException, status
@@ -37,6 +38,12 @@ def ingest_report(
     artifact_bytes: bytes | None = None,
     signing_key_id: str | None = None,
     signature_verified: bool = False,
+    artifact_object_key: str | None = None,
+    artifact_object_version: str | None = None,
+    artifact_size_bytes: int | None = None,
+    artifact_content_type: str | None = None,
+    artifact_stored_at: datetime | None = None,
+    artifact_retention_until: datetime | None = None,
 ) -> IngestResponse:
     report_id = str(report_data.report_id)
     host_id = str(report_data.host.host_id)
@@ -104,6 +111,12 @@ def ingest_report(
         security_score=security_score,
         artifact_name=artifact_name,
         checksum=sha256(artifact_bytes).hexdigest() if artifact_bytes else None,
+        artifact_object_key=artifact_object_key,
+        artifact_object_version=artifact_object_version,
+        artifact_size_bytes=artifact_size_bytes,
+        artifact_content_type=artifact_content_type,
+        artifact_stored_at=artifact_stored_at,
+        artifact_retention_until=artifact_retention_until,
         signing_key_id=signing_key_id,
         signature_verified=signature_verified,
     )

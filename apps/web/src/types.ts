@@ -68,6 +68,10 @@ export interface ReportSummary {
   compliance_score: number
   security_score: number
   artifact_name: string | null
+  artifact_size_bytes: number | null
+  artifact_stored_at: string | null
+  artifact_retention_until: string | null
+  artifact_available: boolean
   signing_key_id: string | null
   signature_verified: boolean
   finding_counts: Record<Severity, number>

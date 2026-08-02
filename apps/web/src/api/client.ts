@@ -86,6 +86,23 @@ export const api = {
   revokeSigningKey(keyId: string): Promise<void> {
     return request(`/signing-keys/${keyId}`, { method: 'DELETE' })
   },
+  async downloadArtifact(reportId: string): Promise<{ blob: Blob; filename: string; checksum: string | null }> {
+    const token = localStorage.getItem('lsa_session')
+    const response = await fetch(`${API_URL}/reports/${reportId}/artifact`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ detail: 'Artifact download failed' }))
+      throw new ApiError(payload.detail ?? 'Artifact download failed', response.status)
+    }
+    const disposition = response.headers.get('Content-Disposition') ?? ''
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `lsa-report-${reportId}.zip`
+    return {
+      blob: await response.blob(),
+      filename,
+      checksum: response.headers.get('X-LSA-Artifact-SHA256'),
+    }
+  },
   findings(filters: { severity?: string; lifecycle?: string; host_id?: string } = {}): Promise<Finding[]> {
     const params = new URLSearchParams()
     Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))

@@ -18,7 +18,8 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
 - Admin-managed signing-key registration, host scoping, expiry, revocation, and provenance history
-- Production-style Docker Compose stack with PostgreSQL, automatic migrations, health checks, and a same-origin web gateway
+- Immutable original-evidence vault with object lock, retention enforcement, verified downloads, and deletion audit events
+- Production-style Docker Compose stack with PostgreSQL, a MinIO evidence vault, automatic migrations, health checks, and a same-origin web gateway
 - Backend and frontend tests plus GitHub Actions CI
 
 ## Quick start
@@ -33,7 +34,7 @@ make up
 
 Open `http://localhost:8080` and sign in with the bootstrap email and password from `deploy/.env`. The API documentation is available at `http://localhost:8080/docs`.
 
-The database is stored in the named `lsa-postgres` volume. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
+The database and immutable evidence objects are stored in named Docker volumes. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, MinIO, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
 
 For direct local development and testing, install Python 3.12+ and Node.js 22+:
 
@@ -46,6 +47,8 @@ make test
 The seeded development ingestion token is `lsa_ingest_demo_secret`. It is intentionally local-only and must never be used in production.
 
 See [docs/docker-deployment.md](docs/docker-deployment.md) for production exposure, TLS, backup, restore, upgrades, and troubleshooting.
+
+See [docs/evidence-vault.md](docs/evidence-vault.md) for object storage, integrity verification, retention, and deletion behavior.
 
 ## Enroll a host
 

@@ -6,10 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from lsa.api import admin, auth, fleet, ingest
+from lsa.api import admin, artifacts, auth, fleet, ingest
 from lsa.config import get_settings
 from lsa.database import Base, SessionLocal, engine, get_db
 from lsa.seed import bootstrap
+from lsa.services.artifacts import ArtifactStore, get_artifact_store
 
 
 settings = get_settings()
@@ -39,6 +40,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(ingest.router, prefix="/api/v1")
+app.include_router(artifacts.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
 
 
@@ -48,6 +50,10 @@ def health() -> dict[str, str]:
 
 
 @app.get("/ready", tags=["operations"])
-def readiness(db: Session = Depends(get_db)) -> dict[str, str]:
+def readiness(
+    db: Session = Depends(get_db),
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
+) -> dict[str, str]:
     db.execute(text("SELECT 1"))
-    return {"status": "ready", "database": "connected"}
+    artifact_store.ensure_ready()
+    return {"status": "ready", "database": "connected", "evidence_vault": "connected"}

@@ -207,6 +207,10 @@ class ReportResponse(BaseModel):
     compliance_score: float
     security_score: float
     artifact_name: str | None
+    artifact_size_bytes: int | None
+    artifact_stored_at: datetime | None
+    artifact_retention_until: datetime | None
+    artifact_available: bool
     signing_key_id: str | None
     signature_verified: bool
     finding_counts: dict[str, int]
@@ -224,3 +228,7 @@ class ReportComparison(BaseModel):
     new: list[FindingDelta]
     persistent: list[FindingDelta]
     resolved: list[FindingDelta]
+
+
+class ArtifactPurgeResponse(BaseModel):
+    deleted: int

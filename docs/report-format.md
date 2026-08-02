@@ -33,3 +33,5 @@ lsa_signing_key_id: 7f2f43b5-…
 ```
 
 When both values are present, the scanner uploads the signed ZIP bundle instead of the unsigned JSON projection. Keep the private key outside inventory and source control. Set `LSA_REQUIRE_SIGNED_BUNDLES=true` on the API to reject unsigned ZIP bundles.
+
+Accepted ZIP bytes are preserved unchanged in the evidence vault. The report record stores the tenant-isolated object key, exact object version, byte length, SHA-256 digest, storage time, and retention deadline. Downloads are served only after the stored object is re-hashed and matches the ingestion digest.
