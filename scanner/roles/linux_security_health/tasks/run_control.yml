@@ -8,6 +8,7 @@
   failed_when: false
   environment:
     SH_STALE_DAYS: "{{ security_health_stale_account_days | string }}"
+    SH_PROFILE: "{{ lsa_profile | default('production_server') }}"
   tags:
     - security_health
     - "health_{{ health_control.id | lower | replace('-', '_') }}"

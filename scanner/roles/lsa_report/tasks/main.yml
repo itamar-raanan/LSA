@@ -3,6 +3,8 @@
   ansible.builtin.assert:
     that:
       - ansible_facts.os_family in ['Debian', 'RedHat']
+      - ansible_facts.distribution in lsa_supported_systems
+      - ansible_facts.distribution_version in lsa_supported_systems.get(ansible_facts.distribution, []) or ansible_facts.distribution_major_version in lsa_supported_systems.get(ansible_facts.distribution, [])
       - lsa_host_id | length > 0
       - lsa_delivery_mode in ['offline', 'upload', 'upload_and_keep']
       - lsa_profile in lsa_supported_profiles
@@ -17,8 +19,12 @@
          else 'rhel' }}
     lsa_report_id: "{{ lookup('pipe', 'python3 -c \"import uuid; print(uuid.uuid4())\"') }}"
     lsa_generated_at: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
-    lsa_machine_id_hash: "sha256:{{ ansible_machine_id | hash('sha256') }}"
+    lsa_machine_id_hash: "sha256:{{ ansible_facts.machine_id | hash('sha256') }}"
     lsa_effective_profile: "{{ lsa_profile }}"
+    lsa_effective_modules: >-
+      {{ ['cis_debian13', 'security_health']
+         if ansible_facts.distribution == 'Debian' and ansible_facts.distribution_major_version == '13'
+         else ['security_health'] }}
 
 - name: Initialize normalized findings
   ansible.builtin.set_fact:
@@ -55,9 +61,10 @@
     security_health_generate_standalone_reports: false
     security_health_exceptions: "{{ lsa_security_health_exceptions }}"
     security_health_stale_account_days: "{{ lsa_security_health_stale_account_days }}"
-  when:
-    - ansible_facts.distribution == 'Debian'
-    - ansible_facts.distribution_major_version == '13'
+    security_health_active_benchmark: >-
+      {{ 'cis_debian13'
+         if ansible_facts.distribution == 'Debian' and ansible_facts.distribution_major_version == '13'
+         else '' }}
 
 - name: Normalize supplemental security-health results
   ansible.builtin.include_tasks: normalize_health_result.yml
@@ -65,9 +72,13 @@
   loop_control:
     loop_var: lsa_health_result
     label: "{{ lsa_health_result.id }} {{ lsa_health_result.title }}"
-  when:
-    - ansible_facts.distribution == 'Debian'
-    - ansible_facts.distribution_major_version == '13'
+
+- name: Validate normalized finding identity and categories
+  ansible.builtin.assert:
+    that:
+      - lsa_findings | map(attribute='control_id') | list | unique | length == lsa_findings | length
+      - lsa_findings | map(attribute='category') | list | difference(lsa_canonical_categories) | length == 0
+    fail_msg: Normalized findings must have unique control IDs and use canonical finding categories.
 
 - name: Calculate report summary
   ansible.builtin.set_fact:
@@ -97,7 +108,7 @@
 - name: Build unsigned portable offline bundle
   ansible.builtin.command:
     argv:
-      - python3
+      - "{{ lsa_controller_python }}"
       - "{{ role_path }}/../../scripts/build_bundle.py"
       - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending/report.json"
       - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending"
@@ -110,7 +121,7 @@
 - name: Build signed portable offline bundle
   ansible.builtin.command:
     argv:
-      - python3
+      - "{{ lsa_controller_python }}"
       - "{{ role_path }}/../../scripts/build_bundle.py"
       - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending/report.json"
       - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending"

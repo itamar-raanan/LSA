@@ -18,13 +18,35 @@
     file: controls.yml
   when: security_health_enabled | bool
 
+- name: Load expanded Linux audit controls
+  ansible.builtin.include_vars:
+    file: expanded_controls.yml
+  when: security_health_enabled | bool
+
+- name: Assemble and validate portable Linux control catalog
+  ansible.builtin.set_fact:
+    security_health_catalog: "{{ security_health_controls + security_health_expanded_controls }}"
+  changed_when: false
+  when: security_health_enabled | bool
+
+- name: Validate portable Linux control metadata
+  ansible.builtin.assert:
+    that:
+      - security_health_catalog | map(attribute='id') | list | unique | length == security_health_catalog | length
+      - security_health_catalog | map(attribute='semantic_key') | list | unique | length == security_health_catalog | length
+      - security_health_catalog | map(attribute='category') | list | difference(security_health_canonical_categories) | length == 0
+    fail_msg: Portable Linux controls must have unique IDs, unique semantic keys, and canonical categories.
+  when: security_health_enabled | bool
+
 - name: Run security health controls
   ansible.builtin.include_tasks: run_control.yml
-  loop: "{{ security_health_controls }}"
+  loop: "{{ security_health_catalog }}"
   loop_control:
     loop_var: health_control
     label: "{{ health_control.id }} {{ health_control.title }}"
-  when: security_health_enabled | bool
+  when:
+    - security_health_enabled | bool
+    - security_health_active_benchmark not in (health_control.superseded_by | default([]))
 
 - name: Generate security health reports
   ansible.builtin.include_tasks: report.yml

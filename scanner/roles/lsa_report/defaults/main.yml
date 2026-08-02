@@ -1,6 +1,7 @@
 ---
 lsa_schema_version: "1.0"
-lsa_scanner_version: "0.4.0"
+lsa_scanner_version: "0.5.0"
+lsa_controller_python: "{{ ansible_playbook_python }}"
 lsa_delivery_mode: upload_and_keep
 lsa_output_root: "{{ playbook_dir }}/../reports"
 lsa_platform_url: "https://lsa.example.com"
@@ -30,6 +31,27 @@ lsa_cis_profile_map:
 lsa_cis_exceptions: {}
 lsa_security_health_exceptions: {}
 lsa_security_health_stale_account_days: 90
+lsa_canonical_categories:
+  - accounts
+  - audit
+  - filesystem
+  - kernel
+  - logging
+  - mandatory_access
+  - network
+  - packages
+  - services
+  - ssh
+  - time
+  - updates
+lsa_supported_systems:
+  Debian: ['12', '13']
+  Ubuntu: ['22.04', '24.04']
+  RedHat: ['8', '9']
+  Rocky: ['8', '9']
+  AlmaLinux: ['8', '9']
+  OracleLinux: ['8', '9']
+  CentOS: ['8', '9']
 lsa_modules:
   - cis
   - security_health
