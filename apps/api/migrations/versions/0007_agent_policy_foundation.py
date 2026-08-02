@@ -20,7 +20,6 @@ policy_mode = sa.Enum("disabled", "audit", "manual", "remediate", name="policymo
 
 
 def upgrade() -> None:
-    policy_mode.create(op.get_bind(), checkfirst=True)
     # Revision 0001 creates the application's current metadata on a brand-new
     # installation. Existing databases at 0006 do not have these tables, while
     # a fresh database already does; support both paths without duplicate DDL.
