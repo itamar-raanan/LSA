@@ -1,8 +1,8 @@
 # Linux Security Auditor
 
-Linux Security Auditor (LSA) is an ingestion-first Linux security and compliance platform. Customer-controlled Ansible scans produce normalized evidence; LSA validates it, maintains a persistent profile for each host, and presents fleet-wide risk, compliance, findings, and history from one console.
+Linux Security Auditor (LSA) is an ingestion-first Linux security and compliance platform. Customer-controlled offline scans or outbound-only agents produce normalized evidence; LSA validates it, maintains a persistent profile for each host, and presents fleet-wide risk, compliance, findings, and history from one console.
 
-LSA does **not** SSH to servers, store privileged server credentials, or execute scans remotely.
+LSA does **not** SSH to servers, store privileged server credentials, or execute scans remotely. Managed agents initiate every connection and execute only locally installed, versioned controls.
 
 ## Current v0.1 foundation
 
@@ -10,6 +10,9 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - PostgreSQL-compatible tenant, host, report, finding, token, and audit models
 - Online JSON and offline ZIP report ingestion
 - Admin-managed host enrollment, revocable host-scoped tokens, and machine-identity binding
+- Outbound-only unified Linux agent with one-time enrollment and local Ed25519 identity
+- Single-group agent assignment, immutable policy versions, heartbeat, and per-control audit scope
+- Monitor and staged Remediation policy templates with server and agent enforcement locked to audit-only
 - Complete manifest, checksum, and optional Ed25519 signature verification for offline bundles
 - New, persistent, and resolved finding comparison
 - React fleet dashboard, enrollment, token lifecycle management, host profiles, report history, comparisons, findings, and upload
@@ -61,6 +64,18 @@ Administrators can manage scanner credentials from **Ingestion tokens**. Prefer 
 
 For cryptographic report provenance, generate an Ed25519 key on the controller with `scanner/scripts/generate_signing_key.py`, register only its public key under **Signing keys**, and add the returned key ID plus private-key path to the scanner variables. See [docs/report-format.md](docs/report-format.md) for the complete signed-bundle workflow.
 
+## Enroll a managed agent
+
+Open **Settings → Agents & policies**, assign a policy to a group, and create a short-lived one-time enrollment token. Install the repository and Python environment on the host, copy `agent/config.example.json` to `/etc/lsa-agent/config.json`, then enroll and start the service:
+
+```bash
+sudo /opt/lsa-agent/venv/bin/python /opt/lsa-agent/agent/lsa_agent.py \
+  --config /etc/lsa-agent/config.json enroll --token 'lsa_enroll_...'
+sudo systemctl enable --now lsa-agent
+```
+
+The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for installation and trust details.
+
 ## Submit a JSON report
 
 ```bash
@@ -92,6 +107,7 @@ GitHub Actions also executes the complete scanner inside an official Debian 13 c
 - `apps/api` — API, data model, ingestion, migrations, tests
 - `apps/web` — React fleet console
 - `scanner` — Ansible scanner, report builder, submission flow
+- `agent` — outbound Linux agent runtime and systemd service
 - `packages/contracts` — versioned machine-readable contracts
 - `deploy` — local deployment composition
 - `docs` — architecture and report-format documentation

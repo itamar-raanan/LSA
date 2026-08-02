@@ -10,7 +10,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_2, section_2_1]
 
 - name: Section 2.1 - Manual server service controls
@@ -19,7 +19,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_2, section_2_1]
 
 - name: Load Section 2.2 control definitions
@@ -33,7 +33,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_2, section_2_2]
 
 - name: Load Section 2.3 control definitions
@@ -47,7 +47,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_2, section_2_3]
 
 - name: Load Section 2.4 control definitions
@@ -61,5 +61,5 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_2, section_2_4]

@@ -10,7 +10,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_3, section_3_1]
 
 - name: Section 3.1 - Automated network device controls
@@ -19,7 +19,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_3, section_3_1]
 
 - name: Load Section 3.2 network kernel module controls
@@ -33,7 +33,7 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_3, section_3_2]
 
 - name: Load Section 3.3 network kernel parameter controls
@@ -47,5 +47,5 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0 and cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [section_3, section_3_3]

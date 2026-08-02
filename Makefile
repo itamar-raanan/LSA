@@ -16,7 +16,7 @@ test:
 	npm test
 
 lint:
-	.venv/bin/ruff check apps scanner
+	.venv/bin/ruff check apps scanner agent
 	npm run lint
 
 build:

@@ -12,6 +12,7 @@ import { CertificatesSettingsPage } from './pages/settings/CertificatesSettingsP
 import { SettingsLayout } from './pages/settings/SettingsLayout'
 import { SettingsOverviewPage } from './pages/settings/SettingsOverviewPage'
 import { UsersSettingsPage } from './pages/settings/UsersSettingsPage'
+import { AgentsSettingsPage } from './pages/settings/AgentsSettingsPage'
 import { SigningKeysPage } from './pages/SigningKeysPage'
 import { TokensPage } from './pages/TokensPage'
 
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<SettingsOverviewPage />} />
           <Route path="users" element={<UsersSettingsPage />} />
+          <Route path="agents" element={<AgentsSettingsPage />} />
           <Route path="authentication" element={<AuthenticationSettingsPage />} />
           <Route path="tokens" element={<TokensPage />} />
           <Route path="signing-keys" element={<SigningKeysPage />} />

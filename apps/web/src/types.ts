@@ -171,3 +171,75 @@ export interface TlsCertificate {
   is_active: boolean
   created_at: string
 }
+
+export type PolicyMode = 'disabled' | 'audit' | 'manual' | 'remediate'
+
+export interface AgentPolicy {
+  id: string
+  name: string
+  description: string
+  version: number
+  default_mode: PolicyMode
+  control_modes: Record<string, PolicyMode>
+  settings: Record<string, unknown>
+  assigned_groups: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentGroup {
+  id: string
+  name: string
+  description: string
+  policy_id: string
+  policy_name: string
+  policy_version: number
+  agent_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface LinuxAgent {
+  id: string
+  host_id: string
+  hostname: string
+  group_id: string
+  group_name: string
+  policy_name: string
+  policy_version: number
+  agent_version: string
+  capabilities: string[]
+  fingerprint: string
+  last_seen_at: string | null
+  last_policy_version: number | null
+  revoked_at: string | null
+  created_at: string
+}
+
+export interface ControlCatalogItem {
+  control_id: string
+  title: string
+  category: string
+  module: string
+}
+
+export interface AgentEnrollmentTokenCreated {
+  id: string
+  name: string
+  group_id: string
+  token: string
+  token_prefix: string
+  expires_at: string
+}
+
+export interface AgentEnrollmentToken {
+  id: string
+  name: string
+  group_id: string
+  group_name: string
+  token_prefix: string
+  expires_at: string
+  used_at: string | null
+  revoked_at: string | null
+  created_at: string
+}

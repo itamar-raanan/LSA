@@ -37,6 +37,8 @@
   vars:
     cis_profile: "{{ lsa_cis_profile_map[lsa_profile] }}"
     cis_exceptions: "{{ lsa_cis_exceptions }}"
+    cis_policy_default_mode: "{{ lsa_policy_default_mode }}"
+    cis_policy_control_modes: "{{ lsa_policy_control_modes }}"
     cis_generate_standalone_reports: false
   when:
     - ansible_facts.distribution == 'Debian'
@@ -61,6 +63,8 @@
     security_health_generate_standalone_reports: false
     security_health_exceptions: "{{ lsa_security_health_exceptions }}"
     security_health_stale_account_days: "{{ lsa_security_health_stale_account_days }}"
+    security_health_policy_default_mode: "{{ lsa_policy_default_mode }}"
+    security_health_policy_control_modes: "{{ lsa_policy_control_modes }}"
     security_health_active_benchmark: >-
       {{ 'cis_debian13'
          if ansible_facts.distribution == 'Debian' and ansible_facts.distribution_major_version == '13'
@@ -72,6 +76,21 @@
   loop_control:
     loop_var: lsa_health_result
     label: "{{ lsa_health_result.id }} {{ lsa_health_result.title }}"
+
+- name: Initialize policy-selected findings
+  ansible.builtin.set_fact:
+    lsa_policy_findings: []
+
+- name: Apply effective agent control policy
+  ansible.builtin.include_tasks: apply_policy.yml
+  loop: "{{ lsa_findings }}"
+  loop_control:
+    loop_var: lsa_policy_finding
+    label: "{{ lsa_policy_finding.control_id }}"
+
+- name: Use policy-selected findings
+  ansible.builtin.set_fact:
+    lsa_findings: "{{ lsa_policy_findings }}"
 
 - name: Validate normalized finding identity and categories
   ansible.builtin.assert:

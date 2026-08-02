@@ -1,9 +1,11 @@
+import json
 import re
 from collections import Counter
 from pathlib import Path
 
 import yaml
 from jinja2 import Environment
+from scanner.scripts.export_control_catalog import build_catalog
 
 
 CIS_ROLE = Path("scanner/roles/cis_debian13_audit")
@@ -86,6 +88,15 @@ def test_complete_debian_13_catalog_is_unique_and_profiled():
     assert sum("manual" in name for _, name, controls in control_groups(CIS_ROLE) for _ in controls) == 12
 
 
+def test_exported_policy_catalog_matches_scanner_sources():
+    exported = json.loads(Path("apps/api/lsa/data/control_catalog.json").read_text())
+
+    assert exported == build_catalog()
+    assert len(exported) == 396
+    assert len({item["control_id"] for item in exported}) == 396
+    assert {item["category"] for item in exported} <= CANONICAL_CATEGORIES
+
+
 def test_portable_catalog_has_no_duplicate_semantics_or_unmapped_categories():
     cis_ids = {str(control["id"]) for control in all_controls(CIS_ROLE)}
     health_controls = all_controls(HEALTH_ROLE)
@@ -118,6 +129,28 @@ def test_scanner_and_console_share_the_canonical_finding_categories():
 
     assert set(defaults["lsa_canonical_categories"]) == CANONICAL_CATEGORIES
     assert frontend_categories == CANONICAL_CATEGORIES
+
+
+def test_shared_report_role_applies_agent_policy_after_normalization():
+    defaults = load_yaml(REPORT_ROLE / "defaults" / "main.yml")
+    policy_task = (REPORT_ROLE / "tasks" / "apply_policy.yml").read_text()
+
+    assert defaults["lsa_policy_default_mode"] == "audit"
+    assert defaults["lsa_policy_control_modes"] == {}
+    assert "lsa_policy_finding.control_id" in policy_task
+    assert "!= 'disabled'" in policy_task
+
+    benchmark_loops = []
+    for path in sorted((CIS_ROLE / "tasks").glob("section_*.yml")):
+        benchmark_loops.extend(
+            task for task in load_yaml(path) if task.get("ansible.builtin.include_tasks")
+        )
+    assert len(benchmark_loops) == 30
+    assert all("cis_policy_control_modes.get" in task.get("when", "") for task in benchmark_loops)
+
+    portable_tasks = load_yaml(HEALTH_ROLE / "tasks" / "main.yml")
+    portable_loop = next(task for task in portable_tasks if task.get("name") == "Run security health controls")
+    assert any("security_health_policy_control_modes.get" in condition for condition in portable_loop["when"])
 
 
 def test_supported_operating_system_matrix_is_explicit():

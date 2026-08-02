@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from lsa.api import admin, artifacts, auth, fleet, ingest, settings as settings_api
+from lsa.api import admin, agents, artifacts, auth, fleet, ingest, settings as settings_api
 from lsa.config import get_settings
 from lsa.database import Base, SessionLocal, engine, get_db
 from lsa.seed import bootstrap
@@ -42,6 +42,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(settings_api.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(agents.router, prefix="/api/v1")
 app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(artifacts.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")

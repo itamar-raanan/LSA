@@ -1,0 +1,9 @@
+---
+- name: Retain controls enabled by policy
+  ansible.builtin.set_fact:
+    lsa_policy_findings: "{{ lsa_policy_findings + [lsa_policy_finding] }}"
+  when: >-
+    lsa_policy_control_modes.get(
+      lsa_policy_finding.control_id,
+      lsa_policy_default_mode
+    ) != 'disabled'

@@ -31,6 +31,8 @@ lsa_cis_profile_map:
 lsa_cis_exceptions: {}
 lsa_security_health_exceptions: {}
 lsa_security_health_stale_account_days: 90
+lsa_policy_default_mode: audit
+lsa_policy_control_modes: {}
 lsa_canonical_categories:
   - accounts
   - audit

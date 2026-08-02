@@ -77,7 +77,9 @@
   loop_control:
     loop_var: cis_control
     label: "{{ cis_control.id }} {{ cis_control.title }}"
-  when: cis_control.id not in (cis_results | map(attribute='id') | list)
+  when:
+    - cis_control.id not in (cis_results | map(attribute='id') | list)
+    - cis_policy_control_modes.get('CIS-DEBIAN13-' ~ cis_control.id, cis_policy_default_mode) != 'disabled'
   tags: [always]
 
 - name: Generate reports

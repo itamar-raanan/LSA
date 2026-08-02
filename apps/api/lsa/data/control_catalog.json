@@ -1,0 +1,2378 @@
+[
+  {
+    "control_id": "CIS-DEBIAN13-1.6.1",
+    "title": "Ensure /etc/motd is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.6.2",
+    "title": "Ensure /etc/issue is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.6.3",
+    "title": "Ensure /etc/issue.net is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.6.4",
+    "title": "Ensure access to /etc/motd is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.6.5",
+    "title": "Ensure access to /etc/issue is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.6.6",
+    "title": "Ensure access to /etc/issue.net is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.2.1",
+    "title": "Ensure sudo is installed",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.2.2",
+    "title": "Ensure sudo commands use pty",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.2.3",
+    "title": "Ensure sudo log file exists",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.2.4",
+    "title": "Ensure users must provide password for escalation",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.2.5",
+    "title": "Ensure re-authentication for privilege escalation is not disabled globally",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.2.6",
+    "title": "Ensure sudo timestamp_timeout is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.2.7",
+    "title": "Ensure access to the su command is restricted",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.1.1",
+    "title": "Ensure latest version of pam is installed",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.1.2",
+    "title": "Ensure latest version of libpam-modules is installed",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.1.3",
+    "title": "Ensure latest version of libpam-pwquality is installed",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.2.1",
+    "title": "Ensure pam_unix module is enabled",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.2.2",
+    "title": "Ensure pam_faillock module is enabled",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.2.3",
+    "title": "Ensure pam_pwquality module is enabled",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.2.4",
+    "title": "Ensure pam_pwhistory module is enabled",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.1.1",
+    "title": "Ensure password failed attempts lockout is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.1.2",
+    "title": "Ensure password unlock time is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.1.3",
+    "title": "Ensure password failed attempts lockout includes root account",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.1",
+    "title": "Ensure password number of changed characters is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.2",
+    "title": "Ensure password length is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.3",
+    "title": "Ensure password complexity is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.4",
+    "title": "Ensure password same consecutive characters is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.5",
+    "title": "Ensure password maximum sequential characters is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.6",
+    "title": "Ensure password dictionary check is enabled",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.7",
+    "title": "Ensure password quality checking is enforced",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.2.8",
+    "title": "Ensure password quality is enforced for the root user",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.3.1",
+    "title": "Ensure password history remember is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.3.2",
+    "title": "Ensure password history is enforced for the root user",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.3.3",
+    "title": "Ensure pam_pwhistory includes use_authtok",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.4.1",
+    "title": "Ensure pam_unix does not include nullok",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.4.2",
+    "title": "Ensure pam_unix does not include remember",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.4.3",
+    "title": "Ensure pam_unix includes a strong password hashing algorithm",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.3.3.4.4",
+    "title": "Ensure pam_unix includes use_authtok",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.1.1",
+    "title": "Ensure password expiration is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.1.2",
+    "title": "Ensure minimum password days is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.1.3",
+    "title": "Ensure password expiration warning days is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.1.4",
+    "title": "Ensure strong password hashing algorithm is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.1.5",
+    "title": "Ensure inactive password lock is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.1.6",
+    "title": "Ensure all users last password change date is in the past",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.1",
+    "title": "Ensure root is the only UID 0 account",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.2",
+    "title": "Ensure root is the only GID 0 account",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.3",
+    "title": "Ensure group root is the only GID 0 group",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.4",
+    "title": "Ensure root account access is controlled",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.5",
+    "title": "Ensure root path integrity",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.6",
+    "title": "Ensure root user umask is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.7",
+    "title": "Ensure system accounts do not have a valid login shell",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.2.8",
+    "title": "Ensure accounts without a valid login shell are locked",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.3.1",
+    "title": "Ensure nologin is not listed in /etc/shells",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.3.2",
+    "title": "Ensure default user shell timeout is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.4.3.3",
+    "title": "Ensure default user umask is configured",
+    "category": "accounts",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-001",
+    "title": "Duplicate numeric user IDs",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-002",
+    "title": "Duplicate numeric group IDs",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-003",
+    "title": "Account primary groups exist",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-004",
+    "title": "Duplicate local user names",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-005",
+    "title": "Duplicate local group names",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-006",
+    "title": "System accounts cannot log in interactively",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-007",
+    "title": "Sudo policy parses successfully",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-007",
+    "title": "Writable directories in root PATH",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PRV-001",
+    "title": "Passwordless sudo rules",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PRV-002",
+    "title": "Broad sudo command wildcards",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-USR-001",
+    "title": "Accounts with empty password fields",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-USR-002",
+    "title": "Additional UID 0 accounts",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-USR-003",
+    "title": "Stale interactive accounts",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-USR-004",
+    "title": "SSH private key permissions in home directories",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.1.1",
+    "title": "Ensure auditd packages are installed",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.1.2",
+    "title": "Ensure auditd service is enabled and active",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.1.3",
+    "title": "Ensure auditing for processes that start prior to auditd is enabled",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.1.4",
+    "title": "Ensure audit_backlog_limit is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.2.1",
+    "title": "Ensure audit log storage size is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.2.2",
+    "title": "Ensure audit logs are not automatically deleted",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.2.3",
+    "title": "Ensure system is disabled when audit logs are full",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.2.4",
+    "title": "Ensure system warns when audit logs are low on space",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.1",
+    "title": "Ensure modification of the /etc/sudoers file is collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.10",
+    "title": "Ensure use of privileged commands are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.11",
+    "title": "Ensure unsuccessful file access attempts are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.12",
+    "title": "Ensure events that modify /etc/group information are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.13",
+    "title": "Ensure events that modify /etc/passwd information are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.14",
+    "title": "Ensure events that modify /etc/shadow and /etc/gshadow are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.15",
+    "title": "Ensure events that modify /etc/security/opasswd are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.16",
+    "title": "Ensure events that modify /etc/nsswitch.conf file are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.17",
+    "title": "Ensure events that modify /etc/pam.conf and /etc/pam.d/ information are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.2",
+    "title": "Ensure actions as another user are always logged",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.21",
+    "title": "Ensure successful file system mounts are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.22",
+    "title": "Ensure session initiation information is collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.23",
+    "title": "Ensure login and logout events are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.24",
+    "title": "Ensure unlink file deletion events by users are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.25",
+    "title": "Ensure rename file deletion events by users are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.26",
+    "title": "Ensure events that modify the system's Mandatory Access Controls are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.3",
+    "title": "Ensure events that modify the sudo log file are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.31",
+    "title": "Ensure kernel module loading unloading and modification is collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.33",
+    "title": "Ensure kernel \"delete_module\" loading unloading and modification is collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.34",
+    "title": "Ensure kernel query_module loading unloading and modification is collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.35",
+    "title": "Ensure the audit configuration is loaded regardless of errors",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.36",
+    "title": "Ensure the audit configuration is immutable",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.37",
+    "title": "Ensure the running and on disk configuration is the same",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.4",
+    "title": "Ensure events that modify date and time information are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.5",
+    "title": "Ensure events that modify sethostname and setdomainname are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.6",
+    "title": "Ensure events that modify /etc/issue and /etc/issue.net are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.8",
+    "title": "Ensure events that modify the system's network environment are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.3.9",
+    "title": "Ensure events that modify /etc/NetworkManager directory are collected",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.1",
+    "title": "Ensure audit log files mode is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.10",
+    "title": "Ensure audit tools group owner is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.2",
+    "title": "Ensure audit log files owner is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.3",
+    "title": "Ensure audit log files group owner is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.4",
+    "title": "Ensure the audit log file directory mode is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.5",
+    "title": "Ensure audit configuration files mode is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.6",
+    "title": "Ensure audit configuration files owner is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.7",
+    "title": "Ensure audit configuration files group owner is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.8",
+    "title": "Ensure audit tools mode is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.2.4.9",
+    "title": "Ensure audit tools owner is configured",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.3.1",
+    "title": "Ensure AIDE is installed",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.3.2",
+    "title": "Ensure filesystem integrity is regularly checked",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.3.3",
+    "title": "Ensure cryptographic mechanisms are used to protect the integrity of audit tools",
+    "category": "audit",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-AUD-001",
+    "title": "Linux audit service is active",
+    "category": "audit",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-AUD-002",
+    "title": "Early-boot process auditing is enabled",
+    "category": "audit",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-AUD-003",
+    "title": "Audit rules are loaded",
+    "category": "audit",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-AUD-004",
+    "title": "Audit configuration is immutable",
+    "category": "audit",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-LOG-001",
+    "title": "Recent failed authentication activity",
+    "category": "audit",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.1",
+    "title": "Ensure cramfs kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.10",
+    "title": "Ensure usb-storage kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.11",
+    "title": "Ensure unused filesystems kernel modules are not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.2",
+    "title": "Ensure freevxfs kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.3",
+    "title": "Ensure hfs kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.4",
+    "title": "Ensure hfsplus kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.5",
+    "title": "Ensure jffs2 kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.6",
+    "title": "Ensure overlay kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.7",
+    "title": "Ensure squashfs kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.8",
+    "title": "Ensure udf kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.1.9",
+    "title": "Ensure firewire-core kernel module is not available",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.1.1",
+    "title": "Ensure /tmp is tmpfs or a separate partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.1.2",
+    "title": "Ensure nodev option set on /tmp partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.1.3",
+    "title": "Ensure nosuid option set on /tmp partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.1.4",
+    "title": "Ensure noexec option set on /tmp partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.2.1",
+    "title": "Ensure /dev/shm is tmpfs or a separate partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.2.2",
+    "title": "Ensure nodev option set on /dev/shm partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.2.3",
+    "title": "Ensure nosuid option set on /dev/shm partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.2.4",
+    "title": "Ensure noexec option set on /dev/shm partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.3.1",
+    "title": "Ensure separate partition exists for /home",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.3.2",
+    "title": "Ensure nodev option set on /home partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.3.3",
+    "title": "Ensure nosuid option set on /home partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.4.1",
+    "title": "Ensure separate partition exists for /var",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.4.2",
+    "title": "Ensure nodev option set on /var partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.4.3",
+    "title": "Ensure nosuid option set on /var partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.5.1",
+    "title": "Ensure separate partition exists for /var/tmp",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.5.2",
+    "title": "Ensure nodev option set on /var/tmp partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.5.3",
+    "title": "Ensure nosuid option set on /var/tmp partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.5.4",
+    "title": "Ensure noexec option set on /var/tmp partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.6.1",
+    "title": "Ensure separate partition exists for /var/log",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.6.2",
+    "title": "Ensure nodev option set on /var/log partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.6.3",
+    "title": "Ensure nosuid option set on /var/log partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.6.4",
+    "title": "Ensure noexec option set on /var/log partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.7.1",
+    "title": "Ensure separate partition exists for /var/log/audit",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.7.2",
+    "title": "Ensure nodev option set on /var/log/audit partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.7.3",
+    "title": "Ensure nosuid option set on /var/log/audit partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.1.2.7.4",
+    "title": "Ensure noexec option set on /var/log/audit partition",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.1",
+    "title": "Ensure access to /etc/passwd is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.10",
+    "title": "Ensure access to /etc/security/opasswd is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.11",
+    "title": "Ensure world writable files and directories are secured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.12",
+    "title": "Ensure no files or directories without an owner and a group exist",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.13",
+    "title": "Ensure SUID and SGID files are reviewed",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.2",
+    "title": "Ensure access to /etc/passwd- is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.3",
+    "title": "Ensure access to /etc/group is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.4",
+    "title": "Ensure access to /etc/group- is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.5",
+    "title": "Ensure access to /etc/shadow is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.6",
+    "title": "Ensure access to /etc/shadow- is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.7",
+    "title": "Ensure access to /etc/gshadow is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.8",
+    "title": "Ensure access to /etc/gshadow- is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.1.9",
+    "title": "Ensure access to /etc/shells is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.1",
+    "title": "Ensure accounts in /etc/passwd use shadowed passwords",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.10",
+    "title": "Ensure local interactive user dot files access is configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.2",
+    "title": "Ensure /etc/shadow password fields are not empty",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.3",
+    "title": "Ensure all groups in /etc/passwd exist in /etc/group",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.4",
+    "title": "Ensure shadow group is empty",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.5",
+    "title": "Ensure no duplicate UIDs exist",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.6",
+    "title": "Ensure no duplicate GIDs exist",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.7",
+    "title": "Ensure no duplicate user names exist",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.8",
+    "title": "Ensure no duplicate group names exist",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-7.2.9",
+    "title": "Ensure local interactive user home directories are configured",
+    "category": "filesystem",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-002",
+    "title": "Bootloader configuration permissions",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-001",
+    "title": "World-writable regular files",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-002",
+    "title": "World-writable directories without sticky bit",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-003",
+    "title": "Files or directories without an owner",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-004",
+    "title": "Files or directories without a group",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-005",
+    "title": "SUID executable review",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-006",
+    "title": "Unexpected file capabilities",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-008",
+    "title": "Temporary filesystem mount protections",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-009",
+    "title": "Shared-memory mount protections",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-010",
+    "title": "System executable and configuration directories are protected",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.4.1",
+    "title": "Ensure bootloader password is set",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.4.2",
+    "title": "Ensure access to bootloader config is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.1",
+    "title": "Ensure fs.protected_hardlinks is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.10",
+    "title": "Ensure kernel.yama.ptrace_scope is configured to a restricted value",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.11",
+    "title": "Ensure core file size is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.12",
+    "title": "Ensure systemd-coredump ProcessSizeMax is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.13",
+    "title": "Ensure systemd-coredump Storage is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.2",
+    "title": "Ensure fs.protected_symlinks is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.3",
+    "title": "Ensure kernel.yama.ptrace_scope is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.4",
+    "title": "Ensure fs.suid_dumpable is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.5",
+    "title": "Ensure kernel.dmesg_restrict is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.6",
+    "title": "Ensure prelink is not installed",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.7",
+    "title": "Ensure Automatic Error Reporting is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.8",
+    "title": "Ensure kernel.kptr_restrict is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.5.9",
+    "title": "Ensure kernel.randomize_va_space is configured",
+    "category": "kernel",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-001",
+    "title": "UEFI Secure Boot state",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-003",
+    "title": "Kernel lockdown mode",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-KRN-001",
+    "title": "Kernel taint state",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.1.1",
+    "title": "Ensure journald service is active",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.1.2",
+    "title": "Ensure journald log file access is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.1.3",
+    "title": "Ensure journald log file rotation is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.1.4",
+    "title": "Ensure journald ForwardToSyslog is disabled",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.1.5",
+    "title": "Ensure journald Storage is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.1.6",
+    "title": "Ensure journald Compress is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.2.1",
+    "title": "Ensure systemd-journal-remote is installed",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.2.2",
+    "title": "Ensure systemd-journal-upload authentication is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.2.3",
+    "title": "Ensure systemd-journal-upload is enabled and active",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.1.2.4",
+    "title": "Ensure systemd-journal-remote service is not in use",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.1",
+    "title": "Ensure rsyslog is installed",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.10",
+    "title": "Ensure rsyslog forwarding uses gtls",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.11",
+    "title": "Ensure rsyslog CA certificates are configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.2",
+    "title": "Ensure rsyslog service is enabled and active",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.3",
+    "title": "Ensure journald is configured to send logs to rsyslog",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.4",
+    "title": "Ensure rsyslog log file creation mode is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.5",
+    "title": "Ensure rsyslog logging is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.6",
+    "title": "Ensure rsyslog is configured to send logs to a remote log host",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.7",
+    "title": "Ensure rsyslog is not configured to receive logs from a remote client",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.8",
+    "title": "Ensure logrotate is configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.2.9",
+    "title": "Ensure rsyslog-gnutls is installed",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-6.1.3.1",
+    "title": "Ensure access to all logfiles has been configured",
+    "category": "logging",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-LOG-002",
+    "title": "System journal is persistent",
+    "category": "logging",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-LOG-003",
+    "title": "Logs are forwarded to a remote collector",
+    "category": "logging",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-LOG-004",
+    "title": "Sensitive authentication logs are protected",
+    "category": "logging",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.3.1.1",
+    "title": "Ensure apparmor packages are installed",
+    "category": "mandatory_access",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.3.1.2",
+    "title": "Ensure AppArmor is enabled",
+    "category": "mandatory_access",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.3.1.3",
+    "title": "Ensure all AppArmor Profiles are enforcing",
+    "category": "mandatory_access",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.3.1.4",
+    "title": "Ensure apparmor_restrict_unprivileged_unconfined is enabled",
+    "category": "mandatory_access",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.1.1",
+    "title": "Ensure IPv6 status is identified",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.1.2",
+    "title": "Ensure wireless interfaces are not available",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.1.3",
+    "title": "Ensure bluetooth services are not in use",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.2.1",
+    "title": "Ensure atm kernel module is not available",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.2.2",
+    "title": "Ensure can kernel module is not available",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.2.3",
+    "title": "Ensure dccp kernel module is not available",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.2.4",
+    "title": "Ensure rds kernel module is not available",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.2.5",
+    "title": "Ensure sctp kernel module is not available",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.2.6",
+    "title": "Ensure tipc kernel module is not available",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.1",
+    "title": "Ensure net.ipv4.ip_forward is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.10",
+    "title": "Ensure net.ipv4.conf.all.secure_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.11",
+    "title": "Ensure net.ipv4.conf.default.secure_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.12",
+    "title": "Ensure net.ipv4.conf.all.rp_filter is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.13",
+    "title": "Ensure net.ipv4.conf.default.rp_filter is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.14",
+    "title": "Ensure net.ipv4.conf.all.accept_source_route is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.15",
+    "title": "Ensure net.ipv4.conf.default.accept_source_route is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.16",
+    "title": "Ensure net.ipv4.conf.all.log_martians is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.17",
+    "title": "Ensure net.ipv4.conf.default.log_martians is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.18",
+    "title": "Ensure net.ipv4.tcp_syncookies is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.2",
+    "title": "Ensure net.ipv4.conf.all.forwarding is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.3",
+    "title": "Ensure net.ipv4.conf.default.forwarding is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.4",
+    "title": "Ensure net.ipv4.conf.all.send_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.5",
+    "title": "Ensure net.ipv4.conf.default.send_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.6",
+    "title": "Ensure net.ipv4.icmp_ignore_bogus_error_responses is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.7",
+    "title": "Ensure net.ipv4.icmp_echo_ignore_broadcasts is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.8",
+    "title": "Ensure net.ipv4.conf.all.accept_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.1.9",
+    "title": "Ensure net.ipv4.conf.default.accept_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.1",
+    "title": "Ensure net.ipv6.conf.all.forwarding is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.2",
+    "title": "Ensure net.ipv6.conf.default.forwarding is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.3",
+    "title": "Ensure net.ipv6.conf.all.accept_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.4",
+    "title": "Ensure net.ipv6.conf.default.accept_redirects is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.5",
+    "title": "Ensure net.ipv6.conf.all.accept_source_route is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.6",
+    "title": "Ensure net.ipv6.conf.default.accept_source_route is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.7",
+    "title": "Ensure net.ipv6.conf.all.accept_ra is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-3.3.2.8",
+    "title": "Ensure net.ipv6.conf.default.accept_ra is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-4.1.1",
+    "title": "Ensure ufw is installed",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-4.1.2",
+    "title": "Ensure ufw service is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-4.1.3",
+    "title": "Ensure ufw incoming default is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-4.1.4",
+    "title": "Ensure ufw outgoing default is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-4.1.5",
+    "title": "Ensure ufw routed default is configured",
+    "category": "network",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-001",
+    "title": "Services listening on non-loopback interfaces",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-002",
+    "title": "Database ports exposed on all interfaces",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-003",
+    "title": "IP forwarding is disabled",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-004",
+    "title": "ICMP redirects are disabled",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-005",
+    "title": "Source-routed packets are rejected",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-006",
+    "title": "Martian packet logging is enabled",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-007",
+    "title": "A host firewall has an active ruleset",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-008",
+    "title": "Wireless interfaces are disabled on servers",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-009",
+    "title": "Uncommon network protocol modules are not loaded",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.1",
+    "title": "Ensure the source.list and .source files use the Signed-By option",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.2",
+    "title": "Ensure weak dependencies are configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.3",
+    "title": "Ensure access to gpg key files are configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.4",
+    "title": "Ensure access to /etc/apt/trusted.gpg.d directory is configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.5",
+    "title": "Ensure access to /etc/apt/auth.conf.d directory is configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.6",
+    "title": "Ensure access to files in the /etc/apt/auth.conf.d directory is configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.7",
+    "title": "Ensure access to /usr/share/keyrings directory is configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.8",
+    "title": "Ensure access to /etc/apt/sources.list.d directory is configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.1.9",
+    "title": "Ensure access to files in /etc/apt/sources.list.d are configured",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.2.2.1",
+    "title": "Ensure updates, patches, and additional security software are installed",
+    "category": "packages",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-005",
+    "title": "Installed package file integrity",
+    "category": "packages",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.1",
+    "title": "Ensure GDM is removed",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.10",
+    "title": "Ensure XDMCP is not enabled",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.11",
+    "title": "Ensure Xwayland is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.2",
+    "title": "Ensure GDM login banner is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.3",
+    "title": "Ensure GDM disable-user-list option is enabled",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.4",
+    "title": "Ensure GDM screen locks when the user is idle",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.5",
+    "title": "Ensure GDM screen locks cannot be overridden",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.6",
+    "title": "Ensure GDM automatic mounting of removable media is disabled",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.7",
+    "title": "Ensure GDM disabling automatic mounting of removable media is not overridden",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.8",
+    "title": "Ensure GDM autorun-never is enabled",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-1.7.9",
+    "title": "Ensure GDM autorun-never is not overridden",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.1",
+    "title": "Ensure autofs services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.10",
+    "title": "Ensure nis server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.11",
+    "title": "Ensure print server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.12",
+    "title": "Ensure rpcbind services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.13",
+    "title": "Ensure rsync services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.14",
+    "title": "Ensure samba file server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.15",
+    "title": "Ensure snmp services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.16",
+    "title": "Ensure telnet-server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.17",
+    "title": "Ensure tftp server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.18",
+    "title": "Ensure web proxy server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.19",
+    "title": "Ensure web server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.2",
+    "title": "Ensure avahi daemon services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.20",
+    "title": "Ensure xinetd services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.21",
+    "title": "Ensure X window server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.22",
+    "title": "Ensure mail transfer agents are configured for local-only mode",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.23",
+    "title": "Ensure only approved services are listening on a network interface",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.3",
+    "title": "Ensure dhcp server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.4",
+    "title": "Ensure dns server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.5",
+    "title": "Ensure dnsmasq services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.6",
+    "title": "Ensure ftp server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.7",
+    "title": "Ensure ldap server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.8",
+    "title": "Ensure message access server services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.1.9",
+    "title": "Ensure network file system services are not in use",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.2.1",
+    "title": "Ensure nis client is not installed",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.2.2",
+    "title": "Ensure rsh client is not installed",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.2.3",
+    "title": "Ensure talk client is not installed",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.2.4",
+    "title": "Ensure telnet client is not installed",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.2.5",
+    "title": "Ensure ldap client is not installed",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.2.6",
+    "title": "Ensure ftp client is not installed",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.1",
+    "title": "Ensure cron daemon is enabled and active",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.2",
+    "title": "Ensure access to /etc/crontab is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.3",
+    "title": "Ensure access to /etc/cron.hourly is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.4",
+    "title": "Ensure access to /etc/cron.daily is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.5",
+    "title": "Ensure access to /etc/cron.weekly is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.6",
+    "title": "Ensure access to /etc/cron.monthly is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.7",
+    "title": "Ensure access to /etc/cron.yearly is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.8",
+    "title": "Ensure access to /etc/cron.d is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.1.9",
+    "title": "Ensure access to crontab is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.4.2.1",
+    "title": "Ensure access to at is configured",
+    "category": "services",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-SVC-001",
+    "title": "Legacy clear-text or high-risk services",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SVC-002",
+    "title": "Failed systemd units",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SVC-003",
+    "title": "Legacy remote-access socket units are disabled",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SVC-004",
+    "title": "Emergency debug shell is not enabled",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.1",
+    "title": "Ensure access to /etc/ssh/sshd_config is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.10",
+    "title": "Ensure sshd HostbasedAuthentication is disabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.11",
+    "title": "Ensure sshd IgnoreRhosts is enabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.12",
+    "title": "Ensure sshd KexAlgorithms is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.13",
+    "title": "Ensure sshd post-quantum cryptography key exchange algorithms are configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.14",
+    "title": "Ensure sshd LoginGraceTime is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.15",
+    "title": "Ensure sshd LogLevel is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.16",
+    "title": "Ensure sshd MACs are configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.17",
+    "title": "Ensure sshd MaxAuthTries is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.18",
+    "title": "Ensure sshd MaxSessions is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.19",
+    "title": "Ensure sshd MaxStartups is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.2",
+    "title": "Ensure access to SSH private host key files is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.20",
+    "title": "Ensure sshd PermitEmptyPasswords is disabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.21",
+    "title": "Ensure sshd PermitRootLogin is disabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.22",
+    "title": "Ensure sshd PermitUserEnvironment is disabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.23",
+    "title": "Ensure sshd UsePAM is enabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.3",
+    "title": "Ensure access to SSH public host key files is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.4",
+    "title": "Ensure sshd access is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.5",
+    "title": "Ensure sshd Banner is configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.6",
+    "title": "Ensure sshd Ciphers are configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.7",
+    "title": "Ensure sshd ClientAliveInterval and ClientAliveCountMax are configured",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.8",
+    "title": "Ensure sshd DisableForwarding is enabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-5.1.9",
+    "title": "Ensure sshd GSSAPIAuthentication is disabled",
+    "category": "ssh",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-001",
+    "title": "SSH daemon configuration syntax",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-002",
+    "title": "SSH root login is disabled",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-003",
+    "title": "SSH password authentication is disabled",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-004",
+    "title": "SSH empty-password authentication is disabled",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-005",
+    "title": "SSH authentication attempts are limited",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-006",
+    "title": "SSH forwarding is disabled",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-007",
+    "title": "SSH idle sessions have a finite timeout",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SSH-008",
+    "title": "SSH weak cryptography is absent",
+    "category": "ssh",
+    "module": "security_health"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.3.1.1",
+    "title": "Ensure a single time synchronization daemon is in use",
+    "category": "time",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.3.2.1",
+    "title": "Ensure systemd-timesyncd configured with authorized timeserver",
+    "category": "time",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.3.2.2",
+    "title": "Ensure systemd-timesyncd is enabled and running",
+    "category": "time",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.3.3.1",
+    "title": "Ensure chrony is configured with authorized timeserver",
+    "category": "time",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.3.3.2",
+    "title": "Ensure chrony is running as user _chrony",
+    "category": "time",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "CIS-DEBIAN13-2.3.3.3",
+    "title": "Ensure chrony is enabled and running",
+    "category": "time",
+    "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-TIME-001",
+    "title": "Network time synchronization is healthy",
+    "category": "time",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-001",
+    "title": "Held packages",
+    "category": "updates",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-002",
+    "title": "No known security updates are pending",
+    "category": "updates",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-003",
+    "title": "No security-related reboot is pending",
+    "category": "updates",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-004",
+    "title": "Automatic security update mechanism is enabled",
+    "category": "updates",
+    "module": "security_health"
+  }
+]

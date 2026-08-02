@@ -20,6 +20,8 @@ cis_report_dir: "{{ playbook_dir }}/reports"
 cis_report_formats: [json, csv, html]
 cis_generate_standalone_reports: false
 cis_exceptions: {}
+cis_policy_default_mode: audit
+cis_policy_control_modes: {}
 cis_results: []
 
 cis_valid_profiles:
