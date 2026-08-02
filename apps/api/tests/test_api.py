@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import tarfile
 import uuid
 import zipfile
 from base64 import b64encode
@@ -74,6 +75,43 @@ def login(client) -> str:
     )
     assert response.status_code == 200
     return response.json()["access_token"]
+
+
+def test_admin_can_download_versioned_agent_package(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    listed = client.get("/api/v1/agent-packages", headers=headers)
+    assert listed.status_code == 200, listed.text
+    packages = listed.json()
+    assert len(packages) == 1
+    package = packages[0]
+    assert package["id"] == "linux-universal"
+    assert package["filename"].endswith("-linux-universal.tar.gz")
+    assert package["operating_system"] == "Linux (Debian, Ubuntu, RHEL)"
+
+    downloaded = client.get(
+        f"/api/v1/agent-packages/{package['id']}/download", headers=headers
+    )
+    assert downloaded.status_code == 200, downloaded.text
+    assert downloaded.headers["content-disposition"] == (
+        f'attachment; filename="{package["filename"]}"'
+    )
+    assert hashlib.sha256(downloaded.content).hexdigest() == package["sha256"]
+    assert downloaded.headers["x-lsa-agent-sha256"] == package["sha256"]
+
+    with tarfile.open(fileobj=io.BytesIO(downloaded.content), mode="r:gz") as archive:
+        names = set(archive.getnames())
+        root = f"lsa-agent-{package['version']}"
+        assert f"{root}/install.sh" in names
+        assert f"{root}/agent/lsa_agent.py" in names
+        assert f"{root}/agent/lsa-agent.service" in names
+        assert f"{root}/scanner/playbooks/scan.yml" in names
+        assert f"{root}/scanner/roles/lsa_report/tasks/main.yml" in names
+        assert archive.getmember(f"{root}/install.sh").mode == 0o755
+
+
+def test_agent_package_download_requires_admin_session(client):
+    response = client.get("/api/v1/agent-packages/linux-universal/download")
+    assert response.status_code == 401
 
 
 def register_signing_key(client, tmp_path: Path, host_id: str | None = None) -> tuple[Path, dict]:

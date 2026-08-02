@@ -1,6 +1,7 @@
-import { CheckCircle, Copy, DesktopTower, Key, Plus, ShieldCheck, X } from '@phosphor-icons/react'
+import { CheckCircle, Copy, DesktopTower, DownloadSimple, Key, Plus, ShieldCheck, X } from '@phosphor-icons/react'
 import { FormEvent, useMemo, useState } from 'react'
 import { api } from '../../api/client'
+import { AgentDownloadPanel } from '../../components/AgentDownloadPanel'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../../components/StatePanel'
 import { useApi } from '../../hooks/useApi'
@@ -10,14 +11,15 @@ const modes: PolicyMode[] = ['audit', 'manual', 'remediate', 'disabled']
 
 export function AgentsSettingsPage() {
   const { data, error, loading, reload } = useApi(async () => {
-    const [agents, groups, policies, controls, enrollmentTokens] = await Promise.all([
-      api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(),
+    const [agents, groups, policies, controls, enrollmentTokens, packages] = await Promise.all([
+      api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(),
     ])
-    return { agents, groups, policies, controls, enrollmentTokens }
+    return { agents, groups, policies, controls, enrollmentTokens, packages }
   }, [])
   const [showGroup, setShowGroup] = useState(false)
   const [showPolicy, setShowPolicy] = useState(false)
   const [showEnrollment, setShowEnrollment] = useState(false)
+  const [showDownloads, setShowDownloads] = useState(false)
   const [token, setToken] = useState('')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -83,9 +85,11 @@ export function AgentsSettingsPage() {
   if (error || !data) return <ErrorState message={error ?? 'Unable to load agent settings'} retry={reload} />
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Managed Linux fleet" title="Agents, groups & policies" detail="Enroll outbound-only agents, assign one effective group, and publish immutable audit policy versions." action={<button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Enrollment token</button>} />
+    <PageHeader eyebrow="Managed Linux fleet" title="Agents, groups & policies" detail="Enroll outbound-only agents, assign one effective group, and publish immutable audit policy versions." action={<div className="flex flex-wrap gap-2"><button className="button-secondary" onClick={() => setShowDownloads(true)}><DownloadSimple size={16} /> Install agent</button><button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Enrollment token</button></div>} />
     <div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-900/40 bg-emerald-950/10 px-4 py-3 text-xs leading-5 text-emerald-200"><ShieldCheck size={17} className="mt-0.5 shrink-0" /><span><strong>Audit-only safety lock is active.</strong> Remediation choices can be staged in policy, but agents cannot change host configuration in this release.</span></div>
     {formError && <div className="mb-6 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
+
+    {showDownloads && <AgentDownloadPanel packages={data.packages} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
 
     {showEnrollment && <section className="panel mb-7 overflow-hidden"><div className="flex items-start justify-between border-b border-stone-800 px-6 py-5"><div><p className="section-label">One-time trust bootstrap</p><h2 className="mt-2 text-base font-semibold">Create enrollment token</h2></div><button className="icon-button" onClick={() => setShowEnrollment(false)} aria-label="Close"><X size={16} /></button></div>{token ? <div className="px-6 py-6"><p className="text-xs text-stone-500">Copy this token now. It is displayed once and becomes invalid after enrollment.</p><div className="mt-4 flex gap-2"><code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-stone-800 bg-[#101411] px-4 py-3 text-xs text-emerald-300">{token}</code><button className="button-secondary" onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy</button></div></div> : <form className="grid gap-4 px-6 py-6 md:grid-cols-3" onSubmit={createEnrollment}><label className="form-field">Name<input name="name" required placeholder="Production enrollment" /></label><label className="form-field">Group<select name="group_id" required className="select-input">{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><label className="form-field">Valid for<select name="hours" className="select-input" defaultValue="24"><option value="1">1 hour</option><option value="24">24 hours</option><option value="168">7 days</option></select></label><div className="md:col-span-3 flex justify-end"><button className="button-primary" disabled={saving || !data.groups.length}>Create token</button></div></form>} {!!data.enrollmentTokens.length && <div className="border-t border-stone-800"><div className="px-6 py-3 font-mono text-[9px] uppercase tracking-wider text-stone-600">Recent enrollment tokens</div>{data.enrollmentTokens.slice(0, 5).map(item => <div key={item.id} className="flex items-center justify-between gap-4 border-t border-stone-800 px-6 py-3 text-xs"><span><strong className="font-medium text-stone-300">{item.name}</strong><small className="table-subtitle">{item.group_name} · {item.token_prefix}…</small></span><span className="flex items-center gap-3 text-stone-600">{item.used_at ? 'Consumed' : item.revoked_at ? 'Revoked' : new Date(item.expires_at) < new Date() ? 'Expired' : 'Active'}{!item.used_at && !item.revoked_at && new Date(item.expires_at) >= new Date() && <button className="button-secondary min-h-9" onClick={() => void submit(() => api.revokeAgentEnrollmentToken(item.id))}>Revoke</button>}</span></div>)}</div>}</section>}
 

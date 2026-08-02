@@ -21,6 +21,7 @@ import type {
   AgentEnrollmentTokenCreated,
   AgentEnrollmentToken,
   PolicyMode,
+  AgentPackage,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -183,6 +184,22 @@ export const api = {
   },
   revokeAgentEnrollmentToken(id: string): Promise<void> {
     return request(`/agent-enrollment-tokens/${id}`, { method: 'DELETE' })
+  },
+  agentPackages(): Promise<AgentPackage[]> {
+    return request('/agent-packages')
+  },
+  async downloadAgentPackage(packageId: string): Promise<{ blob: Blob; filename: string }> {
+    const token = localStorage.getItem('lsa_session')
+    const response = await fetch(`${API_URL}/agent-packages/${encodeURIComponent(packageId)}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ detail: 'Agent package download failed' }))
+      throw new ApiError(payload.detail ?? 'Agent package download failed', response.status)
+    }
+    const disposition = response.headers.get('Content-Disposition') ?? ''
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `lsa-agent-${packageId}.tar.gz`
+    return { blob: await response.blob(), filename }
   },
   controlCatalog(): Promise<ControlCatalogItem[]> {
     return request('/control-catalog')

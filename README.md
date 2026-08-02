@@ -66,15 +66,15 @@ For cryptographic report provenance, generate an Ed25519 key on the controller w
 
 ## Enroll a managed agent
 
-Open **Agents** in the primary console navigation, assign a policy to a group, and create a short-lived one-time enrollment token. Install the repository and Python environment on the host, copy `agent/config.example.json` to `/etc/lsa-agent/config.json`, then enroll and start the service:
+Open **Agents** in the primary console navigation, choose **Install agent**, and download the versioned universal Linux package. The console displays the package SHA-256 and an installation command for the current platform URL. Assign a policy to a group and create a short-lived one-time enrollment token, then transfer the package to the host and run:
 
 ```bash
-sudo /opt/lsa-agent/venv/bin/python /opt/lsa-agent/agent/lsa_agent.py \
-  --config /etc/lsa-agent/config.json enroll --token 'lsa_enroll_...'
-sudo systemctl enable --now lsa-agent
+tar -xzf lsa-agent-0.1.0-linux-universal.tar.gz
+cd lsa-agent-0.1.0
+sudo ./install.sh --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
 ```
 
-The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for installation and trust details.
+The installer places the runtime and audit controls under `/opt/lsa-agent`, creates an isolated Python environment, writes the root-only configuration, enrolls the host, and enables the systemd service. The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for installation and trust details.
 
 ## Submit a JSON report
 

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AppShell } from '../components/AppShell'
@@ -15,6 +15,8 @@ vi.mock('../api/client', () => ({
     agentPolicies: vi.fn().mockResolvedValue([{ id: 'policy-1', name: 'Monitor (Audit Only)', description: '', version: 1, default_mode: 'audit', control_modes: {}, settings: { schedule_minutes: 60 }, assigned_groups: 1, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }]),
     controlCatalog: vi.fn().mockResolvedValue([{ control_id: 'CIS-DEBIAN13-1.1.1', title: 'Disable unused filesystem', category: 'filesystem', module: 'cis_debian13' }]),
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
+    agentPackages: vi.fn().mockResolvedValue([{ id: 'linux-universal', version: '0.1.0', filename: 'lsa-agent-0.1.0-linux-universal.tar.gz', content_type: 'application/gzip', operating_system: 'Linux (Debian, Ubuntu, RHEL)', architecture: 'x86_64 / arm64', size_bytes: 204800, sha256: 'a'.repeat(64) }]),
+    downloadAgentPackage: vi.fn(),
   },
 }))
 
@@ -35,5 +37,11 @@ describe('Agents', () => {
     expect(screen.getByText('Default Linux Fleet')).toBeInTheDocument()
     expect(screen.getByText('Monitor (Audit Only)')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Enrollment token/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Install agent/ })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Install agent/ }))
+    expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Download package' })).toBeEnabled()
+    expect(screen.getByText(/SHA-256/)).toBeInTheDocument()
   })
 })
