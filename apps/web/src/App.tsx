@@ -7,6 +7,7 @@ import { HostDetailPage } from './pages/HostDetailPage'
 import { HostsPage } from './pages/HostsPage'
 import { LoginPage } from './pages/LoginPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { SigningKeysPage } from './pages/SigningKeysPage'
 import { TokensPage } from './pages/TokensPage'
 
 function ProtectedShell() {
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="tokens" element={<TokensPage />} />
+        <Route path="signing-keys" element={<SigningKeysPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

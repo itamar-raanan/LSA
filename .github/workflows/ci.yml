@@ -48,7 +48,9 @@ jobs:
       - name: Install scanner and API dependencies
         run: python3 -m pip install --break-system-packages -e ".[dev]"
       - name: Execute scanner inside Debian 13
-        run: ansible-playbook -i tests/inventory.debian13.ini playbooks/scan.yml
+        run: |
+          python3 scripts/generate_signing_key.py /tmp/lsa-integration-signing-key.pem
+          ansible-playbook -i tests/inventory.debian13.ini playbooks/scan.yml
         working-directory: scanner
       - name: Validate and ingest generated bundle
         run: python3 scanner/tests/verify_debian13_integration.py /tmp/lsa-integration-reports

@@ -1,14 +1,27 @@
 import secrets
 import uuid
+from base64 import b64decode
+from binascii import Error as BinasciiError
+from hashlib import sha256
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from lsa.database import get_db
 from lsa.dependencies import current_user
-from lsa.models import AuditEvent, Host, IngestionToken, User, now_utc
-from lsa.schemas import HostCreate, HostResponse, TokenCreate, TokenCreated, TokenResponse
+from lsa.models import AuditEvent, Host, IngestionToken, SigningKey, User, now_utc
+from lsa.schemas import (
+    HostCreate,
+    HostResponse,
+    SigningKeyCreate,
+    SigningKeyResponse,
+    TokenCreate,
+    TokenCreated,
+    TokenResponse,
+)
 from lsa.security import hash_ingestion_token
 
 
@@ -171,6 +184,116 @@ def revoke_ingestion_token(
             target_type="ingestion_token",
             target_id=token.id,
             details={"name": token.name},
+        )
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def signing_key_response(key: SigningKey) -> SigningKeyResponse:
+    return SigningKeyResponse(
+        id=key.id,
+        name=key.name,
+        host_id=key.host_id,
+        public_key=key.public_key,
+        fingerprint=key.fingerprint,
+        expires_at=key.expires_at,
+        revoked_at=key.revoked_at,
+        created_at=key.created_at,
+    )
+
+
+@router.post("/signing-keys", response_model=SigningKeyResponse, status_code=status.HTTP_201_CREATED)
+def create_signing_key(
+    request: SigningKeyCreate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> SigningKeyResponse:
+    require_admin(user)
+    expires_at = request.expires_at
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=now_utc().tzinfo)
+        if expires_at <= now_utc():
+            raise HTTPException(status_code=422, detail="Signing key expiry must be in the future")
+    if request.host_id:
+        host = db.get(Host, request.host_id)
+        if host is None or host.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="Host not found")
+    try:
+        public_key_bytes = b64decode(request.public_key, validate=True)
+        Ed25519PublicKey.from_public_bytes(public_key_bytes)
+    except (BinasciiError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Public key must be a base64 Ed25519 public key") from exc
+    if len(public_key_bytes) != 32:
+        raise HTTPException(status_code=422, detail="Public key must be a base64 Ed25519 public key")
+
+    key = SigningKey(
+        tenant_id=user.tenant_id,
+        host_id=request.host_id,
+        name=request.name,
+        public_key=request.public_key,
+        fingerprint=sha256(public_key_bytes).hexdigest(),
+        expires_at=expires_at,
+    )
+    db.add(key)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Signing key is already registered") from exc
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="signing_key.created",
+            target_type="signing_key",
+            target_id=key.id,
+            details={"host_id": key.host_id, "name": key.name, "fingerprint": key.fingerprint},
+        )
+    )
+    db.commit()
+    db.refresh(key)
+    return signing_key_response(key)
+
+
+@router.get("/signing-keys", response_model=list[SigningKeyResponse])
+def list_signing_keys(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[SigningKeyResponse]:
+    require_admin(user)
+    keys = db.scalars(
+        select(SigningKey)
+        .where(SigningKey.tenant_id == user.tenant_id)
+        .order_by(SigningKey.created_at.desc())
+    ).all()
+    return [signing_key_response(key) for key in keys]
+
+
+@router.delete("/signing-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_signing_key(
+    key_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    require_admin(user)
+    key = db.get(SigningKey, key_id)
+    if key is None or key.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Signing key not found")
+    if key.revoked_at is not None:
+        raise HTTPException(status_code=409, detail="Signing key is already revoked")
+    key.revoked_at = now_utc()
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="signing_key.revoked",
+            target_type="signing_key",
+            target_id=key.id,
+            details={"name": key.name, "fingerprint": key.fingerprint},
         )
     )
     db.commit()

@@ -1,6 +1,7 @@
 import {
   Bell,
   ChartDonut,
+  Certificate,
   HardDrives,
   Key,
   ListMagnifyingGlass,
@@ -17,6 +18,7 @@ const navigation = [
   { to: '/findings', label: 'Findings', icon: ListMagnifyingGlass, adminOnly: false },
   { to: '/reports', label: 'Reports', icon: UploadSimple, adminOnly: false },
   { to: '/tokens', label: 'Tokens', icon: Key, adminOnly: true },
+  { to: '/signing-keys', label: 'Signing keys', icon: Certificate, adminOnly: true },
 ]
 
 export function AppShell() {

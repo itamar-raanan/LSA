@@ -145,6 +145,24 @@ class TokenResponse(BaseModel):
     created_at: datetime
 
 
+class SigningKeyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    public_key: str = Field(min_length=1, max_length=128)
+    host_id: str | None = None
+    expires_at: datetime | None = None
+
+
+class SigningKeyResponse(BaseModel):
+    id: str
+    name: str
+    host_id: str | None
+    public_key: str
+    fingerprint: str
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+
+
 class FindingResponse(BaseModel):
     id: str
     host_id: str
@@ -189,6 +207,8 @@ class ReportResponse(BaseModel):
     compliance_score: float
     security_score: float
     artifact_name: str | None
+    signing_key_id: str | None
+    signature_verified: bool
     finding_counts: dict[str, int]
 
 

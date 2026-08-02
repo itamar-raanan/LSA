@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Build a deterministic, portable LSA report bundle using the standard library."""
+"""Build a deterministic, portable LSA report bundle with optional Ed25519 signing."""
 
 from __future__ import annotations
 
+import argparse
+import base64
 import csv
 import hashlib
 import html
 import io
 import json
-import sys
 import zipfile
 from pathlib import Path
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 def sha256(data: bytes) -> str:
@@ -42,7 +46,14 @@ def render_csv(report: dict) -> bytes:
     return output.getvalue().encode()
 
 
-def build(report_path: Path, output_dir: Path) -> Path:
+def build(
+    report_path: Path,
+    output_dir: Path,
+    signing_key_path: Path | None = None,
+    signing_key_id: str | None = None,
+) -> Path:
+    if (signing_key_path is None) != (signing_key_id is None):
+        raise ValueError("signing_key_path and signing_key_id must be provided together")
     report_bytes = report_path.read_bytes()
     report = json.loads(report_bytes)
     files = {
@@ -57,9 +68,19 @@ def build(report_path: Path, output_dir: Path) -> Path:
         "report_id": report["report_id"],
         "generated_at": report["generated_at"],
         "files": {name: sha256(content) for name, content in files.items()},
-        "signature": None,
+        "signature": (
+            {"algorithm": "ed25519", "key_id": signing_key_id}
+            if signing_key_id is not None
+            else None
+        ),
     }
-    files["manifest.json"] = json.dumps(manifest, indent=2, sort_keys=True).encode()
+    manifest_bytes = json.dumps(manifest, indent=2, sort_keys=True).encode()
+    files["manifest.json"] = manifest_bytes
+    if signing_key_path is not None:
+        private_key = serialization.load_pem_private_key(signing_key_path.read_bytes(), password=None)
+        if not isinstance(private_key, Ed25519PrivateKey):
+            raise ValueError("signing key must be an Ed25519 private key")
+        files["signature.sig"] = base64.b64encode(private_key.sign(manifest_bytes))
     files["checksums.sha256"] = "".join(f"{sha256(content)}  {name}\n" for name, content in sorted(files.items())).encode()
     safe_time = report["generated_at"].replace(":", "").replace("-", "")
     bundle_path = output_dir / f"lsa-report-{report['host']['hostname']}-{safe_time}.zip"
@@ -71,7 +92,20 @@ def build(report_path: Path, output_dir: Path) -> Path:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        raise SystemExit("usage: build_bundle.py REPORT_JSON OUTPUT_DIRECTORY")
-    print(build(Path(sys.argv[1]), Path(sys.argv[2])))
-
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("report_json", type=Path)
+    parser.add_argument("output_directory", type=Path)
+    parser.add_argument("--signing-key", type=Path)
+    parser.add_argument("--key-id")
+    args = parser.parse_args()
+    try:
+        print(
+            build(
+                args.report_json,
+                args.output_directory,
+                args.signing_key,
+                args.key_id,
+            )
+        )
+    except ValueError as exc:
+        parser.error(str(exc))

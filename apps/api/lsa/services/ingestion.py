@@ -35,6 +35,8 @@ def ingest_report(
     principal: IngestionPrincipal,
     artifact_name: str | None = None,
     artifact_bytes: bytes | None = None,
+    signing_key_id: str | None = None,
+    signature_verified: bool = False,
 ) -> IngestResponse:
     report_id = str(report_data.report_id)
     host_id = str(report_data.host.host_id)
@@ -102,6 +104,8 @@ def ingest_report(
         security_score=security_score,
         artifact_name=artifact_name,
         checksum=sha256(artifact_bytes).hexdigest() if artifact_bytes else None,
+        signing_key_id=signing_key_id,
+        signature_verified=signature_verified,
     )
     db.add(report)
 
@@ -152,7 +156,12 @@ def ingest_report(
             action="report.accepted",
             target_type="report",
             target_id=report.id,
-            details={"host_id": host.id, "finding_count": len(report_data.findings)},
+            details={
+                "host_id": host.id,
+                "finding_count": len(report_data.findings),
+                "signature_verified": signature_verified,
+                "signing_key_id": signing_key_id,
+            },
         )
     )
     db.commit()

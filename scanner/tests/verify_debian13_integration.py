@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+import base64
+import hashlib
 import json
 import os
 import sys
 from pathlib import Path
+
+from cryptography.hazmat.primitives import serialization
 
 
 os.environ["LSA_DATABASE_URL"] = "sqlite:////tmp/lsa-integration.sqlite3"
@@ -12,7 +16,9 @@ os.environ["LSA_SESSION_SECRET"] = "integration-session-secret-with-32-character
 def verify(output_root: Path) -> None:
     from fastapi.testclient import TestClient
 
+    from lsa.database import SessionLocal
     from lsa.main import app
+    from lsa.models import SigningKey, Tenant
     from lsa.schemas import ReportInput
     from lsa.seed import DEMO_TOKEN
 
@@ -34,6 +40,25 @@ def verify(output_root: Path) -> None:
         raise RuntimeError("Container profile did not mark service controls as not applicable")
 
     with TestClient(app) as client:
+        with SessionLocal() as db:
+            tenant = db.query(Tenant).first()
+            private_key = serialization.load_pem_private_key(
+                Path("/tmp/lsa-integration-signing-key.pem").read_bytes(), password=None
+            )
+            public_key = private_key.public_key().public_bytes(
+                serialization.Encoding.Raw,
+                serialization.PublicFormat.Raw,
+            )
+            db.add(
+                SigningKey(
+                    id="00000000-0000-4000-8000-000000009001",
+                    tenant_id=tenant.id,
+                    name="Debian 13 CI signer",
+                    public_key=base64.b64encode(public_key).decode(),
+                    fingerprint=hashlib.sha256(public_key).hexdigest(),
+                )
+            )
+            db.commit()
         response = client.post(
             "/api/v1/ingest/bundles",
             headers={"Authorization": f"Bearer {DEMO_TOKEN}"},

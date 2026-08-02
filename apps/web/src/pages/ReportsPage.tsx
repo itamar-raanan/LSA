@@ -56,7 +56,7 @@ export function ReportsPage() {
         <aside className="panel p-6 md:p-8">
           <p className="section-label">Validation pipeline</p>
           <ol className="mt-7 space-y-6">
-            {['Authenticate the submitter', 'Validate schema and safe paths', 'Verify report identity', 'Compare finding state', 'Update fleet posture'].map((step, index) => <li key={step} className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full border border-stone-700 font-mono text-[9px] text-stone-400">{String(index + 1).padStart(2, '0')}</span><span className="pt-1 text-xs text-stone-400">{step}</span></li>)}
+            {['Authenticate the submitter', 'Validate checksums and safe paths', 'Verify the signer and host scope', 'Compare finding state', 'Update fleet posture'].map((step, index) => <li key={step} className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full border border-stone-700 font-mono text-[9px] text-stone-400">{String(index + 1).padStart(2, '0')}</span><span className="pt-1 text-xs text-stone-400">{step}</span></li>)}
           </ol>
           <div className="mt-8 border-t border-stone-800 pt-6"><div className="flex items-center gap-2 text-xs font-medium text-stone-300"><ShieldCheck size={17} className="text-emerald-400" />No server access required</div><p className="mt-3 text-xs leading-5 text-stone-600">The platform receives evidence only. It cannot open an SSH session or execute remediation on a reporting host.</p></div>
         </aside>
@@ -64,4 +64,3 @@ export function ReportsPage() {
     </div>
   )
 }
-

@@ -6,6 +6,7 @@
       - lsa_host_id | length > 0
       - lsa_delivery_mode in ['offline', 'upload', 'upload_and_keep']
       - lsa_profile in lsa_supported_profiles
+      - (lsa_signing_key_file | length > 0) == (lsa_signing_key_id | length > 0)
     fail_msg: LSA requires Debian, Ubuntu, or RHEL family Linux and a platform host UUID.
 
 - name: Resolve normalized operating-system family
@@ -54,7 +55,7 @@
   delegate_to: localhost
   become: false
 
-- name: Build portable offline bundle
+- name: Build unsigned portable offline bundle
   ansible.builtin.command:
     argv:
       - python3
@@ -65,8 +66,26 @@
   become: false
   register: lsa_bundle_build
   changed_when: true
+  when: lsa_signing_key_file | length == 0
 
-- name: Submit normalized report
+- name: Build signed portable offline bundle
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ role_path }}/../../scripts/build_bundle.py"
+      - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending/report.json"
+      - "{{ lsa_output_root }}/{{ inventory_hostname }}/pending"
+      - --signing-key
+      - "{{ lsa_signing_key_file }}"
+      - --key-id
+      - "{{ lsa_signing_key_id }}"
+  delegate_to: localhost
+  become: false
+  register: lsa_bundle_build
+  changed_when: true
+  when: lsa_signing_key_file | length > 0
+
+- name: Submit unsigned normalized report
   ansible.builtin.uri:
     url: "{{ lsa_platform_url }}/api/v1/ingest/reports"
     method: POST
@@ -82,7 +101,31 @@
   become: false
   no_log: true
   register: lsa_submission
-  when: lsa_delivery_mode in ['upload', 'upload_and_keep']
+  when:
+    - lsa_delivery_mode in ['upload', 'upload_and_keep']
+    - lsa_signing_key_file | length == 0
+
+- name: Submit signed report bundle
+  ansible.builtin.uri:
+    url: "{{ lsa_platform_url }}/api/v1/ingest/bundles"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ lookup('file', lsa_ingest_token_file) | trim }}"
+    body_format: form-multipart
+    body:
+      file:
+        filename: "{{ lsa_bundle_build.stdout }}"
+        mime_type: application/zip
+    status_code: 202
+    timeout: 120
+    validate_certs: true
+  delegate_to: localhost
+  become: false
+  no_log: true
+  register: lsa_submission
+  when:
+    - lsa_delivery_mode in ['upload', 'upload_and_keep']
+    - lsa_signing_key_file | length > 0
 
 - name: Record accepted upload
   ansible.builtin.copy:

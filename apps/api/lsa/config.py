@@ -16,9 +16,9 @@ class Settings(BaseSettings):
     bootstrap_password: str = "lsa-dev-password"
     seed_demo: bool = True
     max_upload_bytes: int = 25 * 1024 * 1024
+    require_signed_bundles: bool = False
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

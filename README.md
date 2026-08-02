@@ -10,13 +10,14 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - PostgreSQL-compatible tenant, host, report, finding, token, and audit models
 - Online JSON and offline ZIP report ingestion
 - Admin-managed host enrollment, revocable host-scoped tokens, and machine-identity binding
-- Complete manifest and checksum verification for offline bundles
+- Complete manifest, checksum, and optional Ed25519 signature verification for offline bundles
 - New, persistent, and resolved finding comparison
 - React fleet dashboard, enrollment, token lifecycle management, host profiles, report history, comparisons, findings, and upload
 - Thirty-two read-only Debian 13 controls for updates, identity, accounts, SSH, networking, kernel posture, auditing, mandatory access, packages, services, time, and logging
 - Versioned report JSON Schema
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
+- Admin-managed signing-key registration, host scoping, expiry, revocation, and provenance history
 - Docker Compose development stack
 - Backend and frontend tests plus GitHub Actions CI
 
@@ -49,6 +50,8 @@ Sign in as an administrator, open **Linux hosts**, and choose **Enroll host**. L
 The first accepted report binds that platform identity to the host's hashed machine ID. Later reports with a different machine ID are rejected. Tokens can also be issued, listed, and revoked through the `/api/v1/ingestion-tokens` endpoints.
 
 Administrators can manage scanner credentials from **Ingestion tokens**. Prefer host-scoped tokens with an expiry. Revocation is immediate, while accepted reports and host history remain immutable.
+
+For cryptographic report provenance, generate an Ed25519 key on the controller with `scanner/scripts/generate_signing_key.py`, register only its public key under **Signing keys**, and add the returned key ID plus private-key path to the scanner variables. See [docs/report-format.md](docs/report-format.md) for the complete signed-bundle workflow.
 
 ## Submit a JSON report
 
