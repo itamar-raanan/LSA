@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from lsa.config import Settings
@@ -14,9 +14,20 @@ from lsa.services.ingestion import ingest_report
 
 
 DEMO_TOKEN = "lsa_ingest_demo_secret"
+BOOTSTRAP_LOCK_ID = 5499808732000001
+
+
+def acquire_bootstrap_lock(db: Session) -> None:
+    """Serialize bootstrap across concurrent PostgreSQL application workers."""
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": BOOTSTRAP_LOCK_ID},
+        )
 
 
 def bootstrap(db: Session, settings: Settings) -> None:
+    acquire_bootstrap_lock(db)
     tenant = db.scalar(select(Tenant).where(Tenant.slug == "default"))
     if tenant is None:
         tenant = Tenant(name="Paragon Infrastructure", slug="default")
