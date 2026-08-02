@@ -10,14 +10,12 @@ import {
   PlugsConnected,
   Scroll,
   UsersThree,
-  DesktopTower,
 } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../../components/PageHeader'
 
 const primarySettings = [
   { to: '/settings/users', title: 'Users & access', detail: 'Govern JIT users and enforce tenant roles and permissions.', status: 'Available', icon: UsersThree },
-  { to: '/settings/agents', title: 'Agents & policies', detail: 'Enroll Linux agents, assign groups, and version audit policy.', status: 'Audit only', icon: DesktopTower },
   { to: '/settings/authentication', title: 'Authentication', detail: 'Configure OpenID Connect providers and RADIUS.', status: 'Available', icon: LockKey },
   { to: '/settings/tokens', title: 'Ingestion tokens', detail: 'Issue and revoke host-scoped scanner credentials.', status: 'Available', icon: Key },
   { to: '/settings/signing-keys', title: 'Signing keys', detail: 'Register public keys used to verify report provenance.', status: 'Available', icon: Fingerprint },

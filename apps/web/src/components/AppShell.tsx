@@ -6,6 +6,7 @@ import {
   ListMagnifyingGlass,
   SignOut,
   UploadSimple,
+  DesktopTower,
 } from '@phosphor-icons/react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
@@ -16,6 +17,7 @@ const navigation = [
   { to: '/hosts', label: 'Hosts', icon: HardDrives, adminOnly: false },
   { to: '/findings', label: 'Findings', icon: ListMagnifyingGlass, adminOnly: false },
   { to: '/reports', label: 'Reports', icon: UploadSimple, adminOnly: false },
+  { to: '/agents', label: 'Agents', icon: DesktopTower, adminOnly: true },
   { to: '/settings', label: 'Settings', icon: GearSix, adminOnly: true },
 ]
 
