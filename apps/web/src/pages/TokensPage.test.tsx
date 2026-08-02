@@ -11,7 +11,7 @@ vi.mock('../api/client', () => ({
   },
 }))
 
-vi.mock('../auth/AuthContext', () => ({
+vi.mock('../auth/useAuth', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'admin@lsa.local', name: 'Security Admin', role: 'admin' } }),
 }))
 

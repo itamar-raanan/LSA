@@ -1,14 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import type { User } from '../types'
-
-interface AuthValue {
-  user: User | null
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
-}
-
-const AuthContext = createContext<AuthValue | null>(null)
+import { AuthContext, type AuthValue } from './context'
 
 function loadUser(): User | null {
   const raw = localStorage.getItem('lsa_user')
@@ -42,10 +35,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
-
-export function useAuth() {
-  const value = useContext(AuthContext)
-  if (!value) throw new Error('useAuth must be used inside AuthProvider')
-  return value
-}
-
