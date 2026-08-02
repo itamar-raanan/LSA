@@ -1,8 +1,8 @@
-import enum
 import uuid
 from datetime import UTC, datetime
+from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from lsa.database import Base
@@ -16,7 +16,7 @@ def now_utc() -> datetime:
     return datetime.now(UTC)
 
 
-class Severity(str, enum.Enum):
+class Severity(StrEnum):
     critical = "critical"
     high = "high"
     medium = "medium"
@@ -24,7 +24,7 @@ class Severity(str, enum.Enum):
     info = "info"
 
 
-class FindingStatus(str, enum.Enum):
+class FindingStatus(StrEnum):
     passed = "pass"
     failed = "fail"
     manual = "manual"
@@ -159,4 +159,3 @@ class AuditEvent(Base):
     target_id: Mapped[str] = mapped_column(String(160))
     details: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
-
