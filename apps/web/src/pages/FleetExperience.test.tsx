@@ -36,6 +36,11 @@ describe('Fleet console experience', () => {
     expect(screen.getByText('Xeon Test')).toBeInTheDocument()
     expect(screen.getByText(/QEMU/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete host' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Close host details' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize host details' }))
+    expect(screen.queryByText('Xeon Test')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Restore web-01 details' }))
+    expect(screen.getByText('Xeon Test')).toBeInTheDocument()
   })
 
   it('shows all 12 categories before revealing category findings', async () => {

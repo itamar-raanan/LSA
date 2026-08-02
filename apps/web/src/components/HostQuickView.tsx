@@ -1,4 +1,4 @@
-import { ArrowSquareOut, Clock, Cpu, HardDrives, Trash, X } from '@phosphor-icons/react'
+import { ArrowSquareOut, CaretUp, Clock, Cpu, HardDrives, Minus, Trash, X } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
@@ -16,6 +16,7 @@ function formatUptime(value: unknown) {
 export function HostQuickView({ host, close, deleted }: { host: Host; close: () => void; deleted: () => void }) {
   const { user } = useAuth()
   const [confirming, setConfirming] = useState(false)
+  const [minimized, setMinimized] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const info = host.system_info ?? {}
@@ -32,10 +33,23 @@ export function HostQuickView({ host, close, deleted }: { host: Host; close: () 
     }
   }
 
+  if (minimized) {
+    return <aside className="host-quick-view host-quick-view-minimized" aria-label={`${host.hostname} details`}>
+      <button className="host-quick-view-restore" onClick={() => setMinimized(false)} aria-label={`Restore ${host.hostname} details`}>
+        <span className="min-w-0"><span className="section-label block">Host card</span><span className="mt-1 block truncate text-xs font-medium text-stone-200">{host.hostname}</span></span>
+        <CaretUp size={16} className="shrink-0 text-stone-500" />
+      </button>
+      <button className="icon-button mr-3 shrink-0" aria-label="Close host details" onClick={close}><X size={16} /></button>
+    </aside>
+  }
+
   return <aside className="host-quick-view" aria-label={`${host.hostname} details`}>
     <div className="flex items-start justify-between gap-4 border-b border-stone-800 px-5 py-5">
       <div className="min-w-0"><p className="section-label">Host card</p><h2 className="mt-2 truncate text-lg font-semibold text-stone-100">{host.hostname}</h2><p className="mt-1 truncate font-mono text-[10px] text-stone-600">{host.fqdn ?? host.ip_addresses[0] ?? host.id}</p></div>
-      <button className="icon-button shrink-0" aria-label="Close host details" onClick={close}><X size={16} /></button>
+      <div className="flex shrink-0 items-center gap-2">
+        <button className="icon-button" aria-label="Minimize host details" title="Minimize" onClick={() => { setConfirming(false); setMinimized(true) }}><Minus size={16} /></button>
+        <button className="icon-button" aria-label="Close host details" title="Close" onClick={close}><X size={16} /></button>
+      </div>
     </div>
     <div className="max-h-[60vh] overflow-y-auto px-5 py-5">
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-stone-800 bg-stone-800">
