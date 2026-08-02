@@ -1,8 +1,8 @@
 ---
 id: lsa_debian_13
 name: LSA Debian Linux 13 production baseline
-version: 0.3.0
+version: 0.4.0
 os_family: debian
 os_versions: ["13"]
 profiles: [production_server, minimal_server, router, container]
-description: Thirty-two read-only production controls for Debian 13 servers and containers.
+description: Legacy compact control definitions retained for migration reference; the active scanner uses the complete 354-control audit roles.

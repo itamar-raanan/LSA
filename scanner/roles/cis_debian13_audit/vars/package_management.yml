@@ -1,0 +1,119 @@
+---
+cis_package_management_controls:
+  - id: '1.2.1.1'
+    title: Ensure the source.list and .source files use the Signed-By option
+    assessment: Manual
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: Every active APT repository is approved and uses a repository-specific Signed-By key.
+    guidance: Review /etc/apt/sources.list and files under /etc/apt/sources.list.d against site policy.
+
+  - id: '1.2.1.2'
+    title: Ensure weak dependencies are configured
+    assessment: Automated
+    profiles: [level2_server, level2_workstation]
+    expected: APT::Install-Recommends and APT::Install-Suggests are both 0.
+    audit: !unsafe |
+      recommends="$(apt-config dump 2>/dev/null | awk -F'"' '/^APT::Install-Recommends / {v=$2} END {print v}')"
+      suggests="$(apt-config dump 2>/dev/null | awk -F'"' '/^APT::Install-Suggests / {v=$2} END {print v}')"
+      printf 'Install-Recommends=%s\nInstall-Suggests=%s\n' "$recommends" "$suggests"
+      [[ "$recommends" == "0" && "$suggests" == "0" ]]
+
+  - id: '1.2.1.3'
+    title: Ensure access to gpg key files are configured
+    assessment: Automated
+    profiles: [level1_server, level2_server]
+    expected: Relevant GPG and Signed-By source files are root:root and mode 0644 or more restrictive.
+    audit: !unsafe |
+      bad=0
+      while IFS= read -r -d '' file; do
+        stat -Lc 'noncompliant: %n mode=%#a owner=%U group=%G' "$file"
+        bad=1
+      done < <(find -L /usr/share/keyrings /etc/apt/trusted.gpg.d -xdev -type f -name '*gpg' \( ! -user root -o ! -group root -o -perm /133 \) -print0 2>/dev/null)
+      while IFS= read -r -d '' file; do
+        if grep -Pqs '^([^#\n\r]+)?\bSigned-By\b' "$file"; then
+          stat -Lc 'noncompliant: %n mode=%#a owner=%U group=%G' "$file"
+          bad=1
+        fi
+      done < <(find -L /etc/apt/sources.list.d -xdev -type f \( -name '*.list' -o -name '*.sources' \) \( ! -user root -o ! -group root -o -perm /133 \) -print0 2>/dev/null)
+      exit "$bad"
+
+  - id: '1.2.1.4'
+    title: Ensure access to /etc/apt/trusted.gpg.d directory is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server]
+    expected: /etc/apt/trusted.gpg.d is root:root and mode 0755 or more restrictive.
+    audit: !unsafe |
+      path=/etc/apt/trusted.gpg.d
+      [[ -d "$path" ]] || { echo "missing: $path"; exit 1; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$path")
+      printf 'mode=%s uid=%s gid=%s\n' "$mode" "$uid" "$gid"
+      (( (8#$mode & 8#0022) == 0 )) && [[ "$uid" == 0 && "$gid" == 0 ]]
+
+  - id: '1.2.1.5'
+    title: Ensure access to /etc/apt/auth.conf.d directory is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server]
+    expected: /etc/apt/auth.conf.d is root:root and mode 0755 or more restrictive.
+    audit: !unsafe |
+      path=/etc/apt/auth.conf.d
+      [[ -d "$path" ]] || { echo "missing: $path"; exit 1; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$path")
+      printf 'mode=%s uid=%s gid=%s\n' "$mode" "$uid" "$gid"
+      (( (8#$mode & 8#0022) == 0 )) && [[ "$uid" == 0 && "$gid" == 0 ]]
+
+  - id: '1.2.1.6'
+    title: Ensure access to files in the /etc/apt/auth.conf.d directory is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: Files are root:root and mode 0640 or more restrictive.
+    audit: !unsafe |
+      bad=0
+      while IFS= read -r -d '' file; do
+        stat -Lc 'noncompliant: %n mode=%#a owner=%U group=%G' "$file"
+        bad=1
+      done < <(find -L /etc/apt/auth.conf.d -xdev -type f \( ! -user root -o ! -group root -o -perm /0137 \) -print0 2>/dev/null)
+      exit "$bad"
+
+  - id: '1.2.1.7'
+    title: Ensure access to /usr/share/keyrings directory is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server]
+    expected: /usr/share/keyrings is root:root and mode 0755 or more restrictive.
+    audit: !unsafe |
+      path=/usr/share/keyrings
+      [[ -d "$path" ]] || { echo "missing: $path"; exit 1; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$path")
+      printf 'mode=%s uid=%s gid=%s\n' "$mode" "$uid" "$gid"
+      (( (8#$mode & 8#0022) == 0 )) && [[ "$uid" == 0 && "$gid" == 0 ]]
+
+  - id: '1.2.1.8'
+    title: Ensure access to /etc/apt/sources.list.d directory is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server]
+    expected: /etc/apt/sources.list.d is root:root and mode 0755 or more restrictive.
+    audit: !unsafe |
+      path=/etc/apt/sources.list.d
+      [[ -d "$path" ]] || { echo "missing: $path"; exit 1; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$path")
+      printf 'mode=%s uid=%s gid=%s\n' "$mode" "$uid" "$gid"
+      (( (8#$mode & 8#0022) == 0 )) && [[ "$uid" == 0 && "$gid" == 0 ]]
+
+  - id: '1.2.1.9'
+    title: Ensure access to files in /etc/apt/sources.list.d are configured
+    assessment: Automated
+    profiles: [level1_server, level2_server]
+    expected: Files are root:root and mode 0644 or more restrictive.
+    audit: !unsafe |
+      bad=0
+      while IFS= read -r -d '' file; do
+        stat -Lc 'noncompliant: %n mode=%#a owner=%U group=%G' "$file"
+        bad=1
+      done < <(find -L /etc/apt/sources.list.d -xdev -type f \( ! -user root -o ! -group root -o -perm /0133 \) -print0 2>/dev/null)
+      exit "$bad"
+
+  - id: '1.2.2.1'
+    title: Ensure updates, patches, and additional security software are installed
+    assessment: Manual
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: No pending approved updates and no pending reboot, according to site policy.
+    guidance: Run apt update and apt -s upgrade, then review /var/run/reboot-required. This role does not refresh package metadata.

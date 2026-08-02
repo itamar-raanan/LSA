@@ -206,7 +206,7 @@ def list_findings(
     lifecycle: str | None = None,
     host_id: str | None = None,
     category: str | None = None,
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int = Query(default=1000, ge=1, le=5000),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> list[FindingResponse]:

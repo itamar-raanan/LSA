@@ -1,0 +1,286 @@
+---
+cis_section7_controls:
+- id: 7.1.1
+  title: Ensure access to /etc/passwd is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/passwd ] || { echo '/etc/passwd missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/passwd)
+    EOF
+    [ $((8#$mode & 8#0133)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/passwd
+- id: 7.1.2
+  title: Ensure access to /etc/passwd- is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/passwd- ] || { echo '/etc/passwd- missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/passwd-)
+    EOF
+    [ $((8#$mode & 8#0133)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/passwd-
+- id: 7.1.3
+  title: Ensure access to /etc/group is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/group ] || { echo '/etc/group missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/group)
+    EOF
+    [ $((8#$mode & 8#0133)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/group
+- id: 7.1.4
+  title: Ensure access to /etc/group- is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/group- ] || { echo '/etc/group- missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/group-)
+    EOF
+    [ $((8#$mode & 8#0133)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/group-
+- id: 7.1.5
+  title: Ensure access to /etc/shadow is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/shadow ] || { echo '/etc/shadow missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/shadow)
+    EOF
+    [ $((8#$mode & 8#0137)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 42 ] || [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/shadow
+- id: 7.1.6
+  title: Ensure access to /etc/shadow- is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/shadow- ] || { echo '/etc/shadow- missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/shadow-)
+    EOF
+    [ $((8#$mode & 8#0137)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 42 ] || [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/shadow-
+- id: 7.1.7
+  title: Ensure access to /etc/gshadow is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/gshadow ] || { echo '/etc/gshadow missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/gshadow)
+    EOF
+    [ $((8#$mode & 8#0137)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 42 ] || [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/gshadow
+- id: 7.1.8
+  title: Ensure access to /etc/gshadow- is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/gshadow- ] || { echo '/etc/gshadow- missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/gshadow-)
+    EOF
+    [ $((8#$mode & 8#0137)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 42 ] || [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/gshadow-
+- id: 7.1.9
+  title: Ensure access to /etc/shells is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/shells ] || { echo '/etc/shells missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/shells)
+    EOF
+    [ $((8#$mode & 8#0133)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/shells
+- id: 7.1.10
+  title: Ensure access to /etc/security/opasswd is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    [ -e /etc/security/opasswd ] || { echo '/etc/security/opasswd missing'; exit 1; }
+    read mode uid gid <<EOF
+    $(stat -Lc '%a %u %g' /etc/security/opasswd)
+    EOF
+    [ $((8#$mode & 8#0177)) -eq 0 ] || { echo "mode=$mode"; exit 1; }
+    [ "$uid" = 0 ] || { echo "uid=$uid"; exit 1; }
+    [ "$gid" = 0 ] || { echo "gid=$gid"; exit 1; }
+    stat -Lc '%a %U %G %n' /etc/security/opasswd
+- id: 7.1.11
+  title: Ensure world writable files and directories are secured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    badf=$(find / -xdev -type f -perm -0002 -printf '%m %p\n' 2>/dev/null)
+    badd=$(find / -xdev -type d -perm -0002 ! -perm -1000 -printf '%m %p\n' 2>/dev/null)
+    [ -z "$badf$badd" ] || { echo "$badf"; echo "$badd"; exit 1; }
+    echo 'World-writable objects secured'
+- id: 7.1.12
+  title: Ensure no files or directories without an owner and a group exist
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(find / -xdev \( -nouser -o -nogroup \) -printf '%u %g %p\n' 2>/dev/null)
+    [ -z "$bad" ] || { echo "$bad"; exit 1; }
+    echo 'No unowned/ungrouped objects'
+- id: 7.2.1
+  title: Ensure accounts in /etc/passwd use shadowed passwords
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(awk -F: '$2 != "x" {print $1 ":" $2}' /etc/passwd)
+    [ -z "$bad" ] || { echo "$bad"; exit 1; }
+    echo 'All accounts use shadowed passwords'
+- id: 7.2.2
+  title: Ensure /etc/shadow password fields are not empty
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(awk -F: '$2 == "" {print $1}' /etc/shadow)
+    [ -z "$bad" ] || { echo "$bad"; exit 1; }
+    echo 'No empty shadow passwords'
+- id: 7.2.3
+  title: Ensure all groups in /etc/passwd exist in /etc/group
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(awk -F: 'NR==FNR{g[$3]=1;next}!($4 in g){print $1 ":" $4}' /etc/group /etc/passwd)
+    [ -z "$bad" ] || { echo "$bad"; exit 1; }
+    echo 'All primary groups exist'
+- id: 7.2.4
+  title: Ensure shadow group is empty
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    m=$(getent group shadow | cut -d: -f4)
+    p=$(awk -F: '$4==42{print $1}' /etc/passwd)
+    [ -z "$m$p" ] || { echo "members=$m primary=$p"; exit 1; }
+    echo 'shadow group empty'
+- id: 7.2.5
+  title: Ensure no duplicate UIDs exist
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(cut -d: -f3 /etc/passwd | sort | uniq -d)
+    [ -z "$bad" ] || { echo "Duplicate UID: $bad"; exit 1; }
+    echo 'No duplicate UIDs'
+- id: 7.2.6
+  title: Ensure no duplicate GIDs exist
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(cut -d: -f3 /etc/group | sort | uniq -d)
+    [ -z "$bad" ] || { echo "Duplicate GID: $bad"; exit 1; }
+    echo 'No duplicate GIDs'
+- id: 7.2.7
+  title: Ensure no duplicate user names exist
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(cut -d: -f1 /etc/passwd | sort | uniq -d)
+    [ -z "$bad" ] || { echo "Duplicate user: $bad"; exit 1; }
+    echo 'No duplicate users'
+- id: 7.2.8
+  title: Ensure no duplicate group names exist
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    bad=$(cut -d: -f1 /etc/group | sort | uniq -d)
+    [ -z "$bad" ] || { echo "Duplicate group: $bad"; exit 1; }
+    echo 'No duplicate groups'
+- id: 7.2.9
+  title: Ensure local interactive user home directories are configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    u=$(awk '$1=="UID_MIN"{print $2}' /etc/login.defs|tail -1); [ -n "$u" ] || u=1000
+    bad=''
+    while IFS=: read -r n _ id _ _ h s; do [ "$id" -ge "$u" ] || continue; grep -qx "$s" /etc/shells || continue; [ -d "$h" ] || { bad="$bad\n$n missing $h"; continue; }; o=$(stat -Lc %U "$h"); m=$(stat -Lc %a "$h"); [ "$o" = "$n" ] || bad="$bad\n$n owner=$o"; [ $((8#$m & 0027)) -eq 0 ] || bad="$bad\n$n mode=$m"; done </etc/passwd
+    [ -z "$bad" ] || { printf '%b\n' "$bad"; exit 1; }
+    echo 'Home directories compliant'
+- id: 7.2.10
+  title: Ensure local interactive user dot files access is configured
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: System satisfies the benchmark audit procedure
+  audit: !unsafe |
+    u=$(awk '$1=="UID_MIN"{print $2}' /etc/login.defs|tail -1); [ -n "$u" ] || u=1000
+    bad=''
+    while IFS=: read -r n _ id _ _ h s; do [ "$id" -ge "$u" ] || continue; grep -qx "$s" /etc/shells || continue; [ -d "$h" ] || continue; for f in "$h"/.[!.]* "$h"/..?*; do [ -e "$f" ] || continue; b=${f##*/}; case "$b" in .forward|.rhosts) bad="$bad\n$n prohibited $f";; *) m=$(stat -Lc %a "$f"); [ $((8#$m & 0022)) -eq 0 ] || bad="$bad\n$n writable $f mode=$m";; esac; o=$(stat -Lc %U "$f"); [ "$o" = "$n" ] || bad="$bad\n$n $f owner=$o"; done; done </etc/passwd
+    [ -z "$bad" ] || { printf '%b\n' "$bad"; exit 1; }
+    echo 'Dot files compliant'
+cis_section7_manual_controls:
+- id: 7.1.13
+  title: Ensure SUID and SGID files are reviewed
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: Manual review required by the benchmark
+  guidance: Follow the CIS Debian Linux 13 Benchmark v1.0.0 audit procedure and retain site-specific evidence.

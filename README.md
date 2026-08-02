@@ -13,7 +13,7 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - Complete manifest, checksum, and optional Ed25519 signature verification for offline bundles
 - New, persistent, and resolved finding comparison
 - React fleet dashboard, enrollment, token lifecycle management, host profiles, report history, comparisons, findings, and upload
-- Thirty-two read-only Debian 13 controls for updates, identity, accounts, SSH, networking, kernel posture, auditing, mandatory access, packages, services, time, and logging
+- Complete 354-control Debian 13 audit surface: 334 benchmark controls plus 20 supplemental security-health checks, with no host remediation
 - Versioned report JSON Schema
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
@@ -82,7 +82,7 @@ ansible-playbook -i inventory.ini playbooks/scan.yml \
 
 Delivery modes are `offline`, `upload`, and `upload_and_keep`. The last mode is the production default because it preserves a local artifact even after successful submission.
 
-The current executable control pack targets Debian 13 and performs read-only checks. Select `production_server`, `minimal_server`, `router`, or `container` with `lsa_profile`; profile-specific controls are emitted as `not_applicable` when they do not belong to the target. Other declared platform families remain accepted by the report contract but do not yet have executable control packs.
+The current executable control pack targets Debian 13 and performs read-only checks. Every report contains the complete 354-control catalog; controls outside the selected profile are emitted as `not_applicable` instead of disappearing. Select an LSA deployment profile (`production_server`, `minimal_server`, `router`, or `container`) or a direct benchmark profile (`level1_server`, `level2_server`, `level1_workstation`, or `level2_workstation`) with `lsa_profile`. Other declared platform families remain accepted by the report contract but do not yet have executable control packs.
 
 GitHub Actions also executes the complete scanner inside an official Debian 13 container, validates the normalized report, verifies the portable bundle, and ingests it through the API.
 

@@ -1,0 +1,72 @@
+---
+- name: "{{ cis_control.id }} | Read exact mount information"
+  ansible.builtin.command:
+    argv: [findmnt, -kn, -M, "{{ cis_control.mount }}", -o, TARGET,SOURCE,FSTYPE,OPTIONS]
+  register: cis_mount_info
+  changed_when: false
+  failed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Check /tmp boot-time mount state"
+  ansible.builtin.command:
+    argv: [systemctl, is-enabled, tmp.mount]
+  register: cis_tmp_mount_enabled
+  changed_when: false
+  failed_when: false
+  when: cis_control.boot_check | default(false)
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Derive mount facts"
+  ansible.builtin.set_fact:
+    cis_mount_present: "{{ cis_mount_info.rc == 0 and (cis_mount_info.stdout | trim | length > 0) }}"
+    cis_mount_options: >-
+      {{ ((cis_mount_info.stdout | trim).split() | last).split(',')
+         if (cis_mount_info.rc == 0 and (cis_mount_info.stdout | trim | length > 0)) else [] }}
+    cis_mount_boot_ok: >-
+      {{ (not (cis_control.boot_check | default(false))) or
+         ((cis_tmp_mount_enabled.stdout | default('') | trim) not in ['disabled', 'masked', '']) }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Record filesystem mount result"
+  ansible.builtin.set_fact:
+    cis_results: >-
+      {{ cis_results + [{
+        'id': cis_control.id,
+        'title': cis_control.title,
+        'section': cis_control.id.rsplit('.', 1)[0],
+        'assessment': 'Automated',
+        'profiles': cis_control.profiles,
+        'status':
+          ('EXCLUDED' if cis_control.id in cis_exceptions else
+           'ERROR' if cis_mount_info.rc not in [0, 1] else
+           'PASS' if (
+             (cis_control.check == 'mount' and cis_mount_present and cis_mount_boot_ok) or
+             (cis_control.check == 'option' and cis_mount_present and cis_control.option in cis_mount_options)
+           ) else 'FAIL'),
+        'expected':
+          (cis_control.mount ~ ' is an exact mount point' ~
+           (' and tmp.mount is not disabled or masked' if cis_control.boot_check | default(false) else '')
+           if cis_control.check == 'mount' else
+           cis_control.option ~ ' is present in mount options for ' ~ cis_control.mount),
+        'remediation': cis_remediations.get(cis_control.id,
+          'Configure the required dedicated mount or mount option, then remount or reboot and re-run the audit.'),
+        'actual':
+          ('Documented exception: ' ~ cis_exceptions[cis_control.id] if cis_control.id in cis_exceptions else
+           'findmnt_rc=' ~ (cis_mount_info.rc | string) ~
+           ', mounted=' ~ (cis_mount_present | string) ~
+           ', options=' ~ (cis_mount_options | join(',')) ~
+           (', tmp.mount=' ~ (cis_tmp_mount_enabled.stdout | default('not checked') | trim)
+            if cis_control.boot_check | default(false) else '')),
+        'evidence': {
+          'findmnt': cis_mount_info.stdout_lines | default([]),
+          'findmnt_stderr': cis_mount_info.stderr_lines | default([]),
+          'systemd_boot_state': cis_tmp_mount_enabled.stdout | default('not checked') | trim
+        }
+      }] }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"

@@ -1,0 +1,27 @@
+---
+cis_bootloader_controls:
+  - id: '1.4.1'
+    title: Ensure bootloader password is set
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: GRUB defines a superuser and a PBKDF2-SHA512 password for that user.
+    audit: !unsafe |
+      cfg=/boot/grub/grub.cfg
+      [[ -r "$cfg" ]] || { echo "cannot read $cfg"; exit 2; }
+      superusers="$(grep -E '^\s*set\s+superusers=' "$cfg" | tail -1 || true)"
+      password="$(grep -E '^\s*password_pbkdf2\s+[^[:space:]]+\s+grub\.pbkdf2\.sha512\.' "$cfg" | tail -1 || true)"
+      printf 'superusers=%s\npassword=%s\n' "$superusers" "$password"
+      [[ -n "$superusers" && -n "$password" ]]
+
+  - id: '1.4.2'
+    title: Ensure access to bootloader config is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: /boot/grub/grub.cfg is owned by root:root and has mode 0600 or more restrictive.
+    audit: !unsafe |
+      cfg=/boot/grub/grub.cfg
+      [[ -e "$cfg" ]] || { echo "$cfg does not exist"; exit 2; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$cfg")
+      printf 'mode=%s uid=%s gid=%s\n' "$mode" "$uid" "$gid"
+      # No permissions for group/other and no execute bit for owner.
+      (( (8#$mode & 0177) == 0 )) && [[ "$uid" == 0 && "$gid" == 0 ]]

@@ -39,11 +39,12 @@ Deleting a host is a logical deletion: it removes the asset from active fleet, d
 - Ubuntu 22.04 and 24.04
 - RHEL family 8 and 9
 
-The v0.3 scanner implementation focuses on Debian 13 with 32 executable controls and explicit production-server, minimal-server, router, and container profiles. The shared contract and plugin boundaries already admit the other supported families.
+The v0.4 scanner implementation focuses on Debian 13 with 334 benchmark controls and 20 supplemental security-health controls. Of the benchmark controls, 322 are automated read-only checks and 12 are explicit manual reviews. Every report retains all 354 control IDs; controls outside the chosen profile are `not_applicable`. The shared contract and plugin boundaries already admit the other supported families.
 
 ## Security invariants
 
 - No SSH credentials or remote execution paths exist in the platform.
+- Scanner audit tasks may read privileged host state but cannot run package, service, account, permission, mount, firewall, kernel, or filesystem mutation commands; automated tests enforce this boundary.
 - Ingestion token hashes—not raw tokens—are stored.
 - Expired or revoked ingestion tokens cannot submit evidence.
 - Report bundles must not contain API tokens.

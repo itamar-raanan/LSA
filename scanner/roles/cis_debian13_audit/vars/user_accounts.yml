@@ -1,0 +1,220 @@
+---
+cis_user_account_profiles: &all_profiles
+  - level1_server
+  - level1_workstation
+  - level2_server
+  - level2_workstation
+
+cis_user_account_controls:
+  - id: "5.4.1.1"
+    title: Ensure password expiration is configured
+    profiles: *all_profiles
+    expected: PASS_MAX_DAYS is 365 or less and all existing local interactive users have a maximum password age of 365 days or less
+    audit: !unsafe |
+      fail=0
+      value="$(awk '$1 == "PASS_MAX_DAYS" {print $2}' /etc/login.defs | tail -1)"
+      [ -n "$value" ] && [ "$value" -le 365 ] || { echo "PASS_MAX_DAYS is invalid or missing: ${value:-unset}"; fail=1; }
+      findings="$(awk -F: '($2 ~ /^\$.+\$/) {if ($5 > 365 || $5 < 1) print $1 ": max_days=" $5}' /etc/shadow)"
+      if [ -n "$findings" ]; then printf '%s\n' "$findings"; fail=1; fi
+      echo "PASS_MAX_DAYS=${value:-unset}"
+      exit "$fail"
+
+  - id: "5.4.1.3"
+    title: Ensure password expiration warning days is configured
+    profiles: *all_profiles
+    expected: PASS_WARN_AGE is 7 or more and existing local interactive users have at least 7 warning days
+    audit: !unsafe |
+      fail=0
+      value="$(awk '$1 == "PASS_WARN_AGE" {print $2}' /etc/login.defs | tail -1)"
+      [ -n "$value" ] && [ "$value" -ge 7 ] || { echo "PASS_WARN_AGE is invalid or missing: ${value:-unset}"; fail=1; }
+      findings="$(awk -F: '($2 ~ /^\$.+\$/) {if ($6 < 7) print $1 ": warn_days=" $6}' /etc/shadow)"
+      if [ -n "$findings" ]; then printf '%s\n' "$findings"; fail=1; fi
+      echo "PASS_WARN_AGE=${value:-unset}"
+      exit "$fail"
+
+  - id: "5.4.1.4"
+    title: Ensure strong password hashing algorithm is configured
+    profiles: *all_profiles
+    expected: ENCRYPT_METHOD is YESCRYPT or SHA512 and pam_unix uses a strong hashing algorithm
+    audit: !unsafe |
+      fail=0
+      method="$(awk '$1 == "ENCRYPT_METHOD" {print toupper($2)}' /etc/login.defs | tail -1)"
+      case "$method" in YESCRYPT|SHA512) ;; *) echo "ENCRYPT_METHOD is weak or missing: ${method:-unset}"; fail=1;; esac
+      line="$(grep -Psi '^\s*password\s+[^#]+\s+pam_unix\.so\b' /etc/pam.d/common-password | tail -1 || true)"
+      [ -n "$line" ] || { echo 'pam_unix password line is missing'; fail=1; }
+      if [ -n "$line" ] && ! grep -Pq '\b(yescrypt|sha512)\b' <<< "$line"; then echo "Strong pam_unix hashing option missing: $line"; fail=1; fi
+      echo "ENCRYPT_METHOD=${method:-unset}"
+      [ -z "$line" ] || echo "$line"
+      exit "$fail"
+
+  - id: "5.4.1.5"
+    title: Ensure inactive password lock is configured
+    profiles: *all_profiles
+    expected: Default inactive password period is 45 days or less and all existing users are configured for 45 days or less
+    audit: !unsafe |
+      fail=0
+      default_value="$(useradd -D 2>/dev/null | awk -F= '$1 == "INACTIVE" {print $2}')"
+      [ -n "$default_value" ] && [ "$default_value" -ge 0 ] && [ "$default_value" -le 45 ] || { echo "Default INACTIVE is invalid: ${default_value:-unset}"; fail=1; }
+      findings="$(awk -F: '($2 ~ /^\$.+\$/) {if ($7 == "" || $7 < 0 || $7 > 45) print $1 ": inactive=" ($7 == "" ? "unset" : $7)}' /etc/shadow)"
+      if [ -n "$findings" ]; then printf '%s\n' "$findings"; fail=1; fi
+      echo "Default INACTIVE=${default_value:-unset}"
+      exit "$fail"
+
+  - id: "5.4.1.6"
+    title: Ensure all users last password change date is in the past
+    profiles: *all_profiles
+    expected: No user's last password change date is in the future
+    audit: !unsafe |
+      now_days=$(( $(date +%s) / 86400 ))
+      bad="$(awk -F: -v now="$now_days" '($3 > now) {print $1 ": last_change_days=" $3 ", current_days=" now}' /etc/shadow)"
+      [ -z "$bad" ] || { printf '%s\n' "$bad"; exit 1; }
+      echo 'All last password change dates are current or in the past'
+
+  - id: "5.4.2.1"
+    title: Ensure root is the only UID 0 account
+    profiles: *all_profiles
+    expected: root is the only account with UID 0
+    audit: !unsafe |
+      accounts="$(awk -F: '$3 == 0 {print $1}' /etc/passwd)"
+      [ "$accounts" = root ] || { echo "UID 0 accounts: $accounts"; exit 1; }
+      echo 'root is the only UID 0 account'
+
+  - id: "5.4.2.2"
+    title: Ensure root is the only GID 0 account
+    profiles: *all_profiles
+    expected: root is the only account with primary GID 0
+    audit: !unsafe |
+      accounts="$(awk -F: '$4 == 0 {print $1}' /etc/passwd)"
+      [ "$accounts" = root ] || { echo "Accounts with primary GID 0: $accounts"; exit 1; }
+      echo 'root is the only account with primary GID 0'
+
+  - id: "5.4.2.3"
+    title: Ensure group root is the only GID 0 group
+    profiles: *all_profiles
+    expected: root is the only group with GID 0
+    audit: !unsafe |
+      groups="$(awk -F: '$3 == 0 {print $1}' /etc/group)"
+      [ "$groups" = root ] || { echo "GID 0 groups: $groups"; exit 1; }
+      echo 'root is the only GID 0 group'
+
+  - id: "5.4.2.4"
+    title: Ensure root account access is controlled
+    profiles: *all_profiles
+    expected: The root password field is set to a locked value or a valid password hash according to organizational policy
+    audit: !unsafe |
+      field="$(getent shadow root | cut -d: -f2)"
+      [ -n "$field" ] || { echo 'Unable to read root shadow entry'; exit 2; }
+      case "$field" in
+        '!'|'!!'|'*'|'!*') echo 'Root account is locked';;
+        \$*) echo 'Root account has a password hash; verify access is controlled';;
+        '') echo 'Root password field is empty'; exit 1;;
+        *) echo "Unexpected root password field: $field"; exit 1;;
+      esac
+
+  - id: "5.4.2.5"
+    title: Ensure root path integrity
+    profiles: *all_profiles
+    expected: Root PATH contains no empty entries, trailing colon, current-directory entries, non-root-owned directories, or group/world-writable directories
+    audit: !unsafe |
+      fail=0
+      path_value="$(sudo -Hiu root env | awk -F= '$1 == "PATH" {print substr($0,6)}')"
+      [ -n "$path_value" ] || { echo 'Unable to determine root PATH'; exit 2; }
+      case "$path_value" in :*|*::*|*:) echo "Root PATH contains an empty entry: $path_value"; fail=1;; esac
+      old_ifs="$IFS"; IFS=:
+      for dir in $path_value; do
+        [ "$dir" != . ] || { echo 'Root PATH contains current directory'; fail=1; continue; }
+        [ -d "$dir" ] || { echo "Root PATH directory does not exist: $dir"; fail=1; continue; }
+        owner="$(stat -Lc '%U' "$dir")"; mode="$(stat -Lc '%a' "$dir")"
+        [ "$owner" = root ] || { echo "$dir is owned by $owner"; fail=1; }
+        perm=$((8#$mode))
+        [ $((perm & 0022)) -eq 0 ] || { echo "$dir is group/world writable: $mode"; fail=1; }
+      done
+      IFS="$old_ifs"
+      echo "root PATH=$path_value"
+      exit "$fail"
+
+  - id: "5.4.2.6"
+    title: Ensure root user umask is configured
+    profiles: *all_profiles
+    expected: Root's effective umask is 027 or more restrictive
+    audit: !unsafe |
+      value="$(sudo -Hiu root sh -c 'umask' 2>/dev/null | tail -1)"
+      [[ "$value" =~ ^0?[0-7]{3}$ ]] || { echo "Unable to determine root umask: ${value:-unset}"; exit 2; }
+      numeric=$((8#$value))
+      [ $((numeric & 0027)) -eq 0027 ] || { echo "Root umask is too permissive: $value"; exit 1; }
+      echo "Root effective umask=$value"
+
+  - id: "5.4.2.7"
+    title: Ensure system accounts do not have a valid login shell
+    profiles: *all_profiles
+    expected: System accounts below UID_MIN, excluding root, sync, shutdown, and halt, use nologin or false
+    audit: !unsafe |
+      uid_min="$(awk '$1 == "UID_MIN" {print $2}' /etc/login.defs | tail -1)"
+      [ -n "$uid_min" ] || { echo 'UID_MIN is missing'; exit 2; }
+      bad="$(awk -F: -v min="$uid_min" '($1 !~ /^(root|sync|shutdown|halt)$/ && $3 < min && $7 !~ /(nologin|false)$/) {print $1 ":" $3 ":" $7}' /etc/passwd)"
+      [ -z "$bad" ] || { printf '%s\n' "$bad"; exit 1; }
+      echo 'All applicable system accounts use nologin or false'
+
+  - id: "5.4.2.8"
+    title: Ensure accounts without a valid login shell are locked
+    profiles: *all_profiles
+    expected: Accounts whose shell is not listed in /etc/shells are locked, excluding root, sync, shutdown, and halt
+    audit: !unsafe |
+      valid_re="$(awk '{gsub("/","\\/"); printf "%s%s", sep, $0; sep="|"}' /etc/shells)"
+      fail=0
+      while IFS=: read -r user _ _ _ _ _ shell; do
+        case "$user" in root|sync|shutdown|halt) continue;; esac
+        grep -Fxq "$shell" /etc/shells && continue
+        status="$(passwd -S "$user" 2>/dev/null | awk '{print $2}')"
+        case "$status" in L|LK) ;; *) echo "$user has invalid shell $shell but is not locked (status=${status:-unknown})"; fail=1;; esac
+      done < /etc/passwd
+      [ "$fail" -eq 0 ] && echo 'All accounts without valid login shells are locked'
+      exit "$fail"
+
+  - id: "5.4.3.1"
+    title: Ensure nologin is not listed in /etc/shells
+    profiles: *all_profiles
+    expected: /etc/shells does not list a nologin shell
+    audit: !unsafe |
+      bad="$(grep -PHs '(^|/)nologin$' /etc/shells 2>/dev/null || true)"
+      [ -z "$bad" ] || { printf '%s\n' "$bad"; exit 1; }
+      echo 'nologin is not listed in /etc/shells'
+
+  - id: "5.4.3.2"
+    title: Ensure default user shell timeout is configured
+    profiles: *all_profiles
+    expected: TMOUT is configured read-only, exported, and set to 900 seconds or less in system-wide shell initialization files
+    audit: !unsafe |
+      files=(/etc/profile /etc/bash.bashrc /etc/profile.d/*.sh)
+      declarations="$(grep -PHs '^\s*(readonly\s+TMOUT|export\s+TMOUT|TMOUT\s*=)' "${files[@]}" 2>/dev/null || true)"
+      value="$(grep -Phs '^\s*TMOUT\s*=\s*[0-9]+' "${files[@]}" 2>/dev/null | tail -1 | grep -Po '[0-9]+' | tail -1 || true)"
+      [ -n "$value" ] && [ "$value" -gt 0 ] && [ "$value" -le 900 ] || { echo "TMOUT is invalid or missing: ${value:-unset}"; printf '%s\n' "$declarations"; exit 1; }
+      grep -Pqs '^\s*readonly\s+TMOUT\b|^\s*typeset\s+-r\s+TMOUT\b' "${files[@]}" 2>/dev/null || { echo 'TMOUT is not readonly'; exit 1; }
+      grep -Pqs '^\s*export\s+TMOUT\b|^\s*TMOUT=.*;\s*export\s+TMOUT\b' "${files[@]}" 2>/dev/null || { echo 'TMOUT is not exported'; exit 1; }
+      printf '%s\n' "$declarations"
+
+  - id: "5.4.3.3"
+    title: Ensure default user umask is configured
+    profiles: *all_profiles
+    expected: Default user umask is 027 or more restrictive in login.defs and system-wide shell initialization files
+    audit: !unsafe |
+      fail=0
+      login_umask="$(awk '$1 == "UMASK" {print $2}' /etc/login.defs | tail -1)"
+      [[ "$login_umask" =~ ^0?[0-7]{3}$ ]] || { echo "UMASK in login.defs is invalid or missing: ${login_umask:-unset}"; fail=1; }
+      if [[ "$login_umask" =~ ^0?[0-7]{3}$ ]]; then
+        numeric=$((8#$login_umask)); [ $((numeric & 0027)) -eq 0027 ] || { echo "login.defs UMASK is too permissive: $login_umask"; fail=1; }
+      fi
+      bad="$(grep -PHsi '^\s*umask\s+(000|002|007|022)\b' /etc/profile /etc/bash.bashrc /etc/profile.d/*.sh 2>/dev/null || true)"
+      [ -z "$bad" ] || { printf '%s\n' "$bad"; fail=1; }
+      good="$(grep -PHsi '^\s*umask\s+0?[0-7]*[2-7]7\b|^\s*umask\s+0?[2-7]7\b' /etc/profile /etc/bash.bashrc /etc/profile.d/*.sh 2>/dev/null || true)"
+      [ -n "$good" ] || { echo 'No restrictive system-wide umask setting found'; fail=1; }
+      echo "login.defs UMASK=${login_umask:-unset}"
+      [ -z "$good" ] || printf '%s\n' "$good"
+      exit "$fail"
+
+cis_user_account_manual_controls:
+  - id: "5.4.1.2"
+    title: Ensure minimum password days is configured
+    profiles: *all_profiles
+    expected: PASS_MIN_DAYS and all existing local interactive accounts meet the organization-defined minimum, commonly 1 day or more
+    guidance: Review PASS_MIN_DAYS in /etc/login.defs and the minimum password age field for every local interactive account in /etc/shadow. Confirm the value matches organizational policy.

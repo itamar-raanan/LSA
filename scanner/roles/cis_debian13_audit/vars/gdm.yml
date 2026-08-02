@@ -1,0 +1,191 @@
+---
+cis_gdm_controls:
+  - id: "1.7.1"
+    title: Ensure GDM is removed
+    assessment: Automated
+    profiles: [level2_server]
+    expected: The gdm3 package is not installed
+    audit: !unsafe |
+      if dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$'; then
+        echo "FAIL: gdm3 is installed"
+        exit 1
+      fi
+      echo "PASS: gdm3 is not installed"
+      exit 0
+
+  - id: "1.7.2"
+    title: Ensure GDM login banner is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, banner-message-enable is true and banner-message-text contains a non-empty site-approved warning
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      files=$(find /etc/dconf/db -type f -path '*/gdm.d/*' 2>/dev/null)
+      [ -n "$files" ] || { echo "FAIL: no GDM dconf key files found"; exit 1; }
+      enabled=$(grep -Phsi '^\h*banner-message-enable\h*=\h*true\h*$' $files 2>/dev/null | tail -n1)
+      text=$(grep -Phsi '^\h*banner-message-text\h*=\h*['"'"']?.+['"'"']?\h*$' $files 2>/dev/null | tail -n1)
+      [ -n "$enabled" ] && [ -n "$text" ] || {
+        echo "FAIL: enabled=${enabled:-missing}; text=${text:-missing}"; exit 1;
+      }
+      echo "PASS: $enabled"
+      echo "REVIEW: $text"
+      echo "Verify banner wording against local policy"
+      exit 0
+
+  - id: "1.7.3"
+    title: Ensure GDM disable-user-list option is enabled
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, org.gnome.login-screen disable-user-list is true
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      match=$(grep -RPhsi '^\h*disable-user-list\h*=\h*true\h*$' /etc/dconf/db/*/ 2>/dev/null | tail -n1)
+      [ -n "$match" ] || { echo "FAIL: disable-user-list=true was not found"; exit 1; }
+      echo "PASS: $match"
+      exit 0
+
+  - id: "1.7.4"
+    title: Ensure GDM screen locks when the user is idle
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, idle-delay is between 1 and 900 seconds and lock-delay is 5 seconds or less
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      idle=$(grep -RPhsi '^\h*idle-delay\h*=\h*uint32\h+\K[0-9]+' /etc/dconf/db/*/ 2>/dev/null | tail -n1)
+      lock=$(grep -RPhsi '^\h*lock-delay\h*=\h*uint32\h+\K[0-9]+' /etc/dconf/db/*/ 2>/dev/null | tail -n1)
+      [[ "$idle" =~ ^[0-9]+$ && "$lock" =~ ^[0-9]+$ ]] || {
+        echo "FAIL: idle-delay=${idle:-missing}; lock-delay=${lock:-missing}"; exit 1;
+      }
+      if [ "$idle" -ge 1 ] && [ "$idle" -le 900 ] && [ "$lock" -le 5 ]; then
+        echo "PASS: idle-delay=$idle lock-delay=$lock"
+        exit 0
+      fi
+      echo "FAIL: idle-delay=$idle lock-delay=$lock"
+      exit 1
+
+  - id: "1.7.5"
+    title: Ensure GDM screen locks cannot be overridden
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, dconf locks protect idle-delay and lock-delay
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      idle=$(grep -RPhsi '^/org/gnome/desktop/session/idle-delay\h*$' /etc/dconf/db/*/locks/ 2>/dev/null | head -n1)
+      lock=$(grep -RPhsi '^/org/gnome/desktop/screensaver/lock-delay\h*$' /etc/dconf/db/*/locks/ 2>/dev/null | head -n1)
+      [ -n "$idle" ] && [ -n "$lock" ] || {
+        echo "FAIL: idle lock=${idle:-missing}; screen lock=${lock:-missing}"; exit 1;
+      }
+      echo "PASS: idle-delay and lock-delay are locked"
+      exit 0
+
+  - id: "1.7.6"
+    title: Ensure GDM automatic mounting of removable media is disabled
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, automount and automount-open are both false
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      automount=$(grep -RPhsi '^\h*automount\h*=\h*false\h*$' /etc/dconf/db/*/ 2>/dev/null | tail -n1)
+      open=$(grep -RPhsi '^\h*automount-open\h*=\h*false\h*$' /etc/dconf/db/*/ 2>/dev/null | tail -n1)
+      [ -n "$automount" ] && [ -n "$open" ] || {
+        echo "FAIL: automount=${automount:-missing}; automount-open=${open:-missing}"; exit 1;
+      }
+      echo "PASS: automount=false and automount-open=false"
+      exit 0
+
+  - id: "1.7.7"
+    title: Ensure GDM disabling automatic mounting of removable media is not overridden
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, dconf locks protect automount and automount-open
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      automount=$(grep -RPhsi '^/org/gnome/desktop/media-handling/automount\h*$' /etc/dconf/db/*/locks/ 2>/dev/null | head -n1)
+      open=$(grep -RPhsi '^/org/gnome/desktop/media-handling/automount-open\h*$' /etc/dconf/db/*/locks/ 2>/dev/null | head -n1)
+      [ -n "$automount" ] && [ -n "$open" ] || {
+        echo "FAIL: automount lock=${automount:-missing}; automount-open lock=${open:-missing}"; exit 1;
+      }
+      echo "PASS: removable-media automount settings are locked"
+      exit 0
+
+  - id: "1.7.8"
+    title: Ensure GDM autorun-never is enabled
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, autorun-never is true
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      match=$(grep -RPhsi '^\h*autorun-never\h*=\h*true\h*$' /etc/dconf/db/*/ 2>/dev/null | tail -n1)
+      [ -n "$match" ] || { echo "FAIL: autorun-never=true was not found"; exit 1; }
+      echo "PASS: $match"
+      exit 0
+
+  - id: "1.7.9"
+    title: Ensure GDM autorun-never is not overridden
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, dconf locks protect autorun-never
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      match=$(grep -RPhsi '^/org/gnome/desktop/media-handling/autorun-never\h*$' /etc/dconf/db/*/locks/ 2>/dev/null | head -n1)
+      [ -n "$match" ] || { echo "FAIL: autorun-never lock was not found"; exit 1; }
+      echo "PASS: $match"
+      exit 0
+
+  - id: "1.7.10"
+    title: Ensure XDMCP is not enabled
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When GDM is installed, no [xdmcp] block enables XDMCP
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      found=0
+      for file in /etc/gdm3/custom.conf /etc/gdm3/daemon.conf /etc/gdm/custom.conf /etc/gdm/daemon.conf; do
+        [ -f "$file" ] || continue
+        if awk 'BEGIN{IGNORECASE=1} /^\h*\[xdmcp\]\h*$/{inblock=1;next} /^\h*\[/{inblock=0} inblock && /^\h*Enable\h*=\h*true\h*$/{print; exit 1}' "$file"; then
+          :
+        else
+          echo "FAIL: XDMCP enabled in $file"
+          found=1
+        fi
+      done
+      [ "$found" -eq 0 ] || exit 1
+      echo "PASS: XDMCP is not enabled"
+      exit 0
+
+  - id: "1.7.11"
+    title: Ensure Xwayland is configured
+    assessment: Automated
+    profiles: [level2_server, level2_workstation]
+    expected: When GDM is installed, WaylandEnable=false is configured in the [daemon] block
+    audit: !unsafe |
+      dpkg-query -W -f='${Status}\n' gdm3 2>/dev/null | grep -q '^install ok installed$' || {
+        echo "NOT_APPLICABLE: gdm3 is not installed"; exit 3;
+      }
+      for file in /etc/gdm3/custom.conf /etc/gdm/custom.conf; do
+        [ -f "$file" ] || continue
+        if awk 'BEGIN{IGNORECASE=1} /^\h*\[daemon\]\h*$/{inblock=1;next} /^\h*\[/{inblock=0} inblock && /^\h*WaylandEnable\h*=\h*false\h*$/{found=1} END{exit found ? 0 : 1}' "$file"; then
+          echo "PASS: WaylandEnable=false in $file"
+          exit 0
+        fi
+      done
+      echo "FAIL: WaylandEnable=false was not found in a GDM [daemon] block"
+      exit 1

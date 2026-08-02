@@ -1,0 +1,100 @@
+---
+cis_time_sync_controls:
+  - id: "2.3.1.1"
+    title: "Ensure a single time synchronization daemon is in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: Exactly one of chrony.service or systemd-timesyncd.service is enabled and active, unless host-based synchronization is documented as an exception.
+    audit: !unsafe |
+      active=0
+      enabled=0
+      evidence=()
+      for service in chrony.service systemd-timesyncd.service; do
+        state="$(systemctl is-active "$service" 2>/dev/null || true)"
+        boot="$(systemctl is-enabled "$service" 2>/dev/null || true)"
+        evidence+=("$service active=$state enabled=$boot")
+        [ "$state" = "active" ] && active=$((active + 1))
+        case "$boot" in enabled|enabled-runtime) enabled=$((enabled + 1));; esac
+      done
+      printf '%s\n' "${evidence[@]}"
+      if [ "$active" -eq 1 ] && [ "$enabled" -eq 1 ]; then exit 0; fi
+      exit 1
+
+  - id: "2.3.2.1"
+    title: "Ensure systemd-timesyncd configured with authorized timeserver"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When systemd-timesyncd is in use, an effective NTP or FallbackNTP value is configured to locally approved time servers.
+    audit: !unsafe |
+      if ! systemctl is-active systemd-timesyncd.service 2>/dev/null | grep -qx active; then
+        echo "systemd-timesyncd is not the active time synchronization daemon"
+        exit 3
+      fi
+      output="$(systemd-analyze cat-config systemd/timesyncd.conf 2>/dev/null || true)"
+      printf '%s\n' "$output"
+      if printf '%s\n' "$output" | awk -F= '/^[[:space:]]*(NTP|FallbackNTP)[[:space:]]*=/{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); if ($2 != "") found=1} END{exit !found}'; then
+        exit 0
+      fi
+      exit 1
+
+  - id: "2.3.2.2"
+    title: "Ensure systemd-timesyncd is enabled and running"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When systemd-timesyncd is selected, systemd-timesyncd.service is enabled and active.
+    audit: !unsafe |
+      if systemctl is-active chrony.service 2>/dev/null | grep -qx active; then
+        echo "chrony is the active time synchronization daemon"
+        exit 3
+      fi
+      active="$(systemctl is-active systemd-timesyncd.service 2>/dev/null || true)"
+      enabled="$(systemctl is-enabled systemd-timesyncd.service 2>/dev/null || true)"
+      echo "systemd-timesyncd.service active=$active enabled=$enabled"
+      case "$enabled" in enabled|enabled-runtime) :;; *) exit 1;; esac
+      [ "$active" = active ]
+
+  - id: "2.3.3.1"
+    title: "Ensure chrony is configured with authorized timeserver"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When chrony is in use, at least one locally approved server or pool directive is configured.
+    audit: !unsafe |
+      if ! systemctl is-active chrony.service 2>/dev/null | grep -qx active; then
+        echo "chrony is not the active time synchronization daemon"
+        exit 3
+      fi
+      files=()
+      [ -f /etc/chrony/chrony.conf ] && files+=(/etc/chrony/chrony.conf)
+      while IFS= read -r file; do files+=("$file"); done < <(find /etc/chrony/sources.d -maxdepth 1 -type f -name '*.sources' 2>/dev/null | sort)
+      if [ "${#files[@]}" -eq 0 ]; then echo "No chrony configuration files found"; exit 1; fi
+      grep -HEn '^[[:space:]]*(server|pool)[[:space:]]+[^#[:space:]]+' "${files[@]}" || exit 1
+
+  - id: "2.3.3.2"
+    title: "Ensure chrony is running as user _chrony"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When chrony is in use, the chronyd process runs as user _chrony.
+    audit: !unsafe |
+      if ! systemctl is-active chrony.service 2>/dev/null | grep -qx active; then
+        echo "chrony is not the active time synchronization daemon"
+        exit 3
+      fi
+      users="$(ps -eo user=,comm= | awk '$2 ~ /^chronyd?$/ {print $1}' | sort -u)"
+      echo "chrony process users: ${users:-none}"
+      [ "$users" = "_chrony" ]
+
+  - id: "2.3.3.3"
+    title: "Ensure chrony is enabled and running"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: When chrony is selected, chrony.service is enabled and active.
+    audit: !unsafe |
+      if systemctl is-active systemd-timesyncd.service 2>/dev/null | grep -qx active; then
+        echo "systemd-timesyncd is the active time synchronization daemon"
+        exit 3
+      fi
+      active="$(systemctl is-active chrony.service 2>/dev/null || true)"
+      enabled="$(systemctl is-enabled chrony.service 2>/dev/null || true)"
+      echo "chrony.service active=$active enabled=$enabled"
+      case "$enabled" in enabled|enabled-runtime) :;; *) exit 1;; esac
+      [ "$active" = active ]

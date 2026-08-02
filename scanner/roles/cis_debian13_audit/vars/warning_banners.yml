@@ -1,0 +1,116 @@
+---
+cis_warning_banner_controls:
+  - id: "1.6.1"
+    title: Ensure /etc/motd is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: MOTD content contains no OS-identifying escape sequences or operating-system name; remaining content must follow local policy
+    audit: !unsafe |
+      os_id="$(awk -F= '$1 == "ID" {gsub(/\"/, "", $2); print $2}' /etc/os-release 2>/dev/null)"
+      found=0
+      reviewed=0
+      shopt -s nullglob
+      files=(/etc/motd /etc/motd.d/*)
+      for file in "${files[@]}"; do
+        [ -f "$file" ] || continue
+        [ -s "$file" ] && reviewed=$((reviewed + 1))
+        if grep -Pqsi -- "(\\\\v|\\\\r|\\\\m|\\\\s${os_id:+|\\b${os_id}\\b})" "$file"; then
+          echo "FAIL: $file includes system information"
+          found=1
+        else
+          echo "REVIEW: $file contains no detected system information; verify site-policy wording"
+        fi
+      done
+      if [ "$found" -ne 0 ]; then exit 1; fi
+      if [ "$reviewed" -eq 0 ]; then
+        echo "PASS: no non-empty MOTD files found; verify that this follows local policy"
+      else
+        echo "PASS: no MOTD file exposes detected system information"
+      fi
+      exit 0
+
+  - id: "1.6.2"
+    title: Ensure /etc/issue is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: /etc/issue exists, contains no OS-identifying escape sequences or operating-system name, and follows local policy
+    audit: !unsafe |
+      [ -f /etc/issue ] || { echo "FAIL: /etc/issue does not exist"; exit 1; }
+      os_id="$(awk -F= '$1 == "ID" {gsub(/\"/, "", $2); print $2}' /etc/os-release 2>/dev/null)"
+      if grep -Pqsi -- "(\\\\v|\\\\r|\\\\m|\\\\s${os_id:+|\\b${os_id}\\b})" /etc/issue; then
+        echo "FAIL: /etc/issue includes system information"
+        exit 1
+      fi
+      echo "PASS: no detected system information; verify banner text follows local policy"
+      cat /etc/issue
+      exit 0
+
+  - id: "1.6.3"
+    title: Ensure /etc/issue.net is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: /etc/issue.net exists, contains no OS-identifying escape sequences or operating-system name, and follows local policy
+    audit: !unsafe |
+      [ -f /etc/issue.net ] || { echo "FAIL: /etc/issue.net does not exist"; exit 1; }
+      os_id="$(awk -F= '$1 == "ID" {gsub(/\"/, "", $2); print $2}' /etc/os-release 2>/dev/null)"
+      if grep -Pqsi -- "(\\\\v|\\\\r|\\\\m|\\\\s${os_id:+|\\b${os_id}\\b})" /etc/issue.net; then
+        echo "FAIL: /etc/issue.net includes system information"
+        exit 1
+      fi
+      echo "PASS: no detected system information; verify banner text follows local policy"
+      cat /etc/issue.net
+      exit 0
+
+  - id: "1.6.4"
+    title: Ensure access to /etc/motd is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If /etc/motd exists, its resolved target is owned by root:root and mode is 0644 or more restrictive
+    audit: !unsafe |
+      if [ ! -e /etc/motd ]; then
+        echo "PASS: /etc/motd does not exist"
+        exit 0
+      fi
+      target="$(readlink -e /etc/motd)" || { echo "ERROR: cannot resolve /etc/motd"; exit 2; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$target") || exit 2
+      mode_value=$((8#$mode))
+      if [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((mode_value & 8#133)) -eq 0 ]; then
+        echo "PASS: target=$target mode=$mode uid=$uid gid=$gid"
+        exit 0
+      fi
+      echo "FAIL: target=$target mode=$mode uid=$uid gid=$gid"
+      exit 1
+
+  - id: "1.6.5"
+    title: Ensure access to /etc/issue is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: /etc/issue is owned by root:root and mode is 0644 or more restrictive
+    audit: !unsafe |
+      [ -e /etc/issue ] || { echo "FAIL: /etc/issue does not exist"; exit 1; }
+      target="$(readlink -e /etc/issue)" || { echo "ERROR: cannot resolve /etc/issue"; exit 2; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$target") || exit 2
+      mode_value=$((8#$mode))
+      if [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((mode_value & 8#133)) -eq 0 ]; then
+        echo "PASS: target=$target mode=$mode uid=$uid gid=$gid"
+        exit 0
+      fi
+      echo "FAIL: target=$target mode=$mode uid=$uid gid=$gid"
+      exit 1
+
+  - id: "1.6.6"
+    title: Ensure access to /etc/issue.net is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: /etc/issue.net is owned by root:root and mode is 0644 or more restrictive
+    audit: !unsafe |
+      [ -e /etc/issue.net ] || { echo "FAIL: /etc/issue.net does not exist"; exit 1; }
+      target="$(readlink -e /etc/issue.net)" || { echo "ERROR: cannot resolve /etc/issue.net"; exit 2; }
+      read -r mode uid gid < <(stat -Lc '%a %u %g' "$target") || exit 2
+      mode_value=$((8#$mode))
+      if [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((mode_value & 8#133)) -eq 0 ]; then
+        echo "PASS: target=$target mode=$mode uid=$uid gid=$gid"
+        exit 0
+      fi
+      echo "FAIL: target=$target mode=$mode uid=$uid gid=$gid"
+      exit 1

@@ -1,0 +1,94 @@
+---
+- name: "{{ cis_control.id }} | Detect module availability"
+  ansible.builtin.shell: |
+    set -o pipefail
+    module="{{ cis_control.module }}"
+    module_path="${module//-//}"
+    found=0
+    while IFS= read -r path; do
+      if [ -d "$path/$module_path" ] && [ -n "$(ls -A "$path/$module_path" 2>/dev/null)" ]; then
+        found=1
+        printf '%s\n' "$module exists in $path"
+      fi
+    done < <(readlink -e /usr/lib/modules/*/kernel/{{ cis_control.module_type }} 2>/dev/null || readlink -e /lib/modules/*/kernel/{{ cis_control.module_type }} 2>/dev/null)
+    exit 0
+  args:
+    executable: /bin/bash
+  register: cis_module_available
+  changed_when: false
+  failed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Check loaded module"
+  ansible.builtin.command: "lsmod"
+  register: cis_lsmod
+  changed_when: false
+  failed_when: false
+  when: cis_module_available.stdout | length > 0
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Read modprobe configuration"
+  ansible.builtin.command: "modprobe --showconfig"
+  register: cis_modprobe_config
+  changed_when: false
+  failed_when: false
+  when: cis_module_available.stdout | length > 0
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Evaluate result"
+  ansible.builtin.set_fact:
+    cis_module_loaded: >-
+      {{
+        (cis_module_available.stdout | length > 0) and
+        ((cis_lsmod.stdout_lines | default([]) | select('match', '^' ~ (cis_control.loaded_name | default(cis_control.module)) ~ '\\s') | list | length) > 0)
+      }}
+    cis_module_blacklisted: >-
+      {{
+        (cis_module_available.stdout | length == 0) or
+        ((cis_modprobe_config.stdout_lines | default([]) | select('match', '^blacklist\\s+' ~ cis_control.module ~ '(\\s|$)') | list | length) > 0)
+      }}
+    cis_module_install_disabled: >-
+      {{
+        (cis_module_available.stdout | length == 0) or
+        ((cis_modprobe_config.stdout_lines | default([]) | select('match', '^install\\s+' ~ cis_control.module ~ '\\s+/bin/(false|true)(\\s|$)') | list | length) > 0)
+      }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Record audit result"
+  ansible.builtin.set_fact:
+    cis_results: >-
+      {{
+        cis_results + [{
+          'id': cis_control.id,
+          'title': cis_control.title,
+          'section': '1.1.1',
+          'assessment': 'Automated',
+          'profiles': cis_control.profiles,
+          'status':
+            ('EXCLUDED' if cis_control.id in cis_exceptions else
+             'PASS' if (not cis_module_loaded and cis_module_blacklisted and cis_module_install_disabled) else
+             'FAIL'),
+          'expected': 'Module is absent, or is not loaded and is disabled with blacklist and install /bin/false or /bin/true.',
+          'remediation': cis_remediations.get(cis_control.id,
+            'Unload and disable the kernel module after confirming it is not required.'),
+          'actual':
+            ('Documented exception: ' ~ cis_exceptions[cis_control.id] if cis_control.id in cis_exceptions else
+             'module_available=' ~ ((cis_module_available.stdout | length > 0) | string) ~
+             ', module_loaded=' ~ (cis_module_loaded | string) ~
+             ', blacklisted=' ~ (cis_module_blacklisted | string) ~
+             ', install_disabled=' ~ (cis_module_install_disabled | string)),
+          'evidence': {
+            'availability': cis_module_available.stdout_lines | default([]),
+            'loaded_lines': cis_lsmod.stdout_lines | default([]) | select('match', '^' ~ (cis_control.loaded_name | default(cis_control.module)) ~ '\\s') | list,
+            'modprobe_lines': cis_modprobe_config.stdout_lines | default([]) | select('search', cis_control.module) | list
+          }
+        }]
+      }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"

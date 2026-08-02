@@ -1,0 +1,17 @@
+---
+- name: Validate selected CIS profile
+  ansible.builtin.assert:
+    that:
+      - cis_profile in cis_valid_profiles
+    fail_msg: "Unsupported cis_profile={{ cis_profile }}. Valid values: {{ cis_valid_profiles | join(', ') }}"
+  changed_when: false
+
+- name: Validate target operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == cis_benchmark.target_distribution
+      - ansible_facts.distribution_major_version == cis_benchmark.target_major_version
+    fail_msg: >-
+      This role targets Debian 13 only. Detected
+      {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}.
+  changed_when: false

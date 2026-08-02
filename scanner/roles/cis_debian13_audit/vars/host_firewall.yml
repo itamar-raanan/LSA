@@ -1,0 +1,84 @@
+---
+cis_host_firewall_controls:
+  - id: '4.1.1'
+    title: Ensure ufw is installed
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The ufw package is installed
+    audit: !unsafe |
+      if dpkg-query -W -f='${db:Status-Status}\n' ufw 2>/dev/null | grep -qx installed; then
+        echo 'ufw is installed'
+        exit 0
+      fi
+      echo 'ufw is not installed'
+      exit 1
+
+  - id: '4.1.2'
+    title: Ensure ufw service is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: ufw.service is enabled and active, and ufw reports Status active
+    audit: !unsafe |
+      if ! command -v ufw >/dev/null 2>&1; then
+        echo 'ufw command is unavailable'
+        exit 1
+      fi
+      enabled="$(systemctl is-enabled ufw.service 2>/dev/null || true)"
+      active="$(systemctl is-active ufw.service 2>/dev/null || true)"
+      status="$(ufw status 2>&1 || true)"
+      printf 'service_enabled=%s\nservice_active=%s\n%s\n' "$enabled" "$active" "$status"
+      [[ "$enabled" == enabled && "$active" == active ]] && grep -Pq '^Status:\s+active\s*$' <<< "$status"
+
+  - id: '4.1.3'
+    title: Ensure ufw incoming default is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The UFW incoming default policy is deny or reject
+    audit: !unsafe |
+      if ! command -v ufw >/dev/null 2>&1; then
+        echo 'ufw command is unavailable'
+        exit 1
+      fi
+      status="$(ufw status verbose 2>&1 || true)"
+      default_line="$(awk '/^Default:/ {print; exit}' <<< "$status")"
+      printf '%s\n' "$status"
+      [[ -n "$default_line" ]] || exit 1
+      incoming="$(sed -nE 's/^Default:[[:space:]]*([^,]+).*/\1/p' <<< "$default_line" | xargs)"
+      printf 'parsed_incoming=%s\n' "$incoming"
+      grep -Pqi '^(deny|reject)[[:space:]]*\(incoming\)$' <<< "$incoming"
+
+  - id: '4.1.4'
+    title: Ensure ufw outgoing default is configured
+    assessment: Automated
+    profiles: [level2_server, level2_workstation]
+    expected: The UFW outgoing default policy is deny or reject
+    audit: !unsafe |
+      if ! command -v ufw >/dev/null 2>&1; then
+        echo 'ufw command is unavailable'
+        exit 1
+      fi
+      status="$(ufw status verbose 2>&1 || true)"
+      default_line="$(awk '/^Default:/ {print; exit}' <<< "$status")"
+      printf '%s\n' "$status"
+      [[ -n "$default_line" ]] || exit 1
+      outgoing="$(cut -d, -f2 <<< "$default_line" | xargs)"
+      printf 'parsed_outgoing=%s\n' "$outgoing"
+      grep -Pqi '^(deny|reject)[[:space:]]*\(outgoing\)$' <<< "$outgoing"
+
+  - id: '4.1.5'
+    title: Ensure ufw routed default is configured
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The UFW routed default policy is disabled or deny
+    audit: !unsafe |
+      if ! command -v ufw >/dev/null 2>&1; then
+        echo 'ufw command is unavailable'
+        exit 1
+      fi
+      status="$(ufw status verbose 2>&1 || true)"
+      default_line="$(awk '/^Default:/ {print; exit}' <<< "$status")"
+      printf '%s\n' "$status"
+      [[ -n "$default_line" ]] || exit 1
+      routed="$(cut -d, -f3 <<< "$default_line" | xargs)"
+      printf 'parsed_routed=%s\n' "$routed"
+      grep -Pqi '^(disabled|deny)[[:space:]]*\(routed\)$' <<< "$routed"

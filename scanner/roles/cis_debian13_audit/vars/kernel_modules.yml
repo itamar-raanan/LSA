@@ -1,0 +1,99 @@
+---
+cis_kernel_module_controls:
+- id: 1.1.1.1
+  title: Ensure cramfs kernel module is not available
+  module: cramfs
+  module_type: fs
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+- id: 1.1.1.2
+  title: Ensure freevxfs kernel module is not available
+  module: freevxfs
+  module_type: fs
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+- id: 1.1.1.3
+  title: Ensure hfs kernel module is not available
+  module: hfs
+  module_type: fs
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+- id: 1.1.1.4
+  title: Ensure hfsplus kernel module is not available
+  module: hfsplus
+  module_type: fs
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+- id: 1.1.1.5
+  title: Ensure jffs2 kernel module is not available
+  module: jffs2
+  module_type: fs
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+- id: 1.1.1.6
+  title: Ensure overlay kernel module is not available
+  module: overlay
+  loaded_name: overlay
+  module_type: fs
+  profiles:
+  - level2_server
+  - level2_workstation
+- id: 1.1.1.7
+  title: Ensure squashfs kernel module is not available
+  module: squashfs
+  module_type: fs
+  profiles:
+  - level2_server
+  - level2_workstation
+- id: 1.1.1.8
+  title: Ensure udf kernel module is not available
+  module: udf
+  module_type: fs
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+- id: 1.1.1.9
+  title: Ensure firewire-core kernel module is not available
+  module: firewire-core
+  loaded_name: firewire_core
+  module_type: drivers/firewire
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+- id: 1.1.1.10
+  title: Ensure usb-storage kernel module is not available
+  module: usb-storage
+  loaded_name: usb_storage
+  module_type: drivers/usb/storage
+  profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+cis_kernel_module_manual_controls:
+- id: 1.1.1.11
+  title: Ensure unused filesystems kernel modules are not available
+  profiles:
+  - level1_server
+  - level1_workstation
+  expected: Manual review completed
+  guidance: Inventory filesystem modules and confirm unused modules are disabled.

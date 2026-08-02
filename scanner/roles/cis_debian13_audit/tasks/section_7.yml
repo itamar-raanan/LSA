@@ -1,0 +1,23 @@
+---
+- name: Load Section 7 controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/system_maintenance.yml"
+  tags: [section_7]
+
+- name: Section 7 automated controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_section7_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_7]
+
+- name: Section 7 manual controls
+  ansible.builtin.include_tasks: audit_manual_control.yml
+  loop: "{{ cis_section7_manual_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_7]

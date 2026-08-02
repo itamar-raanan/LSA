@@ -1,0 +1,47 @@
+---
+- name: "{{ health_control.id }} | {{ health_control.title }}"
+  ansible.builtin.shell: "{{ health_control.audit }}"
+  args:
+    executable: /bin/bash
+  register: health_audit
+  changed_when: false
+  failed_when: false
+  environment:
+    SH_STALE_DAYS: "{{ security_health_stale_account_days | string }}"
+  tags:
+    - security_health
+    - "health_{{ health_control.id | lower | replace('-', '_') }}"
+
+- name: "{{ health_control.id }} | Record result"
+  ansible.builtin.set_fact:
+    security_health_results: >-
+      {{ security_health_results + [{
+        'id': health_control.id,
+        'title': health_control.title,
+        'category': health_control.category,
+        'severity': health_control.severity,
+        'status':
+          ('EXCLUDED' if health_control.id in security_health_exceptions else
+           'PASS' if health_audit.rc == 0 else
+           'FAIL' if health_audit.rc == 1 else
+           'ERROR' if health_audit.rc == 2 else
+           'NOT_APPLICABLE' if health_audit.rc == 3 else
+           'REVIEW'),
+        'summary': health_control.summary,
+        'risk': health_control.risk,
+        'remediation': health_control.remediation,
+        'verification': health_control.verification,
+        'actual':
+          ('Documented exception: ' ~ security_health_exceptions[health_control.id]
+           if health_control.id in security_health_exceptions else
+           (health_audit.stdout | default('') | trim)),
+        'evidence': {
+          'stdout': (health_audit.stdout_lines | default([]))[:security_health_max_evidence_lines],
+          'stderr': (health_audit.stderr_lines | default([]))[:50],
+          'rc': health_audit.rc | default(2)
+        }
+      }] }}
+  changed_when: false
+  tags:
+    - security_health
+    - "health_{{ health_control.id | lower | replace('-', '_') }}"

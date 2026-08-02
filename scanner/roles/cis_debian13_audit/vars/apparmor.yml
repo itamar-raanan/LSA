@@ -1,0 +1,62 @@
+---
+cis_apparmor_controls:
+  - id: '1.3.1.1'
+    title: Ensure apparmor packages are installed
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: Packages apparmor and apparmor-utils are installed.
+    audit: !unsafe |
+      missing=0
+      for package in apparmor apparmor-utils; do
+        status="$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null || true)"
+        printf '%s: %s\n' "$package" "${status:-not installed}"
+        [[ "$status" == installed ]] || missing=1
+      done
+      exit "$missing"
+
+  - id: '1.3.1.2'
+    title: Ensure AppArmor is enabled
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: No Linux boot entry contains apparmor=0.
+    audit: !unsafe |
+      cfg=/boot/grub/grub.cfg
+      [[ -r "$cfg" ]] || { echo "cannot read $cfg"; exit 2; }
+      matches="$(grep -E '^\s*linux' "$cfg" | grep -E '(^|[[:space:]])apparmor=0([[:space:]]|$)' || true)"
+      [[ -z "$matches" ]] || { printf '%s\n' "$matches"; exit 1; }
+      echo 'No apparmor=0 kernel parameter found.'
+
+  - id: '1.3.1.3'
+    title: Ensure all AppArmor Profiles are enforcing
+    assessment: Automated
+    profiles: [level2_server, level2_workstation]
+    expected: Profiles are loaded; zero profiles/processes are in complain mode; zero profiled processes are unconfined.
+    audit: !unsafe |
+      command -v apparmor_status >/dev/null 2>&1 || { echo 'apparmor_status not found'; exit 2; }
+      output="$(apparmor_status 2>&1)" || { printf '%s\n' "$output"; exit 2; }
+      printf '%s\n' "$output"
+      loaded="$(awk '/profiles are loaded/ {print $1; exit}' <<< "$output")"
+      complain_profiles="$(awk '/profiles are in complain mode/ {print $1; exit}' <<< "$output")"
+      complain_processes="$(awk '/processes are in complain mode/ {print $1; exit}' <<< "$output")"
+      unconfined="$(awk '/processes are unconfined but have a profile defined/ {print $1; exit}' <<< "$output")"
+      [[ "$loaded" =~ ^[1-9][0-9]*$ && "${complain_profiles:-1}" == 0 && "${complain_processes:-1}" == 0 && "${unconfined:-1}" == 0 ]]
+
+  - id: '1.3.1.4'
+    title: Ensure apparmor_restrict_unprivileged_unconfined is enabled
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: kernel.apparmor_restrict_unprivileged_unconfined equals 1 at runtime and in effective persistent configuration.
+    audit: !unsafe |
+      parameter=kernel.apparmor_restrict_unprivileged_unconfined
+      runtime="$(sysctl -n "$parameter" 2>/dev/null || true)"
+      persistent=""
+      systemd_sysctl="$(readlink -e /lib/systemd/systemd-sysctl || readlink -e /usr/lib/systemd/systemd-sysctl || true)"
+      if [[ -n "$systemd_sysctl" ]]; then
+        while IFS= read -r file; do
+          file="${file//# /}"
+          value="$(awk -F= -v key="$parameter" '$1 ~ "^[[:space:]]*" key "[[:space:]]*$" {gsub(/[[:space:]]/, "", $2); v=$2} END {print v}' "$file" 2>/dev/null)"
+          [[ -n "$value" ]] && { persistent="$value"; persistent_file="$file"; break; }
+        done < <("$systemd_sysctl" --cat-config 2>/dev/null | tac | sed -n 's/^# \(\/.*\.conf\)$/\1/p')
+      fi
+      printf 'runtime=%s\npersistent=%s\nfile=%s\n' "$runtime" "$persistent" "${persistent_file:-not found}"
+      [[ "$runtime" == 1 && "$persistent" == 1 ]]

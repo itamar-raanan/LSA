@@ -1,0 +1,144 @@
+---
+- name: "{{ cis_control.id }} | Audit network kernel parameter"
+  ansible.builtin.shell: |
+    set -o pipefail
+
+    parameter={{ cis_control.parameter | quote }}
+    expected={{ cis_control.expected_value | string | quote }}
+
+    if [[ {{ cis_control.ipv6 | default(false) | bool | ternary('1', '0') }} == 1 ]]; then
+      ipv6_disabled=0
+
+      if [[ -r /sys/module/ipv6/parameters/disable ]] &&
+         [[ "$(cat /sys/module/ipv6/parameters/disable)" == "1" ]]; then
+        ipv6_disabled=1
+      fi
+
+      if [[ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)" == "1" ]] &&
+         [[ "$(sysctl -n net.ipv6.conf.default.disable_ipv6 2>/dev/null || echo 0)" == "1" ]]; then
+        ipv6_disabled=1
+      fi
+
+      if [[ "$ipv6_disabled" == 1 ]]; then
+        echo "IPv6 is disabled; recommendation is not applicable"
+        exit 3
+      fi
+    fi
+
+    if ! runtime="$(sysctl -n "$parameter" 2>/dev/null)"; then
+      echo "Unable to read runtime parameter: $parameter" >&2
+      exit 2
+    fi
+
+    mapfile -t definitions < <(
+      grep -RPs \
+        --include='*.conf' \
+        --include='sysctl.conf' \
+        "^[[:space:]]*${parameter//./\\.}[[:space:]]*=" \
+        /etc/sysctl.conf \
+        /etc/sysctl.d \
+        /usr/lib/sysctl.d \
+        /usr/local/lib/sysctl.d \
+        /run/sysctl.d \
+        2>/dev/null || true
+    )
+
+    effective=""
+    effective_file=""
+
+    systemd_sysctl="$(
+      readlink -e /lib/systemd/systemd-sysctl 2>/dev/null ||
+      readlink -e /usr/lib/systemd/systemd-sysctl 2>/dev/null ||
+      true
+    )"
+
+    if [[ -n "$systemd_sysctl" ]]; then
+      while IFS= read -r file; do
+        file="${file//# /}"
+        [[ -r "$file" ]] || continue
+
+        value="$(
+          awk -F= -v key="$parameter" '
+            $0 !~ /^[[:space:]]*#/ {
+              lhs=$1
+              gsub(/[[:space:]]/, "", lhs)
+
+              if (lhs == key) {
+                rhs=$2
+                sub(/[[:space:]]*#.*/, "", rhs)
+                gsub(/[[:space:]]/, "", rhs)
+                value=rhs
+              }
+            }
+            END {
+              print value
+            }
+          ' "$file"
+        )"
+
+        if [[ -n "$value" ]]; then
+          effective="$value"
+          effective_file="$file"
+          break
+        fi
+      done < <(
+        "$systemd_sysctl" --cat-config 2>/dev/null |
+          tac |
+          sed -n 's/^# \(\/.*\.conf\)$/\1/p'
+      )
+    fi
+
+    printf 'parameter=%s\nruntime=%s\nexpected=%s\neffective_persistent=%s\neffective_file=%s\n' \
+      "$parameter" \
+      "$runtime" \
+      "$expected" \
+      "${effective:-not found}" \
+      "${effective_file:-not found}"
+
+    if [[ -n "${definitions[*]-}" ]]; then
+      printf 'definitions:\n%s\n' "${definitions[*]}"
+    else
+      echo "definitions: none"
+    fi
+
+    [[ "$runtime" == "$expected" && "$effective" == "$expected" ]]
+  args:
+    executable: /bin/bash
+  register: cis_network_sysctl_audit
+  changed_when: false
+  failed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Record network kernel parameter result"
+  ansible.builtin.set_fact:
+    cis_results: >-
+      {{ cis_results + [{
+        'id': cis_control.id,
+        'title': cis_control.title,
+        'section': cis_control.id.rsplit('.', 1)[0],
+        'assessment': 'Automated',
+        'profiles': cis_control.profiles,
+        'status':
+          ('EXCLUDED' if cis_control.id in cis_exceptions else
+           'PASS' if (cis_network_sysctl_audit.rc | default(2)) == 0 else
+           'FAIL' if (cis_network_sysctl_audit.rc | default(2)) == 1 else
+           'NOT_APPLICABLE' if (cis_network_sysctl_audit.rc | default(2)) == 3 else
+           'ERROR'),
+        'expected': cis_control.expected,
+        'remediation': cis_remediations.get(cis_control.id,
+          'Review the control evidence and expected state, apply the approved configuration change, and re-run the audit.'),
+        'actual':
+          ('Documented exception: ' ~ cis_exceptions[cis_control.id]
+           if cis_control.id in cis_exceptions else
+           'rc=' ~ (cis_network_sysctl_audit.rc | default(2) | string) ~
+           '; ' ~ (cis_network_sysctl_audit.stdout | default('') | trim)),
+        'evidence': {
+          'stdout': cis_network_sysctl_audit.stdout_lines | default([]),
+          'stderr': cis_network_sysctl_audit.stderr_lines | default([]),
+          'rc': cis_network_sysctl_audit.rc | default(2)
+        }
+      }] }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"

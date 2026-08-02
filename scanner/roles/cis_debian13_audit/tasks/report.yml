@@ -1,0 +1,60 @@
+---
+- name: Generate report metadata
+  ansible.builtin.set_fact:
+    cis_report_hostname: "{{ ansible_hostname | default(inventory_hostname) }}"
+    cis_report_timestamp: "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+  changed_when: false
+
+- name: Ensure report directory exists on controller
+  ansible.builtin.file:
+    path: "{{ cis_report_dir }}/{{ cis_report_hostname }}"
+    state: directory
+    mode: '0750'
+  delegate_to: localhost
+  become: false
+
+- name: Calculate summary
+  ansible.builtin.set_fact:
+    cis_summary:
+      total: "{{ cis_results | length }}"
+      pass: "{{ cis_results | selectattr('status', 'equalto', 'PASS') | list | length }}"
+      fail: "{{ cis_results | selectattr('status', 'equalto', 'FAIL') | list | length }}"
+      manual: "{{ cis_results | selectattr('status', 'equalto', 'MANUAL') | list | length }}"
+      excluded: "{{ cis_results | selectattr('status', 'equalto', 'EXCLUDED') | list | length }}"
+      error: "{{ cis_results | selectattr('status', 'equalto', 'ERROR') | list | length }}"
+  changed_when: false
+
+- name: Write JSON report
+  ansible.builtin.template:
+    src: report.json.j2
+    dest: "{{ cis_report_dir }}/{{ cis_report_hostname }}/cis_report_{{ cis_report_hostname }}_{{ cis_report_timestamp }}.json"
+    mode: '0640'
+  delegate_to: localhost
+  become: false
+  when: "'json' in cis_report_formats"
+
+- name: Write CSV report
+  ansible.builtin.template:
+    src: report.csv.j2
+    dest: "{{ cis_report_dir }}/{{ cis_report_hostname }}/cis_report_{{ cis_report_hostname }}_{{ cis_report_timestamp }}.csv"
+    mode: '0640'
+  delegate_to: localhost
+  become: false
+  when: "'csv' in cis_report_formats"
+
+- name: Write HTML report
+  ansible.builtin.template:
+    src: report.html.j2
+    dest: "{{ cis_report_dir }}/{{ cis_report_hostname }}/cis_report_{{ cis_report_hostname }}_{{ cis_report_timestamp }}.html"
+    mode: '0640'
+  delegate_to: localhost
+  become: false
+  when: "'html' in cis_report_formats"
+
+- name: Display audit summary
+  ansible.builtin.debug:
+    msg: >-
+      CIS audit for {{ inventory_hostname }}: total={{ cis_summary.total }},
+      pass={{ cis_summary.pass }}, fail={{ cis_summary.fail }},
+      manual={{ cis_summary.manual }}, excluded={{ cis_summary.excluded }},
+      error={{ cis_summary.error }}

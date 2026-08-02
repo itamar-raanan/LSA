@@ -1,0 +1,14 @@
+---
+- name: Load Section 4.1 host based firewall controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/host_firewall.yml"
+  tags: [section_4, section_4_1]
+
+- name: Section 4.1 - Uncomplicated Firewall controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_host_firewall_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_4, section_4_1]

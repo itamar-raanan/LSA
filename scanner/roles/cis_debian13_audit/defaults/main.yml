@@ -1,0 +1,29 @@
+---
+cis_benchmark:
+  name: "CIS Debian Linux 13 Benchmark"
+  version: "1.0.0"
+  release_date: "2025-12-16"
+  target_distribution: "Debian"
+  target_major_version: "13"
+
+cis_profile: level1_server
+
+# CIS Level 2 is cumulative: it includes the matching Level 1 baseline.
+cis_profile_inheritance:
+  level1_server: [level1_server]
+  level2_server: [level1_server, level2_server]
+  level1_workstation: [level1_workstation]
+  level2_workstation: [level1_workstation, level2_workstation]
+cis_effective_profiles: "{{ cis_profile_inheritance[cis_profile] | default([cis_profile]) }}"
+
+cis_report_dir: "{{ playbook_dir }}/reports"
+cis_report_formats: [json, csv, html]
+cis_generate_standalone_reports: false
+cis_exceptions: {}
+cis_results: []
+
+cis_valid_profiles:
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation

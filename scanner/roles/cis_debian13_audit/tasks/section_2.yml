@@ -1,0 +1,65 @@
+---
+- name: Load Section 2 control definitions
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/server_services.yml"
+  tags: [section_2, section_2_1]
+
+- name: Section 2.1 - Automated server service controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_server_service_controls | selectattr('assessment', 'equalto', 'Automated') | list }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_2, section_2_1]
+
+- name: Section 2.1 - Manual server service controls
+  ansible.builtin.include_tasks: audit_manual_control.yml
+  loop: "{{ cis_server_service_controls | selectattr('assessment', 'equalto', 'Manual') | list }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_2, section_2_1]
+
+- name: Load Section 2.2 control definitions
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/client_services.yml"
+  tags: [section_2, section_2_2]
+
+- name: Section 2.2 - Automated client service controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_client_service_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_2, section_2_2]
+
+- name: Load Section 2.3 control definitions
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/time_sync.yml"
+  tags: [section_2, section_2_3]
+
+- name: Section 2.3 - Time synchronization controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_time_sync_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_2, section_2_3]
+
+- name: Load Section 2.4 control definitions
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/job_schedulers.yml"
+  tags: [section_2, section_2_4]
+
+- name: Section 2.4 - Job scheduler controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_job_scheduler_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_2, section_2_4]

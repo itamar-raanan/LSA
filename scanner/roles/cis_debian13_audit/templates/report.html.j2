@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CIS Debian 13 Audit - {{ inventory_hostname }}</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #0b1020;
+  --panel: #121a2f;
+  --panel-2: #17223c;
+  --text: #eef3ff;
+  --muted: #9eabc7;
+  --border: #2a385c;
+  --accent: #77a7ff;
+  --pass: #4ade80;
+  --fail: #fb7185;
+  --manual: #60a5fa;
+  --excluded: #fbbf24;
+  --error: #c084fc;
+  --na: #94a3b8;
+  --shadow: 0 18px 50px rgba(0, 0, 0, .25);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f7fc;
+    --panel: #ffffff;
+    --panel-2: #f8faff;
+    --text: #172033;
+    --muted: #667085;
+    --border: #dbe3f0;
+    --accent: #2563eb;
+    --shadow: 0 18px 45px rgba(30, 64, 175, .10);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 15% -10%, rgba(37,99,235,.22), transparent 34rem),
+    radial-gradient(circle at 95% 0%, rgba(124,58,237,.16), transparent 30rem),
+    var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+.container { width: min(1680px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+.hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: center;
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(119,167,255,.13), transparent 42%), var(--panel);
+  box-shadow: var(--shadow);
+}
+.eyebrow { color: var(--accent); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; font-size: .72rem; }
+h1 { margin: 5px 0 10px; font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.08; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: .9rem; }
+.meta strong { color: var(--text); }
+.score-ring {
+  --score: 0;
+  width: 132px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--pass) calc(var(--score) * 1%), rgba(148,163,184,.18) 0);
+  position: relative;
+  flex: none;
+}
+.score-ring::after { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: var(--panel); }
+.score-ring > div { z-index: 1; text-align: center; }
+.score-ring b { display: block; font-size: 1.7rem; line-height: 1; }
+.score-ring span { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .09em; }
+.cards { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 12px; margin: 18px 0; }
+.card { border: 1px solid var(--border); background: var(--panel); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
+.card .label { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
+.card .value { font-size: 1.55rem; font-weight: 850; margin-top: 3px; }
+.card.pass .value { color: var(--pass); } .card.fail .value { color: var(--fail); }
+.card.manual .value { color: var(--manual); } .card.excluded .value { color: var(--excluded); }
+.card.error .value { color: var(--error); }
+.toolbar {
+  position: sticky; top: 0; z-index: 20;
+  display: grid; grid-template-columns: minmax(240px, 1fr) auto auto;
+  gap: 10px; padding: 12px; margin: 18px 0 12px;
+  border: 1px solid var(--border); border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(14px); box-shadow: var(--shadow);
+}
+input, select, button {
+  color: var(--text); background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; font: inherit;
+}
+button { cursor: pointer; font-weight: 700; }
+button:hover { border-color: var(--accent); }
+.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: auto;
+  max-height: calc(100vh - 170px);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  isolation: isolate;
+  scroll-padding-top: 48px;
+}
+table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1240px; }
+thead { position: relative; z-index: 12; }
+th {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: .72rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  text-align: left;
+  box-shadow: 0 1px 0 var(--border);
+}
+th, td { padding: 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: rgba(119,167,255,.045); }
+.control-id { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 800; color: var(--accent); }
+.title { min-width: 230px; font-weight: 720; }
+.badge { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 5px 9px; font-size: .72rem; font-weight: 850; letter-spacing: .04em; }
+.badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.badge.PASS { color: var(--pass); background: color-mix(in srgb, var(--pass) 13%, transparent); }
+.badge.FAIL { color: var(--fail); background: color-mix(in srgb, var(--fail) 13%, transparent); }
+.badge.MANUAL { color: var(--manual); background: color-mix(in srgb, var(--manual) 13%, transparent); }
+.badge.EXCLUDED { color: var(--excluded); background: color-mix(in srgb, var(--excluded) 13%, transparent); }
+.badge.ERROR { color: var(--error); background: color-mix(in srgb, var(--error) 13%, transparent); }
+.badge.NOT_APPLICABLE { color: var(--na); background: color-mix(in srgb, var(--na) 13%, transparent); }
+pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.evidence { margin: 0; max-width: 470px; max-height: 170px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: .78rem; color: var(--muted); }
+.expected { max-width: 300px; font-size: .84rem; }
+.action-card { min-width: 360px; max-width: 560px; border: 1px solid var(--border); background: var(--panel-2); border-radius: 14px; overflow: hidden; }
+.action-head { padding: 13px 14px; }
+.action-label { color: var(--fail); font-size: .69rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.action-summary { margin-top: 5px; font-weight: 720; }
+.action-steps { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: .82rem; }
+.action-steps li + li { margin-top: 5px; }
+details { border-top: 1px solid var(--border); }
+summary { cursor: pointer; padding: 10px 14px; font-weight: 750; font-size: .8rem; color: var(--accent); user-select: none; }
+.remediation-raw { padding: 0 14px 14px; margin: 0; max-height: 380px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: .77rem; color: var(--muted); }
+.no-action { color: var(--muted); font-size: .84rem; }
+.safety { margin: 14px 0 0; padding: 13px 15px; border-left: 4px solid var(--excluded); background: color-mix(in srgb, var(--excluded) 8%, var(--panel)); border-radius: 10px; color: var(--muted); font-size: .85rem; }
+.empty { display: none; text-align: center; padding: 40px; color: var(--muted); }
+.footer { color: var(--muted); text-align: center; font-size: .78rem; margin-top: 18px; }
+@media (max-width: 1050px) { .cards { grid-template-columns: repeat(3, 1fr); } .toolbar { grid-template-columns: 1fr 1fr; } .toolbar input { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .container { width: min(100% - 18px, 1680px); padding-top: 10px; } .hero { grid-template-columns: 1fr; } .score-ring { width: 110px; } .cards { grid-template-columns: repeat(2, 1fr); } .toolbar { grid-template-columns: 1fr; } .toolbar input { grid-column: auto; } }
+@media (max-width: 900px) {
+  .table-wrap { max-height: calc(100vh - 145px); }
+}
+@media print { body { background: #fff; color: #111; } .toolbar, .footer { display: none; } .container { width: 100%; padding: 0; } .hero, .card, .table-wrap { box-shadow: none; } th { position: static; } .table-wrap { overflow: visible; } table { min-width: 0; font-size: 8pt; } details > * { display: block !important; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Security compliance report</div>
+      <h1>CIS Debian Linux 13 Audit</h1>
+      <div class="meta">
+        <span><strong>Host:</strong> {{ inventory_hostname }}</span>
+        <span><strong>Profile:</strong> {{ cis_profile }}</span>
+        <span><strong>Generated:</strong> {{ ansible_date_time.iso8601 }}</span>
+        <span><strong>Benchmark:</strong> {{ cis_benchmark.version | default('1.0.0') }}</span>
+      </div>
+    </div>
+    {% set scored_total = (cis_summary.pass | int) + (cis_summary.fail | int) + (cis_summary.error | int) %}
+    {% set pass_rate = (((cis_summary.pass | int) * 100 / scored_total) | round(0, 'floor') | int) if scored_total > 0 else 0 %}
+    <div class="score-ring" style="--score: {{ pass_rate }}">
+      <div><b>{{ pass_rate }}%</b><span>pass rate</span></div>
+    </div>
+  </section>
+
+  <section class="cards" aria-label="Audit summary">
+    <div class="card"><div class="label">Total</div><div class="value">{{ cis_summary.total }}</div></div>
+    <div class="card pass"><div class="label">Passed</div><div class="value">{{ cis_summary.pass }}</div></div>
+    <div class="card fail"><div class="label">Failed</div><div class="value">{{ cis_summary.fail }}</div></div>
+    <div class="card manual"><div class="label">Manual</div><div class="value">{{ cis_summary.manual }}</div></div>
+    <div class="card excluded"><div class="label">Excluded</div><div class="value">{{ cis_summary.excluded }}</div></div>
+    <div class="card error"><div class="label">Errors</div><div class="value">{{ cis_summary.error }}</div></div>
+  </section>
+
+  <div class="safety"><strong>Before changing the server:</strong> review the full guidance, test in check mode, keep a working console session, create backups, and follow your change-control process. SSH, PAM, firewall, bootloader, storage, and network changes can lock you out or interrupt services.</div>
+
+  <section class="toolbar" aria-label="Report filters">
+    <input id="search" type="search" placeholder="Search ID, title, evidence, or remediation..." aria-label="Search controls">
+    <select id="statusFilter" aria-label="Filter by status">
+      <option value="ALL">All statuses</option>
+      <option value="FAIL">Failed</option>
+      <option value="ERROR">Errors</option>
+      <option value="MANUAL">Manual</option>
+      <option value="PASS">Passed</option>
+      <option value="EXCLUDED">Excluded</option>
+      <option value="NOT_APPLICABLE">Not applicable</option>
+    </select>
+    <button id="failedOnly" type="button">Show action items</button>
+  </section>
+
+  <div class="table-wrap">
+    <table id="resultsTable">
+      <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Expected state</th><th>Evidence</th><th>What you need to do</th></tr></thead>
+      <tbody>
+      {% for result in cis_results %}
+        <tr data-status="{{ result.status }}" data-control="{{ result.id }}">
+          <td class="control-id">{{ result.id }}</td>
+          <td class="title">{{ result.title }}</td>
+          <td><span class="badge {{ result.status }}">{{ result.status | replace('_', ' ') }}</span></td>
+          <td class="expected">{{ result.expected | e }}</td>
+          <td><pre class="evidence">{{ result.actual | e }}</pre></td>
+          <td>
+          {% if result.status in ['FAIL', 'ERROR', 'MANUAL'] %}
+            <div class="action-card">
+              <div class="action-head">
+                <div class="action-label">{% if result.status == 'MANUAL' %}Review required{% else %}Action required{% endif %}</div>
+                <div class="action-summary remediation-summary">Review the guidance below and apply the approved configuration change.</div>
+                <ol class="action-steps">
+                  <li>Confirm the finding and check whether an approved exception applies.</li>
+                  <li>Apply the configuration described in the detailed guidance.</li>
+                  <li>Re-run control <strong>{{ result.id }}</strong> and confirm it reports PASS.</li>
+                </ol>
+              </div>
+              <details>
+                <summary>Open detailed remediation guidance</summary>
+                <pre class="remediation-raw">{{ result.remediation | default('No remediation guidance is available.') | e }}</pre>
+              </details>
+            </div>
+          {% elif result.status == 'EXCLUDED' %}
+            <div class="no-action">No change is required while the documented exception remains approved and valid.</div>
+          {% elif result.status == 'PASS' %}
+            <div class="no-action">No action required. Preserve this configuration and monitor for drift.</div>
+          {% else %}
+            <div class="no-action">No remediation is currently required for this host.</div>
+          {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div id="emptyState" class="empty">No controls match the current filters.</div>
+  </div>
+  <div class="footer">Generated by the CIS Debian 13 Ansible audit role. This report is audit evidence, not an authorization to apply changes.</div>
+</div>
+<script>
+(function () {
+  const rows = Array.from(document.querySelectorAll('#resultsTable tbody tr'));
+  const search = document.getElementById('search');
+  const statusFilter = document.getElementById('statusFilter');
+  const failedOnly = document.getElementById('failedOnly');
+  const emptyState = document.getElementById('emptyState');
+  let actionOnly = false;
+
+  function firstUsefulSentence(text) {
+    const clean = text
+      .replace(/\r/g, '')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !/^[-=]{3,}$/.test(line))
+      .filter(line => !/^(#|\$|sudo\s|apt\s|apt-get\s|systemctl\s|sed\s|awk\s|cat\s|echo\s|printf\s|chmod\s|chown\s|mkdir\s|rm\s|mv\s|cp\s|if\s|fi$|for\s|done$|while\s)/i.test(line))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!clean) return 'Apply the configuration in the detailed guidance, then re-run the audit.';
+    const match = clean.match(/^(.{20,220}?[.!?])(?:\s|$)/);
+    return (match ? match[1] : clean.slice(0, 220)).replace(/^(Remediation:|To remediate,?)/i, '').trim();
+  }
+
+  document.querySelectorAll('.action-card').forEach(card => {
+    const raw = card.querySelector('.remediation-raw');
+    const summary = card.querySelector('.remediation-summary');
+    if (raw && summary) summary.textContent = firstUsefulSentence(raw.textContent);
+  });
+
+  function applyFilters() {
+    const query = search.value.trim().toLowerCase();
+    const selected = statusFilter.value;
+    let visible = 0;
+    rows.forEach(row => {
+      const status = row.dataset.status;
+      const matchesStatus = selected === 'ALL' || status === selected;
+      const matchesAction = !actionOnly || ['FAIL', 'ERROR', 'MANUAL'].includes(status);
+      const matchesSearch = !query || row.textContent.toLowerCase().includes(query);
+      const show = matchesStatus && matchesAction && matchesSearch;
+      row.hidden = !show;
+      if (show) visible += 1;
+    });
+    emptyState.style.display = visible ? 'none' : 'block';
+  }
+
+  search.addEventListener('input', applyFilters);
+  statusFilter.addEventListener('change', applyFilters);
+  failedOnly.addEventListener('click', () => {
+    actionOnly = !actionOnly;
+    failedOnly.textContent = actionOnly ? 'Show all controls' : 'Show action items';
+    failedOnly.setAttribute('aria-pressed', String(actionOnly));
+    applyFilters();
+  });
+})();
+</script>
+</body>
+</html>
