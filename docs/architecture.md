@@ -25,11 +25,13 @@ Only the TLS web gateway publishes a host port, bound to `127.0.0.1:8443` by def
 
 ## Identity and access
 
-LSA keeps one local bootstrap administrator as a break-glass account. All regular console users are created just in time after successful OpenID Connect or RADIUS authentication. Supported OIDC presets are Microsoft Entra ID, Okta, Google Workspace, and ADFS; generic standards-based OpenID Connect is also available.
+LSA keeps one local bootstrap administrator as a break-glass account. Regular console users can be created just in time after successful OpenID Connect or RADIUS authentication, or pre-provisioned against an immutable provider subject before their first sign-in. Supported OIDC presets are Microsoft Entra ID, Okta, Google Workspace, and ADFS; generic standards-based OpenID Connect is also available.
 
 OIDC uses authorization code flow with PKCE, state, and nonce. The callback validates token signature, issuer, audience, expiry, and nonce before binding a user to the provider subject. Group claims map to `admin`, `analyst`, or `auditor`, defaulting to `auditor`. RADIUS maps a configured Access-Accept reply attribute to the same roles and belongs on a trusted internal network or protected tunnel.
 
 Browser tokens carry a database-backed session ID. Disabling a user or logging out revokes active sessions immediately. Provider secrets and TLS private keys are encrypted with `LSA_SETTINGS_ENCRYPTION_KEY`; settings APIs and audit events never return their values.
+
+Deleting a host is a logical deletion: it removes the asset from active fleet, dashboard, and finding views and revokes host-scoped ingestion and signing credentials. Historical reports and retained evidence remain preserved.
 
 ## Supported systems
 

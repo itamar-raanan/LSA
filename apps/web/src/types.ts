@@ -18,6 +18,7 @@ export interface Host {
   architecture: string
   ip_addresses: string[]
   tags: Record<string, string>
+  system_info?: Record<string, string | number | boolean | null>
   compliance_score: number | null
   security_score: number | null
   last_scan_at: string | null
@@ -149,6 +150,14 @@ export interface ManagedUser extends User {
   provider_name: string | null
   last_login_at: string | null
   created_at: string
+}
+
+export interface ManagedUserCreate {
+  email: string
+  display_name: string
+  role: 'admin' | 'analyst' | 'auditor'
+  provider_id: string
+  external_subject: string
 }
 
 export interface TlsCertificate {

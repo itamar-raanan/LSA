@@ -10,6 +10,7 @@ import type {
   User,
   IdentityProvider,
   ManagedUser,
+  ManagedUserCreate,
   ProviderType,
   PublicIdentityProvider,
   TlsCertificate,
@@ -77,6 +78,9 @@ export const api = {
   users(): Promise<ManagedUser[]> {
     return request('/settings/users')
   },
+  createUser(payload: ManagedUserCreate): Promise<ManagedUser> {
+    return request('/settings/users', { method: 'POST', body: JSON.stringify(payload) })
+  },
   updateUserRole(id: string, role: string): Promise<ManagedUser> {
     return request(`/settings/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) })
   },
@@ -100,6 +104,9 @@ export const api = {
   },
   host(id: string): Promise<Host> {
     return request(`/hosts/${id}`)
+  },
+  deleteHost(id: string): Promise<void> {
+    return request(`/hosts/${id}`, { method: 'DELETE' })
   },
   reports(hostId: string): Promise<ReportSummary[]> {
     return request(`/hosts/${hostId}/reports`)
@@ -151,7 +158,7 @@ export const api = {
       checksum: response.headers.get('X-LSA-Artifact-SHA256'),
     }
   },
-  findings(filters: { severity?: string; lifecycle?: string; host_id?: string } = {}): Promise<Finding[]> {
+  findings(filters: { severity?: string; lifecycle?: string; host_id?: string; category?: string } = {}): Promise<Finding[]> {
     const params = new URLSearchParams()
     Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
     return request(`/findings${params.size ? `?${params}` : ''}`)

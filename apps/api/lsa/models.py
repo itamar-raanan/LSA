@@ -72,6 +72,7 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(160))
     password_hash: Mapped[str | None] = mapped_column(String(300), nullable=True)
     role: Mapped[str] = mapped_column(String(30), default="admin")
+    role_source: Mapped[str] = mapped_column(String(30), default="manual")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     auth_source: Mapped[str] = mapped_column(String(30), default="local", index=True)
     identity_provider_id: Mapped[str | None] = mapped_column(
@@ -163,9 +164,11 @@ class Host(Base):
     architecture: Mapped[str] = mapped_column(String(40))
     ip_addresses: Mapped[list[str]] = mapped_column(JSON, default=list)
     tags: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    system_info: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     compliance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     security_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_scan_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     tenant: Mapped[Tenant] = relationship(back_populates="hosts")

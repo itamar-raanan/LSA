@@ -55,6 +55,8 @@ def ingest_report(
     host = db.get(Host, host_id)
     if host is not None and host.tenant_id != principal.tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Host belongs to another tenant")
+    if host is not None and host.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Host has been deleted")
     if host is None:
         host = Host(
             id=host_id,
@@ -69,6 +71,7 @@ def ingest_report(
             architecture=report_data.host.architecture,
             ip_addresses=report_data.host.ip_addresses,
             tags=report_data.host.tags,
+            system_info=report_data.host.system_info.model_dump(exclude_none=True),
         )
         db.add(host)
     elif host.machine_id_hash.startswith("pending:"):
@@ -158,6 +161,7 @@ def ingest_report(
     host.architecture = report_data.host.architecture
     host.ip_addresses = report_data.host.ip_addresses
     host.tags = report_data.host.tags
+    host.system_info = report_data.host.system_info.model_dump(exclude_none=True)
     host.compliance_score = compliance
     host.security_score = security_score
     host.last_scan_at = report_data.generated_at

@@ -4,6 +4,8 @@ Every scanner emits the same normalized JSON document. The formal schema is in `
 
 Required sections are `scanner`, `host`, `scan`, `summary`, and `findings`. Finding control IDs must be stable across scans; LSA uses them to determine new, persistent, and resolved state.
 
+The host section includes the OS distribution, version, kernel, architecture, addresses, and optional `system_info` inventory. Current scanners report CPU model and core count, total memory, uptime, virtualization type and role, hardware vendor and product, and timezone. Older version 1.0 reports without `system_info` remain valid.
+
 An offline bundle contains:
 
 ```text

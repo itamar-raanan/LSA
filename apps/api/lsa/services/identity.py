@@ -88,6 +88,7 @@ def jit_user(
             display_name=display_name,
             password_hash=None,
             role=role,
+            role_source="provider",
             auth_source=provider.provider_type,
             identity_provider_id=provider.id,
             external_subject=subject,
@@ -98,7 +99,8 @@ def jit_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User access is disabled")
     user.email = email.lower()
     user.display_name = display_name
-    user.role = role
+    if user.role_source == "provider":
+        user.role = role
     user.last_login_at = now_utc()
     return user
 

@@ -1,15 +1,17 @@
 import { MagnifyingGlass, Plus } from '@phosphor-icons/react'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
 import { EnrollHostPanel } from '../components/EnrollHostPanel'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
+import { HostQuickView } from '../components/HostQuickView'
+import type { Host } from '../types'
 
 export function HostsPage() {
   const [search, setSearch] = useState('')
   const [enrolling, setEnrolling] = useState(false)
+  const [selected, setSelected] = useState<Host | null>(null)
   const { data, error, loading, reload } = useApi(() => api.hosts(), [])
   const hosts = data?.filter((host) => host.hostname.toLowerCase().includes(search.toLowerCase())) ?? []
   return (
@@ -25,8 +27,8 @@ export function HostsPage() {
             <table className="data-table min-w-[850px]">
               <thead><tr><th>Host</th><th>Operating system</th><th>Environment</th><th>Security</th><th>Compliance</th><th>Open risk</th></tr></thead>
               <tbody>{hosts.map((host) => (
-                <tr key={host.id}>
-                  <td><Link className="font-medium text-stone-200 hover:text-emerald-300" to={`/hosts/${host.id}`}>{host.hostname}</Link><span className="table-subtitle">{host.ip_addresses[0] ?? 'No address reported'}</span></td>
+                <tr key={host.id} className="cursor-pointer" onClick={() => setSelected(host)}>
+                  <td><button className="font-medium text-stone-200 hover:text-emerald-300" onClick={() => setSelected(host)}>{host.hostname}</button><span className="table-subtitle">{host.ip_addresses[0] ?? 'No address reported'}</span></td>
                   <td>{host.operating_system} {host.os_version}<span className="table-subtitle">Kernel {host.kernel}</span></td>
                   <td className="capitalize">{host.tags.environment ?? 'Unassigned'}<span className="table-subtitle">{host.tags.owner ?? 'No owner'}</span></td>
                   <td><span className="score-value">{host.security_score?.toFixed(1) ?? '—'}</span></td>
@@ -40,6 +42,7 @@ export function HostsPage() {
         </section>
       )}
       {enrolling && <EnrollHostPanel close={() => setEnrolling(false)} created={() => void reload()} />}
+      {selected && <HostQuickView host={selected} close={() => setSelected(null)} deleted={() => { setSelected(null); void reload() }} />}
     </div>
   )
 }

@@ -14,6 +14,18 @@ class ScannerInfo(BaseModel):
     version: str = Field(min_length=1, max_length=40)
 
 
+class SystemInfo(BaseModel):
+    cpu_model: str | None = Field(default=None, max_length=300)
+    cpu_cores: int | None = Field(default=None, ge=0)
+    memory_mb: int | None = Field(default=None, ge=0)
+    uptime_seconds: int | None = Field(default=None, ge=0)
+    virtualization_type: str | None = Field(default=None, max_length=80)
+    virtualization_role: str | None = Field(default=None, max_length=80)
+    system_vendor: str | None = Field(default=None, max_length=200)
+    product_name: str | None = Field(default=None, max_length=200)
+    timezone: str | None = Field(default=None, max_length=80)
+
+
 class HostInfo(BaseModel):
     host_id: UUID
     hostname: str = Field(min_length=1, max_length=253)
@@ -26,6 +38,7 @@ class HostInfo(BaseModel):
     architecture: str
     ip_addresses: list[str] = Field(default_factory=list, max_length=64)
     tags: dict[str, str] = Field(default_factory=dict)
+    system_info: SystemInfo = Field(default_factory=SystemInfo)
 
 
 class ScanInfo(BaseModel):
@@ -147,6 +160,14 @@ class UserAdminResponse(BaseModel):
     created_at: datetime
 
 
+class UserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    display_name: str = Field(min_length=1, max_length=160)
+    role: Literal["admin", "analyst", "auditor"] = "auditor"
+    provider_id: str
+    external_subject: str = Field(min_length=1, max_length=320)
+
+
 class UserRoleUpdate(BaseModel):
     role: Literal["admin", "analyst", "auditor"]
 
@@ -178,6 +199,7 @@ class HostResponse(BaseModel):
     architecture: str
     ip_addresses: list[str]
     tags: dict[str, str]
+    system_info: dict[str, object]
     compliance_score: float | None
     security_score: float | None
     last_scan_at: datetime | None

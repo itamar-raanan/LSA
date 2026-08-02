@@ -186,6 +186,72 @@ def test_user_lifecycle_and_session_revocation_are_admin_controlled(client):
     assert disabled.json()["is_active"] is False
 
 
+def test_admin_can_preprovision_radius_user_with_manual_role(client):
+    admin_headers = headers(client)
+    provider = client.post(
+        "/api/v1/settings/identity-providers",
+        headers=admin_headers,
+        json={
+            "name": "Staff RADIUS",
+            "provider_type": "radius",
+            "secret": "secret",
+            "config": {"host": "radius.internal", "user_domain": "example.com"},
+            "is_enabled": True,
+        },
+    ).json()
+    created = client.post(
+        "/api/v1/settings/users",
+        headers=admin_headers,
+        json={
+            "email": "Itamar@Example.com",
+            "display_name": "Itamar Raanan",
+            "role": "analyst",
+            "provider_id": provider["id"],
+            "external_subject": "ITAMAR",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["email"] == "itamar@example.com"
+    assert created.json()["provider_name"] == "Staff RADIUS"
+    with SessionLocal() as db:
+        provisioned = db.get(User, created.json()["id"])
+        assert provisioned.external_subject == "itamar"
+        assert provisioned.password_hash is None
+        assert provisioned.role_source == "manual"
+
+
+def test_preprovisioned_role_is_not_replaced_by_radius_mapping(client, monkeypatch):
+    admin_headers = headers(client)
+    provider = client.post(
+        "/api/v1/settings/identity-providers",
+        headers=admin_headers,
+        json={
+            "name": "Mapped RADIUS",
+            "provider_type": "radius",
+            "secret": "secret",
+            "config": {"host": "radius.internal", "user_domain": "example.com"},
+            "is_enabled": True,
+        },
+    ).json()
+    client.post(
+        "/api/v1/settings/users",
+        headers=admin_headers,
+        json={
+            "email": "manual@example.com",
+            "display_name": "Manual Role",
+            "role": "admin",
+            "provider_id": provider["id"],
+            "external_subject": "manual",
+        },
+    )
+    monkeypatch.setattr("lsa.api.auth.radius_authenticate", lambda *args: ("manual", "auditor"))
+    response = client.post(
+        "/api/v1/auth/radius/login", json={"username": "manual", "password": "password"}
+    )
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == "admin"
+
+
 def test_logout_revokes_database_backed_session(client):
     token = login(client)
     auth = {"Authorization": f"Bearer {token}"}

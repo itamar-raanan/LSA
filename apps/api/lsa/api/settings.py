@@ -13,6 +13,7 @@ from lsa.schemas import (
     IdentityProviderUpdate,
     TlsCertificateResponse,
     UserAdminResponse,
+    UserCreate,
     UserRoleUpdate,
     UserStatusUpdate,
 )
@@ -230,6 +231,54 @@ def list_users(user: User = Depends(current_user), db: Session = Depends(get_db)
     return [user_response(item, providers.get(item.identity_provider_id)) for item in users]
 
 
+@router.post("/users", response_model=UserAdminResponse, status_code=201)
+def create_user(
+    request: UserCreate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    require_admin(user)
+    provider = db.get(IdentityProvider, request.provider_id)
+    if provider is None or provider.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Identity provider not found")
+    email = request.email.strip().lower()
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise HTTPException(status_code=422, detail="A valid email address is required")
+    subject = request.external_subject.strip()
+    if provider.provider_type == "radius":
+        subject = subject.casefold()
+    target = User(
+        tenant_id=user.tenant_id,
+        email=email,
+        display_name=request.display_name.strip(),
+        password_hash=None,
+        role=request.role,
+        role_source="manual",
+        auth_source=provider.provider_type,
+        identity_provider_id=provider.id,
+        external_subject=subject,
+    )
+    db.add(target)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="This email or provider identity is already registered"
+        ) from exc
+    audit(
+        db,
+        user,
+        "user.preprovisioned",
+        "user",
+        target.id,
+        {"provider_id": provider.id, "role": target.role},
+    )
+    db.commit()
+    db.refresh(target)
+    return user_response(target, provider.name)
+
+
 @router.patch("/users/{user_id}/role", response_model=UserAdminResponse)
 def update_user_role(
     user_id: str,
@@ -244,6 +293,7 @@ def update_user_role(
     if target.id == user.id and request.role != "admin":
         raise HTTPException(status_code=409, detail="You cannot remove your own administrator role")
     target.role = request.role
+    target.role_source = "manual"
     audit(db, user, "user.role_changed", "user", target.id, {"role": request.role})
     db.commit()
     return user_response(target)
