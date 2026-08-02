@@ -90,8 +90,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .upload-zone:hover { border-color: #598066; background: #151b17; }
 .upload-zone:active { transform: scale(.995); }
 .page-reveal { animation: reveal .5s cubic-bezier(.16,1,.3,1) both; }
-.host-quick-view { position: fixed; right: 20px; bottom: 20px; z-index: 50; width: min(430px, calc(100vw - 40px)); overflow: hidden; border: 1px solid #465048; border-radius: 20px; background: #151916; box-shadow: 0 28px 80px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.04); animation: card-in .28s cubic-bezier(.16,1,.3,1) both; }
-.host-quick-view-minimized { display: flex; width: min(310px, calc(100vw - 40px)); align-items: center; border-radius: 15px; }
+.host-quick-view { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; max-height: calc(100dvh - 96px); width: min(430px, calc(100vw - 40px)); flex-direction: column; overflow: hidden; border: 1px solid #465048; border-radius: 20px; background: #151916; box-shadow: 0 28px 80px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.04); animation: card-in .28s cubic-bezier(.16,1,.3,1) both; }
+.host-quick-view-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.host-quick-view-minimized { max-height: none; width: min(310px, calc(100vw - 40px)); flex-direction: row; align-items: center; border-radius: 15px; }
 .host-quick-view-restore { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 14px 13px 16px; text-align: left; transition: background .22s cubic-bezier(.16,1,.3,1); }
 .host-quick-view-restore:hover { background: #1b211c; }
 .host-quick-view-restore:active { transform: translateY(1px); }
@@ -105,4 +106,5 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @keyframes reveal { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes card-in { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+@media (max-width: 640px) { .host-quick-view { right: 12px; bottom: 12px; max-height: calc(100dvh - 80px); width: calc(100vw - 24px); } .host-quick-view-minimized { width: min(310px, calc(100vw - 24px)); } }
 @media (min-width: 1024px) { .settings-nav-item small { display: block; } }
