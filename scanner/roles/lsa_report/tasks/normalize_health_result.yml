@@ -1,0 +1,41 @@
+---
+- name: Resolve normalized security-health category
+  ansible.builtin.set_fact:
+    lsa_health_category: >-
+      {% set category = lsa_health_result.category | lower %}
+      {% if category == 'filesystem' %}filesystem
+      {% elif category in ['users', 'privilege', 'authentication'] %}accounts
+      {% elif category == 'services' %}services
+      {% elif category == 'network' %}network
+      {% elif category == 'kernel' %}kernel
+      {% elif category == 'packages' %}packages
+      {% else %}services
+      {% endif %}
+  changed_when: false
+
+- name: Append normalized security-health finding
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [{
+        'control_id': 'LSA-HEALTH-' ~ lsa_health_result.id,
+        'module': 'security_health',
+        'category': lsa_health_category | trim,
+        'title': lsa_health_result.title,
+        'severity': lsa_health_result.severity | lower,
+        'status': (
+          'pass' if lsa_health_result.status == 'PASS' else
+          'fail' if lsa_health_result.status == 'FAIL' else
+          'manual' if lsa_health_result.status == 'REVIEW' else
+          'not_applicable' if lsa_health_result.status in ['NOT_APPLICABLE', 'EXCLUDED'] else
+          'error'
+        ),
+        'expected': (lsa_health_result.summary | default('') | string)[:10000],
+        'actual': (lsa_health_result.actual | default('') | string)[:10000],
+        'evidence': [((lsa_health_result.evidence | default({}) | to_json)[:10000])],
+        'remediation_summary': (lsa_health_result.remediation | default('Review the finding and apply the approved change.') | string)[:10000],
+        'remediation_commands': [],
+        'verification_commands': [((lsa_health_result.verification | default('Re-run the audit.') | string)[:10000])],
+        'reboot_required': false,
+        'service_restart': false
+      }] }}
+  changed_when: false

@@ -1,0 +1,33 @@
+---
+- name: Validate security health assessment settings
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - security_health_report_formats | difference(['html', 'json', 'csv']) | length == 0
+    fail_msg: "Security health assessment requires Linux and supported report formats."
+  when: security_health_enabled | bool
+
+- name: Initialize security health results
+  ansible.builtin.set_fact:
+    security_health_results: []
+  changed_when: false
+  when: security_health_enabled | bool
+
+- name: Load security health controls
+  ansible.builtin.include_vars:
+    file: controls.yml
+  when: security_health_enabled | bool
+
+- name: Run security health controls
+  ansible.builtin.include_tasks: run_control.yml
+  loop: "{{ security_health_controls }}"
+  loop_control:
+    loop_var: health_control
+    label: "{{ health_control.id }} {{ health_control.title }}"
+  when: security_health_enabled | bool
+
+- name: Generate security health reports
+  ansible.builtin.include_tasks: report.yml
+  when:
+    - security_health_enabled | bool
+    - security_health_generate_standalone_reports | bool

@@ -1,0 +1,74 @@
+---
+- name: Load Section 5.1 SSH server controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/ssh_server.yml"
+  tags: [section_5, section_5_1]
+
+- name: Section 5.1 - Configure SSH Server
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_ssh_server_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_5, section_5_1]
+
+- name: Load Section 5.2 privilege escalation controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/privilege_escalation.yml"
+  tags: [section_5, section_5_2]
+
+- name: Section 5.2 - Configure privilege escalation
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_privilege_escalation_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_5, section_5_2]
+
+- name: Load Section 5.3 PAM controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/pam.yml"
+  tags: [section_5, section_5_3]
+
+- name: Section 5.3 - Pluggable Authentication Modules automated controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_pam_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_5, section_5_3]
+
+- name: Section 5.3 - Pluggable Authentication Modules manual controls
+  ansible.builtin.include_tasks: audit_manual_control.yml
+  loop: "{{ cis_pam_manual_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_5, section_5_3]
+
+- name: Load Section 5.4 user accounts and environment controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/user_accounts.yml"
+  tags: [section_5, section_5_4]
+
+- name: Section 5.4 - User accounts and environment automated controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_user_account_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_5, section_5_4]
+
+- name: Section 5.4 - User accounts and environment manual controls
+  ansible.builtin.include_tasks: audit_manual_control.yml
+  loop: "{{ cis_user_account_manual_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_5, section_5_4]

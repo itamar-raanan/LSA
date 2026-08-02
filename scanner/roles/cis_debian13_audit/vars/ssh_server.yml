@@ -1,0 +1,329 @@
+cis_ssh_server_controls:
+- id: 5.1.1
+  title: Ensure access to /etc/ssh/sshd_config is configured
+  profiles: &id001
+  - level1_server
+  - level1_workstation
+  - level2_server
+  - level2_workstation
+  expected: sshd_config and included .conf files are root:root and mode 0600 or more restrictive
+  audit: 'if ! dpkg-query -W -f=''${Status}'' openssh-server 2>/dev/null | grep -q ''install ok installed''; then echo ''openssh-server not installed''; exit 3; fi
+
+    bad=0
+
+    check(){ f="$1"; [ -e "$f" ] || return; read -r mode uid gid < <(stat -Lc ''%a %u %g'' "$f"); echo "$f mode=$mode uid=$uid gid=$gid"; (( (8#$mode & 0077) == 0 )) && [ "$uid" = 0 ] && [ "$gid" = 0 ] || bad=1; }
+
+    check /etc/ssh/sshd_config
+
+    while IFS= read -r -d '''' f; do check "$f"; done < <(find /etc/ssh/sshd_config.d -xdev -type f -name ''*.conf'' -print0 2>/dev/null)
+
+    exit "$bad"
+
+    '
+- id: 5.1.2
+  title: Ensure access to SSH private host key files is configured
+  profiles: *id001
+  expected: Private SSH host keys are root:root mode 0600
+  audit: 'sshd_bin="$(command -v sshd || true)"; keygen="$(command -v ssh-keygen || true)"
+
+    [ -n "$sshd_bin" ] && [ -n "$keygen" ] || { echo ''openssh-server not installed''; exit 3; }
+
+    bad=0; count=0
+
+    while read -r f; do [ -n "$f" ] || continue; if "$keygen" -lf "$f" >/dev/null 2>&1; then count=$((count+1)); read -r mode uid gid < <(stat -Lc ''%a %u %g'' "$f"); echo "$f mode=$mode uid=$uid gid=$gid"; [ "$mode" = 600 ] && [ "$uid" = 0 ] && [ "$gid" = 0 ] || bad=1; fi; done < <("$sshd_bin" -T 2>/dev/null | awk ''$1=="hostkey"{print $2}'')
+
+    [ "$count" -gt 0 ] || { echo ''no private host keys found''; exit 2; }; exit "$bad"
+
+    '
+- id: 5.1.3
+  title: Ensure access to SSH public host key files is configured
+  profiles: *id001
+  expected: Public SSH host keys are root:root mode 0644 or more restrictive
+  audit: 'sshd_bin="$(command -v sshd || true)"; keygen="$(command -v ssh-keygen || true)"
+
+    [ -n "$sshd_bin" ] && [ -n "$keygen" ] || { echo ''openssh-server not installed''; exit 3; }
+
+    bad=0; count=0
+
+    while read -r f; do f="${f}.pub"; [ -f "$f" ] || continue; if "$keygen" -lf "$f" >/dev/null 2>&1; then count=$((count+1)); read -r mode uid gid < <(stat -Lc ''%a %u %g'' "$f"); echo "$f mode=$mode uid=$uid gid=$gid"; (( (8#$mode & 0133) == 0 )) && [ "$uid" = 0 ] && [ "$gid" = 0 ] || bad=1; fi; done < <("$sshd_bin" -T 2>/dev/null | awk ''$1=="hostkey"{print $2}'')
+
+    [ "$count" -gt 0 ] || { echo ''no public host keys found''; exit 2; }; exit "$bad"
+
+    '
+- id: 5.1.4
+  title: Ensure sshd access is configured
+  profiles: *id001
+  expected: At least one AllowUsers, AllowGroups, DenyUsers, or DenyGroups rule is configured
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    printf ''%s\n'' "$cfg" | grep -Pi ''^\s*(allow|deny)(users|groups)\s+\S+'' && exit 0
+
+    echo ''No SSH access restriction found''; exit 1
+
+    '
+- id: 5.1.5
+  title: Ensure sshd Banner is configured
+  profiles: *id001
+  expected: Banner points to an existing policy file without OS disclosure tokens
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    banner="$(printf ''%s\n'' "$cfg"|awk ''$1=="banner"{print $2;exit}'')"; echo "banner=$banner"
+
+    [ -n "$banner" ] && [ "$banner" != none ] && [ -f "$banner" ] || exit 1
+
+    osid="$(awk -F= ''$1=="ID"{gsub(/"/,"",$2);print $2}'' /etc/os-release 2>/dev/null)"
+
+    grep -Pqi "(\\\\v|\\\\r|\\\\m|\\\\s|\\b${osid}\\b)" "$banner" && exit 1
+
+    cat "$banner"; exit 0
+
+    '
+- id: 5.1.6
+  title: Ensure sshd Ciphers are configured
+  profiles: *id001
+  expected: No weak CBC, 3DES, Blowfish, CAST, ARCFOUR, or rijndael-cbc ciphers
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="ciphers"{print $2;exit}'')"; echo "ciphers=$v"
+
+    printf ''%s'' "$v" | grep -Pqi ''(3des|blowfish|cast128|aes(128|192|256)-cbc|arcfour(128|256)?|rijndael-cbc@lysator\.liu\.se)'' && exit 1 || exit 0
+
+    '
+- id: 5.1.7
+  title: Ensure sshd ClientAliveInterval and ClientAliveCountMax are configured
+  profiles: *id001
+  expected: ClientAliveInterval and ClientAliveCountMax are greater than zero
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    i="$(printf ''%s\n'' "$cfg"|awk ''$1=="clientaliveinterval"{print $2;exit}'')"; c="$(printf ''%s\n'' "$cfg"|awk ''$1=="clientalivecountmax"{print $2;exit}'')"; echo "clientaliveinterval=$i clientalivecountmax=$c"; [ "$i" -gt 0 ] 2>/dev/null && [ "$c" -gt 0 ] 2>/dev/null
+
+    '
+- id: 5.1.8
+  title: Ensure sshd DisableForwarding is enabled
+  profiles: &id002
+  - level1_workstation
+  - level2_server
+  - level2_workstation
+  expected: disableforwarding is yes
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="disableforwarding"{print $2;exit}'')"; echo "disableforwarding=$v"; [ "$v" = "yes" ]
+
+    '
+- id: 5.1.9
+  title: Ensure sshd GSSAPIAuthentication is disabled
+  profiles: *id002
+  expected: gssapiauthentication is no
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="gssapiauthentication"{print $2;exit}'')"; echo "gssapiauthentication=$v"; [ "$v" = "no" ]
+
+    '
+- id: 5.1.10
+  title: Ensure sshd HostbasedAuthentication is disabled
+  profiles: *id001
+  expected: hostbasedauthentication is no
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="hostbasedauthentication"{print $2;exit}'')"; echo "hostbasedauthentication=$v"; [ "$v" = "no" ]
+
+    '
+- id: 5.1.11
+  title: Ensure sshd IgnoreRhosts is enabled
+  profiles: *id001
+  expected: ignorerhosts is yes
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="ignorerhosts"{print $2;exit}'')"; echo "ignorerhosts=$v"; [ "$v" = "yes" ]
+
+    '
+- id: 5.1.20
+  title: Ensure sshd PermitEmptyPasswords is disabled
+  profiles: *id001
+  expected: permitemptypasswords is no
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="permitemptypasswords"{print $2;exit}'')"; echo "permitemptypasswords=$v"; [ "$v" = "no" ]
+
+    '
+- id: 5.1.21
+  title: Ensure sshd PermitRootLogin is disabled
+  profiles: *id001
+  expected: permitrootlogin is no
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="permitrootlogin"{print $2;exit}'')"; echo "permitrootlogin=$v"; [ "$v" = "no" ]
+
+    '
+- id: 5.1.22
+  title: Ensure sshd PermitUserEnvironment is disabled
+  profiles: *id001
+  expected: permituserenvironment is no
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="permituserenvironment"{print $2;exit}'')"; echo "permituserenvironment=$v"; [ "$v" = "no" ]
+
+    '
+- id: 5.1.23
+  title: Ensure sshd UsePAM is enabled
+  profiles: *id001
+  expected: usepam is yes
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="usepam"{print $2;exit}'')"; echo "usepam=$v"; [ "$v" = "yes" ]
+
+    '
+- id: 5.1.12
+  title: Ensure sshd KexAlgorithms is configured
+  profiles: *id001
+  expected: No weak SHA-1 key exchange algorithms
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="kexalgorithms"{print $2;exit}'')"; echo "kexalgorithms=$v"; printf ''%s'' "$v" | grep -Pqi ''(diffie-hellman-group1-sha1|diffie-hellman-group14-sha1|diffie-hellman-group-exchange-sha1)'' && exit 1 || exit 0
+
+    '
+- id: 5.1.13
+  title: Ensure sshd post-quantum cryptography key exchange algorithms are configured
+  profiles: *id001
+  expected: sntrup761x25519-sha512 is present; OpenSSH 9.9+ also has mlkem768x25519-sha256
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="kexalgorithms"{print $2;exit}'')"; ver="$($sshd_bin -V 2>&1|grep -Po ''OpenSSH_\K[0-9]+\.[0-9]+''|head -1)"; echo "version=$ver kexalgorithms=$v"; printf ''%s'' "$v"|grep -q ''sntrup761x25519-sha512'' || exit 1
+
+    major=${ver%%.*}; minor=${ver#*.}; if [ "$major" -gt 9 ] || { [ "$major" -eq 9 ] && [ "$minor" -ge 9 ]; }; then printf ''%s'' "$v"|grep -q ''mlkem768x25519-sha256'' || exit 1; fi; exit 0
+
+    '
+- id: 5.1.14
+  title: Ensure sshd LoginGraceTime is configured
+  profiles: *id001
+  expected: LoginGraceTime is between 1 and 60 seconds
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="logingracetime"{print $2;exit}'')"; echo "logingracetime=$v"; [ "$v" -ge 1 ] 2>/dev/null && [ "$v" -le 60 ] 2>/dev/null
+
+    '
+- id: 5.1.15
+  title: Ensure sshd LogLevel is configured
+  profiles: *id001
+  expected: LogLevel is INFO or VERBOSE
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="loglevel"{print toupper($2);exit}'')"; echo "loglevel=$v"; [ "$v" = INFO ] || [ "$v" = VERBOSE ]
+
+    '
+- id: 5.1.16
+  title: Ensure sshd MACs are configured
+  profiles: *id001
+  expected: No weak MAC algorithms are configured
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="macs"{print $2;exit}'')"; echo "macs=$v"; printf ''%s'' "$v"|grep -Pqi ''(hmac-md5|hmac-md5-96|hmac-ripemd160|hmac-sha1-96|umac-64@openssh\.com|hmac-md5-etm@openssh\.com|hmac-md5-96-etm@openssh\.com|hmac-ripemd160-etm@openssh\.com|hmac-sha1-96-etm@openssh\.com|umac-64-etm@openssh\.com|umac-128-etm@openssh\.com)'' && exit 1 || exit 0
+
+    '
+- id: 5.1.17
+  title: Ensure sshd MaxAuthTries is configured
+  profiles: *id001
+  expected: MaxAuthTries is 4 or less
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="maxauthtries"{print $2;exit}'')"; echo "maxauthtries=$v"; [ "$v" -le 4 ] 2>/dev/null
+
+    '
+- id: 5.1.18
+  title: Ensure sshd MaxSessions is configured
+  profiles: *id001
+  expected: MaxSessions is 10 or less
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="maxsessions"{print $2;exit}'')"; echo "maxsessions=$v"; [ "$v" -le 10 ] 2>/dev/null
+
+    '
+- id: 5.1.19
+  title: Ensure sshd MaxStartups is configured
+  profiles: *id001
+  expected: MaxStartups is 10:30:60 or more restrictive
+  audit: 'sshd_bin="$(command -v sshd || true)"
+
+    if [ -z "$sshd_bin" ]; then echo "openssh-server not installed"; exit 3; fi
+
+    cfg="$($sshd_bin -T 2>&1)" || { echo "$cfg"; exit 2; }
+
+    v="$(printf ''%s\n'' "$cfg"|awk ''$1=="maxstartups"{print $2;exit}'')"; echo "maxstartups=$v"; IFS=: read -r a b c <<<"$v"; [ "$a" -le 10 ] 2>/dev/null && [ "$b" -le 30 ] 2>/dev/null && [ "$c" -le 60 ] 2>/dev/null
+
+    '

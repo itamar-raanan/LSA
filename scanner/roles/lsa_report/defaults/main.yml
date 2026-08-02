@@ -1,6 +1,6 @@
 ---
 lsa_schema_version: "1.0"
-lsa_scanner_version: "0.3.0"
+lsa_scanner_version: "0.4.0"
 lsa_delivery_mode: upload_and_keep
 lsa_output_root: "{{ playbook_dir }}/../reports"
 lsa_platform_url: "https://lsa.example.com"
@@ -14,6 +14,22 @@ lsa_supported_profiles:
   - minimal_server
   - router
   - container
+  - level1_server
+  - level2_server
+  - level1_workstation
+  - level2_workstation
+lsa_cis_profile_map:
+  production_server: level2_server
+  minimal_server: level1_server
+  router: level2_server
+  container: level1_server
+  level1_server: level1_server
+  level2_server: level2_server
+  level1_workstation: level1_workstation
+  level2_workstation: level2_workstation
+lsa_cis_exceptions: {}
+lsa_security_health_exceptions: {}
+lsa_security_health_stale_account_days: 90
 lsa_modules:
   - cis
   - security_health

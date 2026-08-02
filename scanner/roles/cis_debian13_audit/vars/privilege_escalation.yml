@@ -1,0 +1,124 @@
+---
+cis_privilege_escalation_controls:
+  - id: "5.2.1"
+    title: Ensure sudo is installed
+    profiles: &all_profiles
+      - level1_server
+      - level1_workstation
+      - level2_server
+      - level2_workstation
+    expected: sudo or sudo-ldap is installed, or both libsss-sudo and sssd are installed
+    audit: !unsafe |
+      if dpkg-query -W -f='${Status}' sudo sudo-ldap 2>/dev/null | grep -q 'install ok installed'; then
+        dpkg-query -W -f='${Package}: ${Status}\n' sudo sudo-ldap 2>/dev/null | grep 'install ok installed'
+        exit 0
+      fi
+      if dpkg-query -W -f='${Status}' libsss-sudo 2>/dev/null | grep -q 'install ok installed' &&
+         dpkg-query -W -f='${Status}' sssd 2>/dev/null | grep -q 'install ok installed'; then
+        echo 'libsss-sudo and sssd are installed'
+        exit 0
+      fi
+      echo 'Neither sudo/sudo-ldap nor libsss-sudo+sssd is installed'
+      exit 1
+
+  - id: "5.2.2"
+    title: Ensure sudo commands use pty
+    profiles: *all_profiles
+    expected: An effective Defaults use_pty setting exists and no active Defaults !use_pty setting exists
+    audit: !unsafe |
+      command -v sudo >/dev/null 2>&1 || { echo 'sudo is not installed'; exit 1; }
+      files=(/etc/sudoers)
+      while IFS= read -r -d '' f; do files+=("$f"); done < <(find /etc/sudoers.d -maxdepth 1 -type f ! -name '*.*' ! -name '*~' -print0 2>/dev/null)
+      enabled="$(grep -HPi '^\s*Defaults\s+([^#\n\r]+,\s*)?use_pty\b' "${files[@]}" 2>/dev/null || true)"
+      disabled="$(grep -HPi '^\s*Defaults\s+([^#\n\r]+,\s*)?!use_pty\b' "${files[@]}" 2>/dev/null || true)"
+      [ -n "$enabled" ] && printf '%s\n' "$enabled"
+      [ -z "$disabled" ] || { printf 'Disabling entries:\n%s\n' "$disabled"; exit 1; }
+      [ -n "$enabled" ] || { echo 'Defaults use_pty was not found'; exit 1; }
+      exit 0
+
+  - id: "5.2.3"
+    title: Ensure sudo log file exists
+    profiles: *all_profiles
+    expected: An active sudo Defaults logfile setting points to a non-empty absolute path
+    audit: !unsafe |
+      command -v sudo >/dev/null 2>&1 || { echo 'sudo is not installed'; exit 1; }
+      files=(/etc/sudoers)
+      while IFS= read -r -d '' f; do files+=("$f"); done < <(find /etc/sudoers.d -maxdepth 1 -type f ! -name '*.*' ! -name '*~' -print0 2>/dev/null)
+      matches="$(grep -HPi '^\s*Defaults\s+([^#]+,\s*)?logfile\s*=\s*["'"']?/[^,"'"'[:space:]]+["'"']?' "${files[@]}" 2>/dev/null || true)"
+      [ -n "$matches" ] || { echo 'No Defaults logfile setting found'; exit 1; }
+      printf '%s\n' "$matches"
+      exit 0
+
+  - id: "5.2.4"
+    title: Ensure users must provide password for escalation
+    profiles:
+      - level2_server
+      - level2_workstation
+    expected: No active NOPASSWD tags exist in sudoers configuration
+    audit: !unsafe |
+      command -v sudo >/dev/null 2>&1 || { echo 'sudo is not installed'; exit 1; }
+      files=(/etc/sudoers)
+      while IFS= read -r -d '' f; do files+=("$f"); done < <(find /etc/sudoers.d -maxdepth 1 -type f ! -name '*.*' ! -name '*~' -print0 2>/dev/null)
+      matches="$(grep -HPi '^[[:space:]]*[^#].*\bNOPASSWD\b' "${files[@]}" 2>/dev/null || true)"
+      [ -z "$matches" ] || { printf '%s\n' "$matches"; exit 1; }
+      echo 'No active NOPASSWD tags found'
+      exit 0
+
+  - id: "5.2.5"
+    title: Ensure re-authentication for privilege escalation is not disabled globally
+    profiles: *all_profiles
+    expected: No active !authenticate tags exist in sudoers configuration
+    audit: !unsafe |
+      command -v sudo >/dev/null 2>&1 || { echo 'sudo is not installed'; exit 1; }
+      files=(/etc/sudoers)
+      while IFS= read -r -d '' f; do files+=("$f"); done < <(find /etc/sudoers.d -maxdepth 1 -type f ! -name '*.*' ! -name '*~' -print0 2>/dev/null)
+      matches="$(grep -HPi '^[[:space:]]*[^#].*!authenticate\b' "${files[@]}" 2>/dev/null || true)"
+      [ -z "$matches" ] || { printf '%s\n' "$matches"; exit 1; }
+      echo 'No active !authenticate tags found'
+      exit 0
+
+  - id: "5.2.6"
+    title: Ensure sudo timestamp_timeout is configured
+    profiles: *all_profiles
+    expected: Every configured timestamp_timeout is between 0 and 15 minutes; otherwise the sudo default is at most 15 minutes
+    audit: !unsafe |
+      command -v sudo >/dev/null 2>&1 || { echo 'sudo is not installed'; exit 1; }
+      files=(/etc/sudoers)
+      while IFS= read -r -d '' f; do files+=("$f"); done < <(find /etc/sudoers.d -maxdepth 1 -type f ! -name '*.*' ! -name '*~' -print0 2>/dev/null)
+      values="$(grep -HPio 'timestamp_timeout\s*=\s*[-]?[0-9]+([.][0-9]+)?' "${files[@]}" 2>/dev/null || true)"
+      bad=0
+      if [ -n "$values" ]; then
+        printf '%s\n' "$values"
+        while IFS= read -r line; do
+          value="$(printf '%s\n' "$line" | sed -E 's/.*=\s*//')"
+          awk -v v="$value" 'BEGIN { exit !(v >= 0 && v <= 15) }' || bad=1
+        done <<< "$values"
+      else
+        default_line="$(sudo -V 2>/dev/null | grep -Pi 'authentication timestamp timeout' | head -1 || true)"
+        printf '%s\n' "${default_line:-No explicit setting; sudo default could not be read}"
+        value="$(printf '%s\n' "$default_line" | grep -Po -- '-?[0-9]+([.][0-9]+)?' | head -1 || true)"
+        [ -n "$value" ] || exit 2
+        awk -v v="$value" 'BEGIN { exit !(v >= 0 && v <= 15) }' || bad=1
+      fi
+      exit "$bad"
+
+  - id: "5.2.7"
+    title: Ensure access to the su command is restricted
+    profiles: *all_profiles
+    expected: pam_wheel is required or requisite with use_uid and group=<empty_group>, and that group has no members
+    audit: !unsafe |
+      [ -f /etc/pam.d/su ] || { echo '/etc/pam.d/su is missing'; exit 1; }
+      line="$(grep -Pi '^\s*auth\s+(required|requisite)\s+pam_wheel\.so\s+.*\buse_uid\b.*\bgroup=\S+' /etc/pam.d/su | tail -1 || true)"
+      if [ -z "$line" ]; then
+        line="$(grep -Pi '^\s*auth\s+(required|requisite)\s+pam_wheel\.so\s+.*\bgroup=\S+.*\buse_uid\b' /etc/pam.d/su | tail -1 || true)"
+      fi
+      [ -n "$line" ] || { echo 'Compliant pam_wheel restriction was not found'; exit 1; }
+      group="$(printf '%s\n' "$line" | grep -Po 'group=\K\S+' | tail -1)"
+      group="${group%%[[:space:]#]*}"
+      entry="$(getent group "$group" || true)"
+      [ -n "$entry" ] || { echo "Configured group does not exist: $group"; exit 1; }
+      members="${entry##*:}"
+      echo "$line"
+      echo "$entry"
+      [ -z "$members" ] || { echo "Group $group is not empty"; exit 1; }
+      exit 0

@@ -1,0 +1,11 @@
+{{ {
+  'metadata': {
+    'host': security_health_report_hostname,
+    'inventory_host': inventory_hostname,
+    'generated_utc': security_health_report_timestamp,
+    'distribution': ansible_distribution | default('unknown'),
+    'distribution_version': ansible_distribution_version | default('unknown'),
+    'kernel': ansible_kernel | default('unknown')
+  },
+  'results': security_health_results
+} | to_nice_json }}

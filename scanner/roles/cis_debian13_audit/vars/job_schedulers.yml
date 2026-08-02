@@ -1,0 +1,142 @@
+---
+cis_job_scheduler_controls:
+  - id: "2.4.1.1"
+    title: "Ensure cron daemon is enabled and active"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, its service is enabled and active.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then
+        echo "cron is not installed; cron subsection is not applicable"
+        exit 3
+      fi
+      unit="$(systemctl list-unit-files --type=service 2>/dev/null | awk '$1 ~ /^crond?\.service$/ {print $1; exit}')"
+      [ -n "$unit" ] || { echo "cron service unit not found"; exit 1; }
+      enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+      active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+      echo "$unit enabled=$enabled active=$active"
+      case "$enabled" in enabled|enabled-runtime) :;; *) exit 1;; esac
+      [ "$active" = active ]
+
+  - id: "2.4.1.2"
+    title: "Ensure access to /etc/crontab is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/crontab is owned by root:root and mode 0600 or more restrictive.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      [ -e /etc/crontab ] || { echo "/etc/crontab is missing"; exit 1; }
+      stat -Lc 'path=%n mode=%a uid=%u gid=%g' /etc/crontab
+      mode=$(stat -Lc '%a' /etc/crontab); uid=$(stat -Lc '%u' /etc/crontab); gid=$(stat -Lc '%g' /etc/crontab)
+      [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((8#$mode & 0177)) -eq 0 ]
+
+  - id: "2.4.1.3"
+    title: "Ensure access to /etc/cron.hourly is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/cron.hourly is owned by root:root and mode 0700 or more restrictive.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      [ -e /etc/cron.hourly ] || { echo "/etc/cron.hourly is missing"; exit 1; }
+      stat -Lc 'path=%n mode=%a uid=%u gid=%g' /etc/cron.hourly
+      mode=$(stat -Lc '%a' /etc/cron.hourly); uid=$(stat -Lc '%u' /etc/cron.hourly); gid=$(stat -Lc '%g' /etc/cron.hourly)
+      [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((8#$mode & 0077)) -eq 0 ]
+
+  - id: "2.4.1.4"
+    title: "Ensure access to /etc/cron.daily is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/cron.daily is owned by root:root and mode 0700 or more restrictive.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      [ -e /etc/cron.daily ] || { echo "/etc/cron.daily is missing"; exit 1; }
+      stat -Lc 'path=%n mode=%a uid=%u gid=%g' /etc/cron.daily
+      mode=$(stat -Lc '%a' /etc/cron.daily); uid=$(stat -Lc '%u' /etc/cron.daily); gid=$(stat -Lc '%g' /etc/cron.daily)
+      [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((8#$mode & 0077)) -eq 0 ]
+
+  - id: "2.4.1.5"
+    title: "Ensure access to /etc/cron.weekly is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/cron.weekly is owned by root:root and mode 0700 or more restrictive.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      [ -e /etc/cron.weekly ] || { echo "/etc/cron.weekly is missing"; exit 1; }
+      stat -Lc 'path=%n mode=%a uid=%u gid=%g' /etc/cron.weekly
+      mode=$(stat -Lc '%a' /etc/cron.weekly); uid=$(stat -Lc '%u' /etc/cron.weekly); gid=$(stat -Lc '%g' /etc/cron.weekly)
+      [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((8#$mode & 0077)) -eq 0 ]
+
+  - id: "2.4.1.6"
+    title: "Ensure access to /etc/cron.monthly is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/cron.monthly is owned by root:root and mode 0700 or more restrictive.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      [ -e /etc/cron.monthly ] || { echo "/etc/cron.monthly is missing"; exit 1; }
+      stat -Lc 'path=%n mode=%a uid=%u gid=%g' /etc/cron.monthly
+      mode=$(stat -Lc '%a' /etc/cron.monthly); uid=$(stat -Lc '%u' /etc/cron.monthly); gid=$(stat -Lc '%g' /etc/cron.monthly)
+      [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((8#$mode & 0077)) -eq 0 ]
+
+  - id: "2.4.1.7"
+    title: "Ensure access to /etc/cron.yearly is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/cron.yearly is owned by root:root and mode 0700 or more restrictive.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      [ -e /etc/cron.yearly ] || { echo "/etc/cron.yearly is missing"; exit 1; }
+      stat -Lc 'path=%n mode=%a uid=%u gid=%g' /etc/cron.yearly
+      mode=$(stat -Lc '%a' /etc/cron.yearly); uid=$(stat -Lc '%u' /etc/cron.yearly); gid=$(stat -Lc '%g' /etc/cron.yearly)
+      [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((8#$mode & 0077)) -eq 0 ]
+
+  - id: "2.4.1.8"
+    title: "Ensure access to /etc/cron.d is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/cron.d is owned by root:root and mode 0700 or more restrictive.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      [ -e /etc/cron.d ] || { echo "/etc/cron.d is missing"; exit 1; }
+      stat -Lc 'path=%n mode=%a uid=%u gid=%g' /etc/cron.d
+      mode=$(stat -Lc '%a' /etc/cron.d); uid=$(stat -Lc '%u' /etc/cron.d); gid=$(stat -Lc '%g' /etc/cron.d)
+      [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ $((8#$mode & 0077)) -eq 0 ]
+
+  - id: "2.4.1.9"
+    title: "Ensure access to crontab is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If cron is installed, /etc/cron.allow exists with root ownership and restrictive permissions, and /etc/cron.deny is absent.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' cron 2>/dev/null | grep -q '^install ok installed$'; then exit 3; fi
+      fail=0
+      if [ ! -f /etc/cron.allow ]; then echo "/etc/cron.allow is missing"; fail=1; else
+        stat -Lc 'path=%n mode=%a uid=%u gid=%g group=%G' /etc/cron.allow
+        mode=$(stat -Lc '%a' /etc/cron.allow); uid=$(stat -Lc '%u' /etc/cron.allow); gidname=$(stat -Lc '%G' /etc/cron.allow)
+        [ "$uid" -eq 0 ] || fail=1
+        case "$gidname" in root|crontab) :;; *) fail=1;; esac
+        [ $((8#$mode & 0133)) -eq 0 ] || fail=1
+      fi
+      if [ -e /etc/cron.deny ]; then echo "/etc/cron.deny exists"; fail=1; fi
+      exit "$fail"
+
+  - id: "2.4.2.1"
+    title: "Ensure access to at is configured"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: If at is installed, /etc/at.allow exists with root ownership and restrictive permissions, and /etc/at.deny is absent.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${Status}' at 2>/dev/null | grep -q '^install ok installed$'; then
+        echo "at is not installed; this recommendation is not applicable"
+        exit 3
+      fi
+      fail=0
+      if [ ! -f /etc/at.allow ]; then echo "/etc/at.allow is missing"; fail=1; else
+        stat -Lc 'path=%n mode=%a uid=%u gid=%g group=%G' /etc/at.allow
+        mode=$(stat -Lc '%a' /etc/at.allow); uid=$(stat -Lc '%u' /etc/at.allow); gidname=$(stat -Lc '%G' /etc/at.allow)
+        [ "$uid" -eq 0 ] || fail=1
+        case "$gidname" in root|daemon) :;; *) fail=1;; esac
+        [ $((8#$mode & 0133)) -eq 0 ] || fail=1
+      fi
+      if [ -e /etc/at.deny ]; then echo "/etc/at.deny exists"; fail=1; fi
+      exit "$fail"

@@ -1,0 +1,51 @@
+---
+- name: Load Section 3.1 network device controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/network_devices.yml"
+  tags: [section_3, section_3_1]
+
+- name: Section 3.1 - Manual network device controls
+  ansible.builtin.include_tasks: audit_manual_control.yml
+  loop: "{{ cis_network_device_controls | selectattr('assessment', 'equalto', 'Manual') | list }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_3, section_3_1]
+
+- name: Section 3.1 - Automated network device controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_network_device_controls | selectattr('assessment', 'equalto', 'Automated') | list }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_3, section_3_1]
+
+- name: Load Section 3.2 network kernel module controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/network_kernel_modules.yml"
+  tags: [section_3, section_3_2]
+
+- name: Section 3.2 - Network kernel module controls
+  ansible.builtin.include_tasks: audit_kernel_module.yml
+  loop: "{{ cis_network_kernel_module_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_3, section_3_2]
+
+- name: Load Section 3.3 network kernel parameter controls
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/network_kernel_parameters.yml"
+  tags: [section_3, section_3_3]
+
+- name: Section 3.3 - Network kernel parameter controls
+  ansible.builtin.include_tasks: audit_network_sysctl_control.yml
+  loop: "{{ cis_network_kernel_parameter_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_3, section_3_3]

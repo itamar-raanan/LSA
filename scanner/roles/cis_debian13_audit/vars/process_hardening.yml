@@ -1,0 +1,142 @@
+---
+cis_process_hardening_controls:
+  - id: '1.5.1'
+    title: Ensure fs.protected_hardlinks is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: fs.protected_hardlinks equals 1 at runtime and in effective persistent configuration.
+    parameter: fs.protected_hardlinks
+    allowed_values: ['1']
+
+  - id: '1.5.2'
+    title: Ensure fs.protected_symlinks is configured
+    assessment: Automated
+    profiles: [level2_server, level2_workstation]
+    expected: fs.protected_symlinks equals 1 at runtime and in effective persistent configuration.
+    parameter: fs.protected_symlinks
+    allowed_values: ['1']
+
+  - id: '1.5.3'
+    title: Ensure kernel.yama.ptrace_scope is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: kernel.yama.ptrace_scope equals 1 at runtime and in effective persistent configuration.
+    parameter: kernel.yama.ptrace_scope
+    allowed_values: ['1']
+
+  - id: '1.5.4'
+    title: Ensure fs.suid_dumpable is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: fs.suid_dumpable equals 0 at runtime and in effective persistent configuration.
+    parameter: fs.suid_dumpable
+    allowed_values: ['0']
+
+  - id: '1.5.5'
+    title: Ensure kernel.dmesg_restrict is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: kernel.dmesg_restrict equals 1 at runtime and in effective persistent configuration.
+    parameter: kernel.dmesg_restrict
+    allowed_values: ['1']
+
+  - id: '1.5.8'
+    title: Ensure kernel.kptr_restrict is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: kernel.kptr_restrict equals 1 or 2 at runtime and in effective persistent configuration.
+    parameter: kernel.kptr_restrict
+    allowed_values: ['1', '2']
+
+  - id: '1.5.9'
+    title: Ensure kernel.randomize_va_space is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: kernel.randomize_va_space equals 2 at runtime and in effective persistent configuration.
+    parameter: kernel.randomize_va_space
+    allowed_values: ['2']
+
+  - id: '1.5.10'
+    title: Ensure kernel.yama.ptrace_scope is configured to a restricted value
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: kernel.yama.ptrace_scope equals 1, 2, or 3 at runtime and in effective persistent configuration.
+    parameter: kernel.yama.ptrace_scope
+    allowed_values: ['1', '2', '3']
+
+cis_process_hardening_shell_controls:
+  - id: '1.5.6'
+    title: Ensure prelink is not installed
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: The prelink package is not installed.
+    audit: !unsafe |
+      status="$(dpkg-query -W -f='${db:Status-Status}' prelink 2>/dev/null || true)"
+      printf 'prelink=%s\n' "${status:-not installed}"
+      [[ "$status" != installed ]]
+
+  - id: '1.5.7'
+    title: Ensure Automatic Error Reporting is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: Apport is absent, or disabled in /etc/default/apport and its service is not active.
+    audit: !unsafe |
+      installed="$(dpkg-query -W -f='${db:Status-Status}' apport 2>/dev/null || true)"
+      if [[ "$installed" != installed ]]; then
+        echo 'apport is not installed'
+        exit 0
+      fi
+      enabled="$(awk -F= '/^\s*enabled\s*=/{gsub(/[[:space:]]/,"",$2); v=$2} END{print v}' /etc/default/apport 2>/dev/null)"
+      active="$(systemctl is-active apport.service 2>/dev/null || true)"
+      printf 'enabled=%s\nservice=%s\n' "${enabled:-unset}" "${active:-unknown}"
+      [[ "$enabled" == 0 && "$active" != active ]]
+
+  - id: '1.5.11'
+    title: Ensure core file size is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: The effective hard core limit for wildcard users is 0 and no later wildcard entry permits core dumps.
+    audit: !unsafe |
+      shopt -s nullglob
+      files=(/etc/security/limits.conf /etc/security/limits.d/*.conf)
+      effective=""
+      source_file=""
+      for file in "${files[@]}"; do
+        [[ -r "$file" ]] || continue
+        while read -r domain type item value rest; do
+          [[ "$domain" == \#* || -z "$domain" ]] && continue
+          if [[ "$domain" == '*' && "$type" == hard && "$item" == core ]]; then
+            effective="$value"; source_file="$file"
+          fi
+        done < "$file"
+      done
+      printf 'effective=%s\nsource=%s\n' "${effective:-unset}" "${source_file:-not found}"
+      [[ "$effective" == 0 ]]
+
+  - id: '1.5.12'
+    title: Ensure systemd-coredump ProcessSizeMax is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: The effective systemd-coredump ProcessSizeMax value is 0, or systemd-coredump is not installed.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${db:Status-Status}' systemd-coredump 2>/dev/null | grep -qx installed; then
+        echo 'systemd-coredump is not installed'
+        exit 0
+      fi
+      value="$(systemd-analyze cat-config systemd/coredump.conf 2>/dev/null | awk -F= '/^\s*ProcessSizeMax\s*=/{gsub(/[[:space:]]/,"",$2); v=$2} END{print v}')"
+      printf 'ProcessSizeMax=%s\n' "${value:-unset}"
+      [[ "$value" == 0 ]]
+
+  - id: '1.5.13'
+    title: Ensure systemd-coredump Storage is configured
+    assessment: Automated
+    profiles: [level1_server, level1_workstation, level2_server, level2_workstation]
+    expected: The effective systemd-coredump Storage value is none, or systemd-coredump is not installed.
+    audit: !unsafe |
+      if ! dpkg-query -W -f='${db:Status-Status}' systemd-coredump 2>/dev/null | grep -qx installed; then
+        echo 'systemd-coredump is not installed'
+        exit 0
+      fi
+      value="$(systemd-analyze cat-config systemd/coredump.conf 2>/dev/null | awk -F= '/^\s*Storage\s*=/{gsub(/[[:space:]]/,"",$2); v=tolower($2)} END{print v}')"
+      printf 'Storage=%s\n' "${value:-unset}"
+      [[ "$value" == none ]]

@@ -1,0 +1,3 @@
+ID,Category,Severity,Status,Title,Summary,Actual,Remediation,Verification
+{% for r in security_health_results %}"{{ r.id | replace('"','""') }}","{{ r.category | replace('"','""') }}","{{ r.severity | replace('"','""') }}","{{ r.status | replace('"','""') }}","{{ r.title | replace('"','""') }}","{{ r.summary | replace('"','""') }}","{{ r.actual | default('') | replace('"','""') | replace('\n',' ') }}","{{ r.remediation | default('') | replace('"','""') | replace('\n',' ') }}","{{ r.verification | default('') | replace('"','""') | replace('\n',' ') }}"
+{% endfor %}

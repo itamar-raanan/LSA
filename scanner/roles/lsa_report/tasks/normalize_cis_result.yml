@@ -1,0 +1,46 @@
+---
+- name: Resolve normalized benchmark category
+  ansible.builtin.set_fact:
+    lsa_cis_category: >-
+      {% set id = lsa_cis_result.id %}
+      {% if id.startswith('1.1') or id.startswith('7.') %}filesystem
+      {% elif id.startswith('1.2') %}packages
+      {% elif id.startswith('1.3') %}mandatory_access
+      {% elif id.startswith('1.4') or id.startswith('1.5') %}kernel
+      {% elif id.startswith('1.6') or id.startswith('5.2') or id.startswith('5.3') or id.startswith('5.4') %}accounts
+      {% elif id.startswith('1.7') or id.startswith('2.1') or id.startswith('2.2') or id.startswith('2.4') %}services
+      {% elif id.startswith('2.3') %}time
+      {% elif id.startswith('3.') or id.startswith('4.') %}network
+      {% elif id.startswith('5.1') %}ssh
+      {% elif id.startswith('6.1') %}logging
+      {% elif id.startswith('6.2') or id.startswith('6.3') %}audit
+      {% else %}services
+      {% endif %}
+  changed_when: false
+
+- name: Append normalized benchmark finding
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [{
+        'control_id': 'CIS-DEBIAN13-' ~ lsa_cis_result.id,
+        'module': 'cis_debian13',
+        'category': lsa_cis_category | trim,
+        'title': lsa_cis_result.title,
+        'severity': 'medium',
+        'status': (
+          'pass' if lsa_cis_result.status == 'PASS' else
+          'fail' if lsa_cis_result.status == 'FAIL' else
+          'manual' if lsa_cis_result.status == 'MANUAL' else
+          'not_applicable' if lsa_cis_result.status in ['NOT_APPLICABLE', 'EXCLUDED'] else
+          'error'
+        ),
+        'expected': (lsa_cis_result.expected | default('') | string)[:10000],
+        'actual': (lsa_cis_result.actual | default('') | string)[:10000],
+        'evidence': [((lsa_cis_result.evidence | default({}) | to_json)[:10000])],
+        'remediation_summary': (lsa_cis_result.remediation | default('Review the failed control and apply the approved change.') | string)[:10000],
+        'remediation_commands': [],
+        'verification_commands': [],
+        'reboot_required': false,
+        'service_restart': false
+      }] }}
+  changed_when: false

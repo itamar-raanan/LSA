@@ -1,0 +1,117 @@
+---
+- name: Load Section 1 control definitions
+  ansible.builtin.include_vars:
+    file: "{{ item }}"
+  loop:
+    - "{{ role_path }}/vars/kernel_modules.yml"
+    - "{{ role_path }}/vars/filesystem_mounts.yml"
+    - "{{ role_path }}/vars/package_management.yml"
+    - "{{ role_path }}/vars/apparmor.yml"
+    - "{{ role_path }}/vars/bootloader.yml"
+    - "{{ role_path }}/vars/process_hardening.yml"
+    - "{{ role_path }}/vars/warning_banners.yml"
+    - "{{ role_path }}/vars/gdm.yml"
+  tags:
+    - section_1
+    - section_1_1
+    - section_1_1_1
+    - section_1_1_2
+    - section_1_2
+    - section_1_2_1
+    - section_1_2_2
+    - section_1_3
+    - section_1_3_1
+    - section_1_4
+    - section_1_5
+    - section_1_6
+    - section_1_7
+
+- name: Section 1.1.1 - Filesystem kernel modules
+  ansible.builtin.include_tasks: audit_kernel_module.yml
+  loop: "{{ cis_kernel_module_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_1, section_1_1_1]
+
+- name: Section 1.1.2 - Filesystem partitions and mount options
+  ansible.builtin.include_tasks: audit_mount.yml
+  loop: "{{ cis_filesystem_mount_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_1, section_1_1_2]
+
+- name: Section 1.2 - Automated package-management controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_package_management_controls | selectattr('assessment', 'equalto', 'Automated') | list }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_2, section_1_2_1, section_1_2_2]
+
+- name: Section 1.2 - Manual package-management controls
+  ansible.builtin.include_tasks: audit_manual_control.yml
+  loop: "{{ cis_package_management_controls | selectattr('assessment', 'equalto', 'Manual') | list }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_2, section_1_2_1, section_1_2_2]
+
+- name: Section 1.3.1 - AppArmor
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_apparmor_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_3, section_1_3_1]
+
+- name: Section 1.4 - Bootloader
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_bootloader_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_4]
+
+- name: Section 1.5 - Sysctl process hardening controls
+  ansible.builtin.include_tasks: audit_sysctl_control.yml
+  loop: "{{ cis_process_hardening_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_5]
+
+- name: Section 1.5 - Other process hardening controls
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_process_hardening_shell_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_5]
+
+- name: Section 1.6 - Command line warning banners
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_warning_banner_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_6]
+
+- name: Section 1.7 - GNOME Display Manager
+  ansible.builtin.include_tasks: audit_shell_control.yml
+  loop: "{{ cis_gdm_controls }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: (cis_control.profiles | intersect(cis_effective_profiles) | length) > 0
+  tags: [section_1, section_1_7]

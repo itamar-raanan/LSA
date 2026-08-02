@@ -1,0 +1,68 @@
+---
+- name: "{{ cis_control.id }} | Audit sysctl runtime and persistent value"
+  ansible.builtin.shell: |
+    set -o pipefail
+    parameter={{ cis_control.parameter | quote }}
+    runtime="$(sysctl -n "$parameter" 2>/dev/null || true)"
+    persistent=""
+    persistent_file=""
+    systemd_sysctl="$(readlink -e /lib/systemd/systemd-sysctl || readlink -e /usr/lib/systemd/systemd-sysctl || true)"
+    if [[ -n "$systemd_sysctl" ]]; then
+      while IFS= read -r file; do
+        file="${file//# /}"
+        [[ -r "$file" ]] || continue
+        value="$(awk -F= -v key="$parameter" '
+          $0 !~ /^[[:space:]]*#/ && $1 ~ "^[[:space:]]*" key "[[:space:]]*$" {
+            gsub(/[[:space:]]/, "", $2); v=$2
+          } END {print v}' "$file")"
+        if [[ -n "$value" ]]; then
+          persistent="$value"
+          persistent_file="$file"
+          break
+        fi
+      done < <("$systemd_sysctl" --cat-config 2>/dev/null | tac | sed -n 's/^# \(\/.*\.conf\)$/\1/p')
+    fi
+    printf 'runtime=%s\npersistent=%s\nfile=%s\n' "$runtime" "$persistent" "${persistent_file:-not found}"
+    allowed='{{ cis_control.allowed_values | join(" ") }}'
+    runtime_ok=1; persistent_ok=1
+    grep -qw -- "$runtime" <<< "$allowed" || runtime_ok=0
+    grep -qw -- "$persistent" <<< "$allowed" || persistent_ok=0
+    [[ "$runtime_ok" == 1 && "$persistent_ok" == 1 ]]
+  args:
+    executable: /bin/bash
+  register: cis_sysctl_audit
+  changed_when: false
+  failed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Record sysctl audit result"
+  ansible.builtin.set_fact:
+    cis_results: >-
+      {{ cis_results + [{
+        'id': cis_control.id,
+        'title': cis_control.title,
+        'section': cis_control.id.rsplit('.', 1)[0],
+        'assessment': 'Automated',
+        'profiles': cis_control.profiles,
+        'status':
+          ('EXCLUDED' if cis_control.id in cis_exceptions else
+           'PASS' if cis_sysctl_audit.rc == 0 else
+           'FAIL' if cis_sysctl_audit.rc == 1 else 'ERROR'),
+        'expected': cis_control.expected,
+        'remediation': cis_remediations.get(cis_control.id,
+          'Review the control evidence and expected state, apply the approved configuration change, and re-run the audit.'),
+        'actual':
+          ('Documented exception: ' ~ cis_exceptions[cis_control.id]
+           if cis_control.id in cis_exceptions else
+           'rc=' ~ (cis_sysctl_audit.rc | string) ~
+           '; ' ~ (cis_sysctl_audit.stdout | default('') | trim)),
+        'evidence': {
+          'stdout': cis_sysctl_audit.stdout_lines | default([]),
+          'stderr': cis_sysctl_audit.stderr_lines | default([]),
+          'rc': cis_sysctl_audit.rc
+        }
+      }] }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"

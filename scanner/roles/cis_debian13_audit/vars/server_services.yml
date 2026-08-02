@@ -1,0 +1,479 @@
+---
+cis_server_service_controls:
+  - id: "2.1.1"
+    title: "Ensure autofs services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' autofs 2>/dev/null | grep -q '^install ok installed$'; then installed+=("autofs"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled autofs.service 2>/dev/null || true)"
+      active="$(systemctl is-active autofs.service 2>/dev/null || true)"
+      echo "autofs.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.2"
+    title: "Ensure avahi daemon services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' avahi-daemon 2>/dev/null | grep -q '^install ok installed$'; then installed+=("avahi-daemon"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled avahi-daemon.socket 2>/dev/null || true)"
+      active="$(systemctl is-active avahi-daemon.socket 2>/dev/null || true)"
+      echo "avahi-daemon.socket: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled avahi-daemon.service 2>/dev/null || true)"
+      active="$(systemctl is-active avahi-daemon.service 2>/dev/null || true)"
+      echo "avahi-daemon.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.3"
+    title: "Ensure dhcp server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' kea-dhcp4-server 2>/dev/null | grep -q '^install ok installed$'; then installed+=("kea-dhcp4-server"); fi
+      if dpkg-query -W -f='${Status}' kea-dhcp6-server 2>/dev/null | grep -q '^install ok installed$'; then installed+=("kea-dhcp6-server"); fi
+      if dpkg-query -W -f='${Status}' kea-dhcp-ddns-server 2>/dev/null | grep -q '^install ok installed$'; then installed+=("kea-dhcp-ddns-server"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled kea-dhcp-ddns-server.service 2>/dev/null || true)"
+      active="$(systemctl is-active kea-dhcp-ddns-server.service 2>/dev/null || true)"
+      echo "kea-dhcp-ddns-server.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled kea-dhcp4-server.service 2>/dev/null || true)"
+      active="$(systemctl is-active kea-dhcp4-server.service 2>/dev/null || true)"
+      echo "kea-dhcp4-server.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled kea-dhcp6-server.service 2>/dev/null || true)"
+      active="$(systemctl is-active kea-dhcp6-server.service 2>/dev/null || true)"
+      echo "kea-dhcp6-server.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.4"
+    title: "Ensure dns server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' bind9 2>/dev/null | grep -q '^install ok installed$'; then installed+=("bind9"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled named.service 2>/dev/null || true)"
+      active="$(systemctl is-active named.service 2>/dev/null || true)"
+      echo "named.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.5"
+    title: "Ensure dnsmasq services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' dnsmasq 2>/dev/null | grep -q '^install ok installed$'; then installed+=("dnsmasq"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled dnsmasq.service 2>/dev/null || true)"
+      active="$(systemctl is-active dnsmasq.service 2>/dev/null || true)"
+      echo "dnsmasq.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.6"
+    title: "Ensure ftp server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' vsftpd 2>/dev/null | grep -q '^install ok installed$'; then installed+=("vsftpd"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled vsftpd.service 2>/dev/null || true)"
+      active="$(systemctl is-active vsftpd.service 2>/dev/null || true)"
+      echo "vsftpd.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.7"
+    title: "Ensure ldap server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' slapd 2>/dev/null | grep -q '^install ok installed$'; then installed+=("slapd"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled slapd.service 2>/dev/null || true)"
+      active="$(systemctl is-active slapd.service 2>/dev/null || true)"
+      echo "slapd.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.8"
+    title: "Ensure message access server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' dovecot-imapd 2>/dev/null | grep -q '^install ok installed$'; then installed+=("dovecot-imapd"); fi
+      if dpkg-query -W -f='${Status}' dovecot-pop3d 2>/dev/null | grep -q '^install ok installed$'; then installed+=("dovecot-pop3d"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled dovecot.socket 2>/dev/null || true)"
+      active="$(systemctl is-active dovecot.socket 2>/dev/null || true)"
+      echo "dovecot.socket: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled dovecot.service 2>/dev/null || true)"
+      active="$(systemctl is-active dovecot.service 2>/dev/null || true)"
+      echo "dovecot.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.9"
+    title: "Ensure network file system services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' nfs-kernel-server 2>/dev/null | grep -q '^install ok installed$'; then installed+=("nfs-kernel-server"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled nfs-server.service 2>/dev/null || true)"
+      active="$(systemctl is-active nfs-server.service 2>/dev/null || true)"
+      echo "nfs-server.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.10"
+    title: "Ensure nis server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' ypserv 2>/dev/null | grep -q '^install ok installed$'; then installed+=("ypserv"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled ypserv.service 2>/dev/null || true)"
+      active="$(systemctl is-active ypserv.service 2>/dev/null || true)"
+      echo "ypserv.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.11"
+    title: "Ensure print server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' cups 2>/dev/null | grep -q '^install ok installed$'; then installed+=("cups"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled cups.socket 2>/dev/null || true)"
+      active="$(systemctl is-active cups.socket 2>/dev/null || true)"
+      echo "cups.socket: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled cups.service 2>/dev/null || true)"
+      active="$(systemctl is-active cups.service 2>/dev/null || true)"
+      echo "cups.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.12"
+    title: "Ensure rpcbind services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' rpcbind 2>/dev/null | grep -q '^install ok installed$'; then installed+=("rpcbind"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled rpcbind.socket 2>/dev/null || true)"
+      active="$(systemctl is-active rpcbind.socket 2>/dev/null || true)"
+      echo "rpcbind.socket: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled rpcbind.service 2>/dev/null || true)"
+      active="$(systemctl is-active rpcbind.service 2>/dev/null || true)"
+      echo "rpcbind.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.13"
+    title: "Ensure rsync services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' rsync 2>/dev/null | grep -q '^install ok installed$'; then installed+=("rsync"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled rsync.service 2>/dev/null || true)"
+      active="$(systemctl is-active rsync.service 2>/dev/null || true)"
+      echo "rsync.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.14"
+    title: "Ensure samba file server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' samba 2>/dev/null | grep -q '^install ok installed$'; then installed+=("samba"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled smbd.service 2>/dev/null || true)"
+      active="$(systemctl is-active smbd.service 2>/dev/null || true)"
+      echo "smbd.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.15"
+    title: "Ensure snmp services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' snmpd 2>/dev/null | grep -q '^install ok installed$'; then installed+=("snmpd"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled snmpd.service 2>/dev/null || true)"
+      active="$(systemctl is-active snmpd.service 2>/dev/null || true)"
+      echo "snmpd.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.16"
+    title: "Ensure telnet-server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' telnetd 2>/dev/null | grep -q '^install ok installed$'; then installed+=("telnetd"); fi
+      if dpkg-query -W -f='${Status}' telnetd-ssl 2>/dev/null | grep -q '^install ok installed$'; then installed+=("telnetd-ssl"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled inetutils-inetd.service 2>/dev/null || true)"
+      active="$(systemctl is-active inetutils-inetd.service 2>/dev/null || true)"
+      echo "inetutils-inetd.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.17"
+    title: "Ensure tftp server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' tftpd-hpa 2>/dev/null | grep -q '^install ok installed$'; then installed+=("tftpd-hpa"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled tftpd-hpa.service 2>/dev/null || true)"
+      active="$(systemctl is-active tftpd-hpa.service 2>/dev/null || true)"
+      echo "tftpd-hpa.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.18"
+    title: "Ensure web proxy server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' squid 2>/dev/null | grep -q '^install ok installed$'; then installed+=("squid"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled squid.service 2>/dev/null || true)"
+      active="$(systemctl is-active squid.service 2>/dev/null || true)"
+      echo "squid.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.19"
+    title: "Ensure web server services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' apache2 2>/dev/null | grep -q '^install ok installed$'; then installed+=("apache2"); fi
+      if dpkg-query -W -f='${Status}' nginx 2>/dev/null | grep -q '^install ok installed$'; then installed+=("nginx"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled apache2.socket 2>/dev/null || true)"
+      active="$(systemctl is-active apache2.socket 2>/dev/null || true)"
+      echo "apache2.socket: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled apache2.service 2>/dev/null || true)"
+      active="$(systemctl is-active apache2.service 2>/dev/null || true)"
+      echo "apache2.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      enabled="$(systemctl is-enabled nginx.service 2>/dev/null || true)"
+      active="$(systemctl is-active nginx.service 2>/dev/null || true)"
+      echo "nginx.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.20"
+    title: "Ensure xinetd services are not in use"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' xinetd 2>/dev/null | grep -q '^install ok installed$'; then installed+=("xinetd"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      bad=0
+      echo "Installed packages: ${installed[*]}"
+      enabled="$(systemctl is-enabled xinetd.service 2>/dev/null || true)"
+      active="$(systemctl is-active xinetd.service 2>/dev/null || true)"
+      echo "xinetd.service: enabled=${enabled:-unknown} active=${active:-unknown}"
+      if [ "$enabled" = "enabled" ] || [ "$active" = "active" ]; then bad=1; fi
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.21"
+    title: "Ensure X window server services are not in use"
+    assessment: Automated
+    profiles: [level2_server]
+    expected: The package is absent, or every associated service and socket is disabled and inactive.
+    audit: !unsafe |
+      installed=()
+      if dpkg-query -W -f='${Status}' xserver-common 2>/dev/null | grep -q '^install ok installed$'; then installed+=("xserver-common"); fi
+      if [ "${#installed[@]}" -eq 0 ]; then
+        echo "PASS: packages are not installed"
+        exit 0
+      fi
+      echo "FAIL: installed packages: ${installed[*]}"
+      exit 1
+
+  - id: "2.1.22"
+    title: "Ensure mail transfer agents are configured for local-only mode"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: SMTP ports 25, 465, and 587 do not listen on non-loopback interfaces.
+    audit: !unsafe |
+      bad=0
+      for port in 25 465 587; do
+        listeners="$(ss -H -lntu 2>/dev/null | awk -v p=":${port}" '$5 ~ p"$" {print $5}')"
+        while IFS= read -r endpoint; do
+          [ -z "$endpoint" ] && continue
+          case "$endpoint" in
+            127.0.0.1:*|\[::1\]:*|::1:*) echo "PASS: $endpoint" ;;
+            *) echo "FAIL: port $port listens on $endpoint"; bad=1 ;;
+          esac
+        done <<< "$listeners"
+      done
+      [ "$bad" -eq 0 ]
+
+  - id: "2.1.23"
+    title: "Ensure only approved services are listening on a network interface"
+    assessment: Manual
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: Every listening service, port, protocol, and interface is approved by local site policy.
+    guidance: Run ss -plntu and review every listener against the approved-service inventory.

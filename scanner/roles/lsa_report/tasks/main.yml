@@ -24,8 +24,47 @@
   ansible.builtin.set_fact:
     lsa_findings: []
 
-- name: Run Debian 13 baseline controls
-  ansible.builtin.import_tasks: "../../../plugins/debian/cis_13/tasks/main.yml"
+- name: Run complete Debian 13 benchmark audit
+  ansible.builtin.include_role:
+    name: cis_debian13_audit
+    public: true
+  vars:
+    cis_profile: "{{ lsa_cis_profile_map[lsa_profile] }}"
+    cis_exceptions: "{{ lsa_cis_exceptions }}"
+    cis_generate_standalone_reports: false
+  when:
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_major_version == '13'
+
+- name: Normalize Debian 13 benchmark results
+  ansible.builtin.include_tasks: normalize_cis_result.yml
+  loop: "{{ cis_results | default([]) }}"
+  loop_control:
+    loop_var: lsa_cis_result
+    label: "{{ lsa_cis_result.id }} {{ lsa_cis_result.title }}"
+  when:
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_major_version == '13'
+
+- name: Run supplemental Linux security-health audit
+  ansible.builtin.include_role:
+    name: linux_security_health
+    public: true
+  vars:
+    security_health_enabled: true
+    security_health_generate_standalone_reports: false
+    security_health_exceptions: "{{ lsa_security_health_exceptions }}"
+    security_health_stale_account_days: "{{ lsa_security_health_stale_account_days }}"
+  when:
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_major_version == '13'
+
+- name: Normalize supplemental security-health results
+  ansible.builtin.include_tasks: normalize_health_result.yml
+  loop: "{{ security_health_results | default([]) }}"
+  loop_control:
+    loop_var: lsa_health_result
+    label: "{{ lsa_health_result.id }} {{ lsa_health_result.title }}"
   when:
     - ansible_facts.distribution == 'Debian'
     - ansible_facts.distribution_major_version == '13'

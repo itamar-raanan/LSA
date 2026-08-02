@@ -1,0 +1,8 @@
+---
+cis_network_kernel_module_controls:
+  - {id: '3.2.1', title: 'Ensure atm kernel module is not available', module: atm, module_type: net, profiles: [level1_server, level2_server, level1_workstation, level2_workstation]}
+  - {id: '3.2.2', title: 'Ensure can kernel module is not available', module: can, module_type: net, profiles: [level1_server, level2_server, level1_workstation, level2_workstation]}
+  - {id: '3.2.3', title: 'Ensure dccp kernel module is not available', module: dccp, module_type: net, profiles: [level1_server, level2_server, level1_workstation, level2_workstation]}
+  - {id: '3.2.4', title: 'Ensure rds kernel module is not available', module: rds, module_type: net, profiles: [level1_server, level2_server, level1_workstation, level2_workstation]}
+  - {id: '3.2.5', title: 'Ensure sctp kernel module is not available', module: sctp, module_type: net, profiles: [level1_server, level2_server, level1_workstation, level2_workstation]}
+  - {id: '3.2.6', title: 'Ensure tipc kernel module is not available', module: tipc, module_type: net, profiles: [level1_server, level2_server, level1_workstation, level2_workstation]}

@@ -1,0 +1,18 @@
+---
+- name: "{{ cis_control.id }} | Record profile exclusion"
+  ansible.builtin.set_fact:
+    cis_results: >-
+      {{ cis_results + [{
+        'id': cis_control.id,
+        'title': cis_control.title,
+        'section': cis_control.id.rsplit('.', 1)[0],
+        'assessment': cis_control.assessment | default('Automated'),
+        'profiles': cis_control.profiles,
+        'status': 'NOT_APPLICABLE',
+        'expected': cis_control.expected | default('Control satisfies the benchmark audit procedure.'),
+        'remediation': cis_remediations.get(cis_control.id,
+          'Review the control evidence and expected state, apply the approved configuration change, and re-run the audit.'),
+        'actual': 'Control is outside the selected ' ~ cis_profile ~ ' profile.',
+        'evidence': {'selected_profile': cis_profile, 'control_profiles': cis_control.profiles}
+      }] }}
+  changed_when: false

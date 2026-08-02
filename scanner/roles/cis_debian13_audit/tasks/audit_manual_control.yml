@@ -1,0 +1,22 @@
+---
+- name: "{{ cis_control.id }} | Record manual control"
+  ansible.builtin.set_fact:
+    cis_results: >-
+      {{ cis_results + [{
+        'id': cis_control.id,
+        'title': cis_control.title,
+        'section': cis_control.id.rsplit('.', 1)[0],
+        'assessment': 'Manual',
+        'profiles': cis_control.profiles,
+        'status': ('EXCLUDED' if cis_control.id in cis_exceptions else 'MANUAL'),
+        'expected': cis_control.expected,
+        'remediation': cis_remediations.get(cis_control.id,
+          'Review the control evidence and expected state, apply the approved configuration change, and re-run the audit.'),
+        'actual':
+          ('Documented exception: ' ~ cis_exceptions[cis_control.id]
+           if cis_control.id in cis_exceptions else cis_control.guidance),
+        'evidence': {'guidance': cis_control.guidance}
+      }] }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"

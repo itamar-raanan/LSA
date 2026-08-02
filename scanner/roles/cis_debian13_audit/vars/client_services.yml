@@ -1,0 +1,97 @@
+---
+cis_client_service_controls:
+  - id: "2.2.1"
+    title: "Ensure nis client is not installed"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The nis package is not installed.
+    audit: !unsafe |
+      if dpkg-query -W -f='${Status}' nis 2>/dev/null | grep -q '^install ok installed$'; then
+        echo "nis is installed"
+        exit 1
+      fi
+      echo "nis is not installed"
+      exit 0
+
+  - id: "2.2.2"
+    title: "Ensure rsh client is not installed"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The rsh-client package is not installed.
+    audit: !unsafe |
+      if dpkg-query -W -f='${Status}' rsh-client 2>/dev/null | grep -q '^install ok installed$'; then
+        echo "rsh-client is installed"
+        exit 1
+      fi
+      echo "rsh-client is not installed"
+      exit 0
+
+  - id: "2.2.3"
+    title: "Ensure talk client is not installed"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: Neither talk nor inetutils-talk is installed.
+    audit: !unsafe |
+      installed=()
+      for package in talk inetutils-talk; do
+        if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q '^install ok installed$'; then
+          installed+=("$package")
+        fi
+      done
+      if [ "${#installed[@]}" -gt 0 ]; then
+        printf 'Installed talk client packages: %s\n' "${installed[*]}"
+        exit 1
+      fi
+      echo "talk client packages are not installed"
+      exit 0
+
+  - id: "2.2.4"
+    title: "Ensure telnet client is not installed"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: Neither telnet nor inetutils-telnet is installed.
+    audit: !unsafe |
+      installed=()
+      for package in telnet inetutils-telnet; do
+        if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q '^install ok installed$'; then
+          installed+=("$package")
+        fi
+      done
+      if [ "${#installed[@]}" -gt 0 ]; then
+        printf 'Installed telnet client packages: %s\n' "${installed[*]}"
+        exit 1
+      fi
+      echo "telnet client packages are not installed"
+      exit 0
+
+  - id: "2.2.5"
+    title: "Ensure ldap client is not installed"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: The ldap-utils package is not installed.
+    audit: !unsafe |
+      if dpkg-query -W -f='${Status}' ldap-utils 2>/dev/null | grep -q '^install ok installed$'; then
+        echo "ldap-utils is installed"
+        exit 1
+      fi
+      echo "ldap-utils is not installed"
+      exit 0
+
+  - id: "2.2.6"
+    title: "Ensure ftp client is not installed"
+    assessment: Automated
+    profiles: [level1_server, level2_server, level1_workstation, level2_workstation]
+    expected: Neither ftp nor tnftp is installed.
+    audit: !unsafe |
+      installed=()
+      for package in ftp tnftp; do
+        if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q '^install ok installed$'; then
+          installed+=("$package")
+        fi
+      done
+      if [ "${#installed[@]}" -gt 0 ]; then
+        printf 'Installed FTP client packages: %s\n' "${installed[*]}"
+        exit 1
+      fi
+      echo "FTP client packages are not installed"
+      exit 0

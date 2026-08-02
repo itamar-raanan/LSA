@@ -1,23 +1,43 @@
-# Debian 13 control profiles
+# Debian 13 audit profiles
 
-The Debian 13 scanner emits every catalogued control in every report. Profile-specific controls use `not_applicable` instead of disappearing, preserving stable comparisons and making coverage visible.
+The Debian 13 v0.4 scanner emits the complete 354-control catalog in every report. Applicable controls are audited; controls outside the selected profile are emitted as `not_applicable`. This keeps comparisons stable when profiles or host roles change.
 
-## Profiles
+## Coverage
 
-- `production_server` — general-purpose long-running server with host firewall, audit, time, logging, and automatic-update services.
-- `minimal_server` — reduced server footprint while retaining host security services.
-- `router` — network-forwarding system; the IPv4-forwarding prohibition is not applicable.
-- `container` — image-managed workload without host-level systemd, firewall, audit, AppArmor, cron, or persistent-journal ownership.
+- 334 Debian 13 benchmark controls across sections 1 through 7
+- 322 automated read-only benchmark checks
+- 12 explicit manual benchmark reviews
+- 20 supplemental Linux security-health checks
+- 354 unique normalized findings in every report
 
-## Control groups
+The supplemental checks cover filesystem exposure, local users, sudo policy, risky services, listening sockets, kernel state, held packages, and recent failed authentication activity.
 
-- `UPD` — security repository, pending upgrades, reboot state, and automatic updates.
-- `FS` — ownership and permissions for identity databases.
-- `ACC` — empty passwords and privileged-account identity.
-- `SSH` — root and password login, empty passwords, authentication attempts, X11, and rhosts.
-- `NET` — forwarding, nftables, legacy remote access, and listening-socket review.
-- `KRN` — core dumps, ASLR, kernel-pointer exposure, kernel logs, and process tracing.
-- `PKG` and `SVC` — unattended-upgrades package and cron service posture.
-- `OBS` — auditd, AppArmor, time synchronization, and persistent journaling.
+## LSA deployment profiles
 
-Control IDs use the `LSA-DEBIAN13-*` namespace. They must not be presented as CIS-certified mappings unless a separately licensed and verified benchmark mapping is introduced.
+- `production_server` maps to `level2_server`.
+- `minimal_server` maps to `level1_server`.
+- `router` maps to `level2_server`; forwarding-related deviations should be documented as exceptions.
+- `container` maps to `level1_server`; host-owned services that do not exist in the container normally resolve as not applicable or failed evidence depending on the benchmark procedure.
+
+## Direct benchmark profiles
+
+- `level1_server`
+- `level2_server`
+- `level1_workstation`
+- `level2_workstation`
+
+Level 2 profiles inherit their corresponding Level 1 profile.
+
+## Result behavior
+
+- `pass` — the observed state satisfies the audit procedure.
+- `fail` — the observed state does not satisfy it.
+- `manual` — the control requires human or policy review.
+- `not_applicable` — the control is outside the selected profile, has a documented exception, or does not apply to the detected software state.
+- `error` — evidence could not be evaluated reliably.
+
+## Read-only boundary
+
+The scanner never applies the remediation text bundled with a control. Audit code is rejected by tests if it contains package changes, service-state changes, account changes, permission changes, mounts, firewall mutations, kernel writes, destructive file operations, or writes into system paths. Three prototype checks that used temporary files were rewritten to evaluate their observations in memory.
+
+Benchmark control IDs are normalized as `CIS-DEBIAN13-<section>`. Supplemental controls use `LSA-HEALTH-<id>`.

@@ -1,0 +1,45 @@
+---
+- name: "{{ cis_control.id }} | Run audit command"
+  ansible.builtin.shell: |
+    set -o pipefail
+    {{ cis_control.audit }}
+  args:
+    executable: /bin/bash
+  register: cis_shell_audit
+  changed_when: false
+  failed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"
+
+- name: "{{ cis_control.id }} | Record audit result"
+  ansible.builtin.set_fact:
+    cis_results: >-
+      {{ cis_results + [{
+        'id': cis_control.id,
+        'title': cis_control.title,
+        'section': cis_control.id.rsplit('.', 1)[0],
+        'assessment': 'Automated',
+        'profiles': cis_control.profiles,
+        'status':
+          ('EXCLUDED' if cis_control.id in cis_exceptions else
+           'PASS' if cis_shell_audit.rc == 0 else
+           'FAIL' if cis_shell_audit.rc == 1 else
+           'NOT_APPLICABLE' if cis_shell_audit.rc == 3 else 'ERROR'),
+        'expected': cis_control.expected,
+        'remediation': cis_remediations.get(cis_control.id,
+          'Review the control evidence and expected state, apply the approved configuration change, and re-run the audit.'),
+        'actual':
+          ('Documented exception: ' ~ cis_exceptions[cis_control.id]
+           if cis_control.id in cis_exceptions else
+           'rc=' ~ (cis_shell_audit.rc | string) ~
+           '; stdout=' ~ (cis_shell_audit.stdout | default('') | trim) ~
+           '; stderr=' ~ (cis_shell_audit.stderr | default('') | trim)),
+        'evidence': {
+          'stdout': cis_shell_audit.stdout_lines | default([]),
+          'stderr': cis_shell_audit.stderr_lines | default([]),
+          'rc': cis_shell_audit.rc
+        }
+      }] }}
+  changed_when: false
+  tags:
+    - "cis_{{ cis_control.id | replace('.', '_') }}"

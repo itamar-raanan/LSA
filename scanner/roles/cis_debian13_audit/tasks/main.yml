@@ -1,0 +1,86 @@
+---
+- name: Validate audit configuration
+  ansible.builtin.include_tasks: preflight.yml
+  tags: [always]
+
+- name: Load complete benchmark control catalog
+  ansible.builtin.include_vars:
+    dir: "{{ role_path }}/vars"
+    extensions: [yml]
+  tags: [always]
+
+- name: Show selected and effective CIS audit profiles
+  ansible.builtin.debug:
+    msg: "Selected profile={{ cis_profile }}; effective profiles={{ cis_effective_profiles | join(', ') }}"
+  changed_when: false
+  tags: [always]
+
+- name: Initialize audit result list
+  ansible.builtin.set_fact:
+    cis_results: []
+  changed_when: false
+  tags: [always]
+
+- name: Run Section 1 audits
+  ansible.builtin.include_tasks: section_1.yml
+  tags: [section_1]
+
+- name: Run Section 2 audits
+  ansible.builtin.include_tasks: section_2.yml
+  tags: [section_2]
+
+- name: Run Section 3 audits
+  ansible.builtin.include_tasks: section_3.yml
+  tags: [section_3]
+
+- name: Run Section 4 audits
+  ansible.builtin.include_tasks: section_4.yml
+  tags: [section_4]
+
+- name: Run Section 5 audits
+  ansible.builtin.include_tasks: section_5.yml
+  tags: [section_5]
+
+- name: Run Section 6
+  ansible.builtin.include_tasks: section_6.yml
+  tags: [section_6]
+
+- name: Run Section 7
+  ansible.builtin.include_tasks: section_7.yml
+  tags: [section_7]
+
+- name: Assemble complete benchmark catalog
+  ansible.builtin.set_fact:
+    cis_complete_catalog: >-
+      {{
+        cis_kernel_module_controls + cis_kernel_module_manual_controls +
+        cis_filesystem_mount_controls + cis_package_management_controls +
+        cis_apparmor_controls + cis_bootloader_controls +
+        cis_process_hardening_controls + cis_process_hardening_shell_controls +
+        cis_warning_banner_controls + cis_gdm_controls +
+        cis_server_service_controls + cis_client_service_controls +
+        cis_time_sync_controls + cis_job_scheduler_controls +
+        cis_network_device_controls + cis_network_kernel_module_controls +
+        cis_network_kernel_parameter_controls + cis_host_firewall_controls +
+        cis_ssh_server_controls + cis_privilege_escalation_controls +
+        cis_pam_controls + cis_pam_manual_controls +
+        cis_user_account_controls + cis_user_account_manual_controls +
+        cis_section6_controls + cis_section6_manual_controls +
+        cis_section7_controls + cis_section7_manual_controls
+      }}
+  changed_when: false
+  tags: [always]
+
+- name: Record controls excluded by the selected profile
+  ansible.builtin.include_tasks: audit_profile_not_applicable.yml
+  loop: "{{ cis_complete_catalog }}"
+  loop_control:
+    loop_var: cis_control
+    label: "{{ cis_control.id }} {{ cis_control.title }}"
+  when: cis_control.id not in (cis_results | map(attribute='id') | list)
+  tags: [always]
+
+- name: Generate reports
+  ansible.builtin.include_tasks: report.yml
+  when: cis_generate_standalone_reports | bool
+  tags: [always, report]

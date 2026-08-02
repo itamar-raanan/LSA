@@ -153,6 +153,39 @@ def test_ingest_and_read_fleet(client):
     assert dashboard.json()["total_hosts"] == 1
 
 
+def test_findings_default_limit_covers_expanded_scanner_catalog(client):
+    payload = report_payload()
+    template = payload["findings"][0]
+    payload["findings"] = [
+        {
+            **template,
+            "control_id": f"CIS-DEBIAN13-TEST-{index:03}",
+            "title": f"Expanded audit control {index}",
+        }
+        for index in range(250)
+    ]
+    payload["summary"] = {
+        "pass": 0,
+        "fail": 250,
+        "manual": 0,
+        "not_applicable": 0,
+        "error": 0,
+    }
+    response = client.post(
+        "/api/v1/ingest/reports",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        json=payload,
+    )
+    assert response.status_code == 202
+
+    findings = client.get(
+        "/api/v1/findings",
+        headers={"Authorization": f"Bearer {login(client)}"},
+    )
+    assert findings.status_code == 200
+    assert len(findings.json()) == 250
+
+
 def test_duplicate_report_rejected(client):
     payload = report_payload()
     headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}

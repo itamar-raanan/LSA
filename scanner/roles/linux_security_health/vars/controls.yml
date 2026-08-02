@@ -1,0 +1,319 @@
+---
+security_health_controls:
+  - id: FS-001
+    title: World-writable regular files
+    category: Filesystem
+    severity: HIGH
+    summary: Detect regular files writable by all users on local filesystems.
+    risk: Any local user may alter data or configuration in a world-writable file.
+    remediation: Review each path. Remove world-write permission with `chmod o-w <path>` unless it is explicitly required and protected by another control.
+    verification: Run `findmnt -Dkerno TARGET,FSTYPE` and repeat the audit command after remediation.
+    audit: !unsafe |
+      findings="$({
+        while read -r mountpoint fstype; do
+          case "$fstype" in proc|sysfs|devtmpfs|devpts|tmpfs|overlay|squashfs|cgroup*|tracefs|securityfs|pstore|debugfs|mqueue|fusectl|configfs|ramfs) continue ;; esac
+          find "$mountpoint" -xdev -type f -perm -0002 -print 2>/dev/null
+        done < <(findmnt -Dkerno TARGET,FSTYPE | sort -u)
+      } | sort -u)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No world-writable regular files found on assessed local filesystems."
+
+  - id: FS-002
+    title: World-writable directories without sticky bit
+    category: Filesystem
+    severity: HIGH
+    summary: Detect world-writable directories that do not have the sticky bit.
+    risk: Users may delete or rename files owned by other users in these directories.
+    remediation: Add the sticky bit with `chmod +t <directory>` or remove world-write permission when it is not required.
+    verification: Run `find <mount> -xdev -type d -perm -0002 ! -perm -1000 -print`.
+    audit: !unsafe |
+      findings="$({
+        while read -r mountpoint fstype; do
+          case "$fstype" in proc|sysfs|devtmpfs|devpts|tmpfs|overlay|squashfs|cgroup*|tracefs|securityfs|pstore|debugfs|mqueue|fusectl|configfs|ramfs) continue ;; esac
+          find "$mountpoint" -xdev -type d -perm -0002 ! -perm -1000 -print 2>/dev/null
+        done < <(findmnt -Dkerno TARGET,FSTYPE | sort -u)
+      } | sort -u)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "All world-writable directories have the sticky bit."
+
+  - id: FS-003
+    title: Files or directories without an owner
+    category: Filesystem
+    severity: HIGH
+    summary: Detect filesystem objects whose UID no longer maps to an account.
+    risk: Reused UIDs can unintentionally grant access to orphaned files.
+    remediation: Assign a valid owner using `chown <user> <path>` or remove the object after validating it is no longer needed.
+    verification: Repeat `find <mount> -xdev -nouser -print`.
+    audit: !unsafe |
+      findings="$({
+        while read -r mountpoint fstype; do
+          case "$fstype" in proc|sysfs|devtmpfs|devpts|tmpfs|overlay|squashfs|cgroup*|tracefs|securityfs|pstore|debugfs|mqueue|fusectl|configfs|ramfs) continue ;; esac
+          find "$mountpoint" -xdev -nouser -print 2>/dev/null
+        done < <(findmnt -Dkerno TARGET,FSTYPE | sort -u)
+      } | sort -u)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No unowned files or directories found."
+
+  - id: FS-004
+    title: Files or directories without a group
+    category: Filesystem
+    severity: HIGH
+    summary: Detect filesystem objects whose GID no longer maps to a group.
+    risk: Reused GIDs can unintentionally grant access to orphaned files.
+    remediation: Assign a valid group using `chgrp <group> <path>` or remove the object after validation.
+    verification: Repeat `find <mount> -xdev -nogroup -print`.
+    audit: !unsafe |
+      findings="$({
+        while read -r mountpoint fstype; do
+          case "$fstype" in proc|sysfs|devtmpfs|devpts|tmpfs|overlay|squashfs|cgroup*|tracefs|securityfs|pstore|debugfs|mqueue|fusectl|configfs|ramfs) continue ;; esac
+          find "$mountpoint" -xdev -nogroup -print 2>/dev/null
+        done < <(findmnt -Dkerno TARGET,FSTYPE | sort -u)
+      } | sort -u)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No ungrouped files or directories found."
+
+  - id: FS-005
+    title: SUID executable review
+    category: Filesystem
+    severity: MEDIUM
+    summary: Inventory SUID executables and identify entries outside a conservative Debian allowlist.
+    risk: Unexpected SUID programs can provide a local privilege-escalation path.
+    remediation: Verify package ownership with `dpkg -S <path>`. Remove SUID with `chmod u-s <path>` only after confirming the program does not require it.
+    verification: Run `find / -xdev -type f -perm -4000 -print` and compare with the approved baseline.
+    audit: !unsafe |
+      allow='^(/usr/bin/(chfn|chsh|gpasswd|mount|newgrp|passwd|su|umount)|/usr/lib/(dbus-1.0/dbus-daemon-launch-helper|openssh/ssh-keysign|polkit-1/polkit-agent-helper-1)|/usr/sbin/unix_chkpwd)$'
+      findings="$({
+        while read -r mountpoint fstype; do
+          case "$fstype" in proc|sysfs|devtmpfs|devpts|tmpfs|overlay|squashfs|cgroup*|tracefs|securityfs|pstore|debugfs|mqueue|fusectl|configfs|ramfs) continue ;; esac
+          find "$mountpoint" -xdev -type f -perm -4000 -print 2>/dev/null
+        done < <(findmnt -Dkerno TARGET,FSTYPE | sort -u)
+      } | sort -u | grep -Ev "$allow" || true)"
+      if [[ -n "$findings" ]]; then echo "Unexpected or locally unapproved SUID files:"; printf '%s\n' "$findings"; exit 4; fi
+      echo "No SUID files outside the built-in Debian review baseline."
+
+  - id: FS-006
+    title: Unexpected file capabilities
+    category: Filesystem
+    severity: MEDIUM
+    summary: Inventory executables with Linux file capabilities.
+    risk: Powerful capabilities can bypass normal discretionary access restrictions without SUID.
+    remediation: Confirm package ownership and business need. Remove an unnecessary capability with `setcap -r <path>`.
+    verification: Run `getcap -r / 2>/dev/null` and compare against an approved host baseline.
+    audit: !unsafe |
+      command -v getcap >/dev/null 2>&1 || { echo "getcap is not installed."; exit 3; }
+      output="$(getcap -r / 2>/dev/null || true)"
+      if [[ -n "$output" ]]; then printf '%s\n' "$output"; exit 4; fi
+      echo "No file capabilities were found."
+
+  - id: FS-007
+    title: Writable directories in root PATH
+    category: Filesystem
+    severity: CRITICAL
+    summary: Detect missing, relative, or non-root-writable directories in root's executable search path.
+    risk: A writable PATH directory may allow command hijacking during privileged execution.
+    remediation: Remove `.` and empty entries from root PATH. Correct ownership to root and remove group/other write permission from each directory.
+    verification: Run `sudo -i env | grep '^PATH='` and inspect each directory with `stat`.
+    audit: !unsafe |
+      bad=0
+      IFS=: read -ra paths <<< "$PATH"
+      for dir in "${paths[@]}"; do
+        [[ -n "$dir" && "$dir" = /* ]] || { echo "Invalid PATH entry: '${dir:-<empty>}'"; bad=1; continue; }
+        [[ -d "$dir" ]] || { echo "Missing PATH directory: $dir"; bad=1; continue; }
+        owner="$(stat -Lc '%U' "$dir" 2>/dev/null || echo unknown)"
+        mode="$(stat -Lc '%a' "$dir" 2>/dev/null || echo 999)"
+        perm=$((8#$mode))
+        if [[ "$owner" != root ]] || (( perm & 0022 )); then
+          echo "$dir owner=$owner mode=$mode"
+          bad=1
+        fi
+      done
+      (( bad == 0 )) && echo "Root PATH entries are absolute, present, root-owned, and not group/other writable."
+      exit "$bad"
+
+  - id: USR-001
+    title: Accounts with empty password fields
+    category: Users
+    severity: CRITICAL
+    summary: Detect accounts with an empty password field in /etc/shadow.
+    risk: An account with an empty password may permit authentication without a secret.
+    remediation: Lock the account with `passwd -l <user>` or set a strong password according to organizational policy.
+    verification: "Run `awk -F: '($2 == \"\") {print $1}' /etc/shadow`."
+    audit: !unsafe |
+      findings="$(awk -F: '($2 == "") {print $1}' /etc/shadow)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No accounts have empty password fields."
+
+  - id: USR-002
+    title: Additional UID 0 accounts
+    category: Users
+    severity: CRITICAL
+    summary: Detect UID 0 accounts other than root.
+    risk: Every UID 0 account has unrestricted administrative access.
+    remediation: Change the account UID, lock or remove the account, and review ownership of files associated with the old UID.
+    verification: "Run `awk -F: '($3 == 0) {print $1}' /etc/passwd`."
+    audit: !unsafe |
+      findings="$(awk -F: '($3 == 0 && $1 != "root") {print $1}' /etc/passwd)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "root is the only UID 0 account."
+
+  - id: USR-003
+    title: Stale interactive accounts
+    category: Users
+    severity: MEDIUM
+    summary: Identify interactive accounts that have not logged in within the configured age threshold.
+    risk: Dormant accounts increase attack surface and are often overlooked during offboarding.
+    remediation: Validate ownership with the application or business owner, then lock, expire, or remove accounts that are no longer required.
+    verification: Review `lastlog` and account-management records.
+    audit: !unsafe |
+      command -v lastlog >/dev/null 2>&1 || { echo "lastlog is unavailable."; exit 3; }
+      days="${SH_STALE_DAYS:-90}"
+      uid_min="$(awk '/^[[:space:]]*UID_MIN[[:space:]]+/ {print $2}' /etc/login.defs | tail -1)"
+      uid_min="${uid_min:-1000}"
+      findings="$(while IFS=: read -r user _ uid _ _ home shell; do
+        (( uid >= uid_min )) || continue
+        case "$shell" in */nologin|*/false) continue ;; esac
+        line="$(lastlog -u "$user" 2>/dev/null | tail -1)"
+        if grep -q 'Never logged in' <<< "$line"; then echo "$user: never logged in"; continue; fi
+        epoch="$(date -d "$(awk '{print $(NF-4),$(NF-3),$(NF-2),$(NF-1),$NF}' <<< "$line")" +%s 2>/dev/null || true)"
+        [[ -n "$epoch" ]] || continue
+        age=$(( ($(date +%s) - epoch) / 86400 ))
+        (( age > days )) && echo "$user: last login ${age} days ago"
+      done < /etc/passwd)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 4; fi
+      echo "No stale interactive accounts detected using the ${days}-day threshold."
+
+  - id: USR-004
+    title: SSH private key permissions in home directories
+    category: Users
+    severity: HIGH
+    summary: Detect likely SSH private keys readable or writable by group or others.
+    risk: Exposed private keys can allow account impersonation and lateral movement.
+    remediation: Set private key ownership to the account owner and mode 0600 or more restrictive. Rotate any key that may have been exposed.
+    verification: Run `find /home /root -path '*/.ssh/*' -type f -exec stat ...`.
+    audit: !unsafe |
+      findings="$(find /root /home -xdev -type f \( -name 'id_rsa' -o -name 'id_dsa' -o -name 'id_ecdsa' -o -name 'id_ed25519' -o -name '*.pem' \) -perm /0077 -printf '%m %u:%g %p\n' 2>/dev/null || true)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No SSH private keys with group/other permissions were found."
+
+  - id: PRV-001
+    title: Passwordless sudo rules
+    category: Privilege
+    severity: HIGH
+    summary: Identify active sudo rules using NOPASSWD.
+    risk: Passwordless privilege escalation reduces protection against session hijacking and accidental execution.
+    remediation: Remove NOPASSWD where it is not strictly required. Scope unavoidable rules to specific commands and service accounts.
+    verification: Run `grep -R 'NOPASSWD' /etc/sudoers /etc/sudoers.d` and validate with `visudo -c`.
+    audit: !unsafe |
+      command -v sudo >/dev/null 2>&1 || { echo "sudo is not installed."; exit 3; }
+      findings="$(grep -RPHn '^[[:space:]]*[^#].*NOPASSWD' /etc/sudoers /etc/sudoers.d 2>/dev/null || true)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 4; fi
+      echo "No active NOPASSWD sudo rules found."
+
+  - id: PRV-002
+    title: Broad sudo command wildcards
+    category: Privilege
+    severity: HIGH
+    summary: Identify sudo rules containing shell glob characters in command specifications.
+    risk: Wildcard expansion may permit arguments or paths outside the administrator's intended scope.
+    remediation: Replace broad wildcard rules with explicit full paths and fixed arguments. Validate the final configuration using `visudo -c`.
+    verification: Review the matched rules manually and test permitted commands using `sudo -l -U <user>`.
+    audit: !unsafe |
+      command -v sudo >/dev/null 2>&1 || { echo "sudo is not installed."; exit 3; }
+      findings="$(grep -RPHn '^[[:space:]]*[^#].*(/[^[:space:],:]*)[?*\[]' /etc/sudoers /etc/sudoers.d 2>/dev/null || true)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 4; fi
+      echo "No obvious command wildcards found in active sudo rules."
+
+  - id: SVC-001
+    title: Legacy clear-text or high-risk services
+    category: Services
+    severity: HIGH
+    summary: Detect active legacy services commonly associated with clear-text authentication or unnecessary exposure.
+    risk: Telnet, rsh, rexec, tftp and similar services can expose credentials or provide weakly controlled access.
+    remediation: Disable and mask unneeded units, remove the corresponding packages, or document an approved exception with compensating controls.
+    verification: Run `systemctl --type=service --state=running` and `ss -lntup`.
+    audit: !unsafe |
+      patterns='telnet|rsh|rlogin|rexec|tftp|xinetd|inetutils-inetd|ypserv'
+      findings="$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | grep -Ei "$patterns" || true)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No targeted legacy high-risk services are running."
+
+  - id: NET-001
+    title: Services listening on non-loopback interfaces
+    category: Network
+    severity: INFO
+    summary: Inventory TCP and UDP listeners exposed beyond loopback.
+    risk: Every exposed listener increases reachable attack surface and should map to an approved service.
+    remediation: Review each listener against the approved service inventory. Bind internal-only services to loopback or a management interface and enforce firewall restrictions.
+    verification: Run `ss -H -lntup` and compare with firewall and service policy.
+    audit: !unsafe |
+      findings="$(ss -H -lntup 2>/dev/null | awk '$5 !~ /^(127\.0\.0\.1|\[::1\]):/ {print}')"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 4; fi
+      echo "No non-loopback listeners detected."
+
+  - id: NET-002
+    title: Database ports exposed on all interfaces
+    category: Network
+    severity: HIGH
+    summary: Detect common database ports bound to wildcard addresses.
+    risk: Internet- or LAN-reachable database services are frequent targets for credential attacks and exploitation.
+    remediation: Bind the database to a required application or private interface and restrict access with the host firewall and upstream controls.
+    verification: Run `ss -H -lntp` and inspect ports 3306, 5432, 6379, 27017, 9200 and 11211.
+    audit: !unsafe |
+      findings="$(ss -H -lntp 2>/dev/null | awk '$4 ~ /(^|\]|:)(3306|5432|6379|27017|9200|11211)$/ && ($4 ~ /^0\.0\.0\.0:/ || $4 ~ /^\[::\]:/ || $4 ~ /^\*:/) {print}')"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No common database ports are listening on wildcard addresses."
+
+  - id: KRN-001
+    title: Kernel taint state
+    category: Kernel
+    severity: MEDIUM
+    summary: Detect whether the running kernel is tainted.
+    risk: Kernel taint may indicate unsupported modules, forced module operations, hardware errors or prior kernel warnings.
+    remediation: Decode the taint value, inspect `dmesg`, remove unsupported modules where possible, and investigate hardware or kernel faults.
+    verification: Check `/proc/sys/kernel/tainted`; zero is untainted.
+    audit: !unsafe |
+      [[ -r /proc/sys/kernel/tainted ]] || { echo "Kernel taint state unavailable."; exit 3; }
+      value="$(cat /proc/sys/kernel/tainted)"
+      if [[ "$value" != 0 ]]; then echo "kernel.tainted=$value"; exit 4; fi
+      echo "Kernel is not tainted."
+
+  - id: SVC-002
+    title: Failed systemd units
+    category: Services
+    severity: MEDIUM
+    summary: Detect systemd units currently in a failed state.
+    risk: Failed security, logging, update or application units may reduce protection or indicate operational problems.
+    remediation: Inspect each unit with `systemctl status <unit>` and `journalctl -u <unit>`, fix the cause, then reset the failed state.
+    verification: Run `systemctl --failed --no-legend`.
+    audit: !unsafe |
+      findings="$(systemctl --failed --no-legend --no-pager 2>/dev/null || true)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 1; fi
+      echo "No failed systemd units."
+
+  - id: PKG-001
+    title: Held packages
+    category: Packages
+    severity: MEDIUM
+    summary: Detect packages held back from normal upgrades.
+    risk: Held security-sensitive packages may remain vulnerable after fixes are available.
+    remediation: Review why each package is held. Remove unnecessary holds using `apt-mark unhold <package>` and apply approved updates.
+    verification: Run `apt-mark showhold`.
+    audit: !unsafe |
+      command -v apt-mark >/dev/null 2>&1 || { echo "apt-mark is unavailable."; exit 3; }
+      findings="$(apt-mark showhold 2>/dev/null || true)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 4; fi
+      echo "No held packages."
+
+  - id: LOG-001
+    title: Recent failed authentication activity
+    category: Authentication
+    severity: MEDIUM
+    summary: Summarize failed authentication records from the previous 24 hours.
+    risk: Repeated failures may indicate password spraying, brute force, expired automation credentials or account misuse.
+    remediation: Validate source addresses and affected accounts, block malicious sources, rotate exposed credentials and tune rate-limiting controls.
+    verification: Review `journalctl --since '-24 hours'` and relevant centralized logs.
+    audit: !unsafe |
+      command -v journalctl >/dev/null 2>&1 || { echo "journalctl is unavailable."; exit 3; }
+      findings="$(journalctl --since '-24 hours' --no-pager 2>/dev/null | grep -Ei 'authentication failure|failed password|invalid user|pam_unix.*failure' | tail -n 100 || true)"
+      if [[ -n "$findings" ]]; then printf '%s\n' "$findings"; exit 4; fi
+      echo "No targeted failed-authentication messages found in the previous 24 hours."

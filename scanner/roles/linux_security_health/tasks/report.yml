@@ -1,0 +1,53 @@
+---
+- name: Set security health report metadata
+  ansible.builtin.set_fact:
+    security_health_report_hostname: >-
+      {{ (ansible_hostname | default(inventory_hostname)) | regex_replace('[^A-Za-z0-9_.-]', '_') }}
+    security_health_report_timestamp: "{{ now(utc=true, fmt='%Y%m%d_%H%M%S') }}"
+  changed_when: false
+
+- name: Set security health report path
+  ansible.builtin.set_fact:
+    security_health_host_report_dir: "{{ security_health_report_dir }}/{{ security_health_report_hostname }}"
+    security_health_report_basename: >-
+      security_health_{{ security_health_report_hostname }}_{{ security_health_report_timestamp }}
+  changed_when: false
+
+- name: Create local security health report directory
+  ansible.builtin.file:
+    path: "{{ security_health_host_report_dir }}"
+    state: directory
+    mode: "0750"
+  delegate_to: localhost
+  become: false
+
+- name: Render security health HTML report
+  ansible.builtin.template:
+    src: report.html.j2
+    dest: "{{ security_health_host_report_dir }}/{{ security_health_report_basename }}.html"
+    mode: "0640"
+  delegate_to: localhost
+  become: false
+  when: "'html' in security_health_report_formats"
+
+- name: Render security health JSON report
+  ansible.builtin.template:
+    src: report.json.j2
+    dest: "{{ security_health_host_report_dir }}/{{ security_health_report_basename }}.json"
+    mode: "0640"
+  delegate_to: localhost
+  become: false
+  when: "'json' in security_health_report_formats"
+
+- name: Render security health CSV report
+  ansible.builtin.template:
+    src: report.csv.j2
+    dest: "{{ security_health_host_report_dir }}/{{ security_health_report_basename }}.csv"
+    mode: "0640"
+  delegate_to: localhost
+  become: false
+  when: "'csv' in security_health_report_formats"
+
+- name: Display security health report location
+  ansible.builtin.debug:
+    msg: "Security health reports: {{ security_health_host_report_dir }}/{{ security_health_report_basename }}.*"
