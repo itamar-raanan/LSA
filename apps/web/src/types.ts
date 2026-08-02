@@ -243,3 +243,14 @@ export interface AgentEnrollmentToken {
   revoked_at: string | null
   created_at: string
 }
+
+export interface AgentPackage {
+  id: string
+  version: string
+  filename: string
+  content_type: string
+  operating_system: string
+  architecture: string
+  size_bytes: number
+  sha256: string
+}

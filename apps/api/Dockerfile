@@ -8,6 +8,8 @@ WORKDIR /app
 
 COPY pyproject.toml README.md alembic.ini ./
 COPY apps/api ./apps/api
+COPY agent ./agent
+COPY scanner ./scanner
 RUN pip install --no-cache-dir .
 
 RUN groupadd --system lsa \

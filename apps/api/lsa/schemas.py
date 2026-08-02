@@ -489,3 +489,14 @@ class ControlCatalogItem(BaseModel):
     title: str
     category: str
     module: str
+
+
+class AgentPackageResponse(BaseModel):
+    id: str
+    version: str
+    filename: str
+    content_type: str
+    operating_system: str
+    architecture: str
+    size_bytes: int
+    sha256: str
