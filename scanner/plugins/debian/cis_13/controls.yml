@@ -1,21 +1,21 @@
 ---
 controls:
-  - id: CIS-DEBIAN13-6.2.3
+  - id: LSA-DEBIAN13-FS-001
     title: Ensure permissions on /etc/passwd are configured
     severity: high
-  - id: CIS-DEBIAN13-6.2.4
+  - id: LSA-DEBIAN13-FS-002
     title: Ensure permissions on /etc/shadow are configured
     severity: critical
-  - id: CIS-DEBIAN13-4.2.7
+  - id: LSA-DEBIAN13-SSH-001
     title: Ensure SSH root login is disabled
     severity: high
-  - id: CIS-DEBIAN13-4.2.10
+  - id: LSA-DEBIAN13-SSH-002
     title: Ensure SSH password authentication is disabled
     severity: high
-  - id: CIS-DEBIAN13-3.3.1
+  - id: LSA-DEBIAN13-NET-001
     title: Ensure IPv4 forwarding is disabled
     severity: medium
-  - id: CIS-DEBIAN13-1.5.1
+  - id: LSA-DEBIAN13-KRN-001
     title: Ensure setuid programs do not produce core dumps
     severity: medium
   - id: LSA-DEBIAN13-FS-003
@@ -36,3 +36,71 @@ controls:
   - id: LSA-DEBIAN13-SVC-001
     title: Ensure the cron scheduler is enabled and active
     severity: low
+    profiles: [production_server, minimal_server, router]
+  - id: LSA-DEBIAN13-UPD-001
+    title: Ensure a Debian security repository is configured
+    severity: critical
+  - id: LSA-DEBIAN13-UPD-002
+    title: Review pending package upgrades
+    severity: high
+  - id: LSA-DEBIAN13-UPD-003
+    title: Ensure the system does not require a reboot
+    severity: medium
+  - id: LSA-DEBIAN13-UPD-004
+    title: Ensure unattended upgrades are enabled
+    severity: high
+    profiles: [production_server, minimal_server, router]
+  - id: LSA-DEBIAN13-NET-002
+    title: Ensure nftables is installed
+    severity: high
+    profiles: [production_server, minimal_server, router]
+  - id: LSA-DEBIAN13-NET-003
+    title: Ensure an nftables ruleset is loaded
+    severity: high
+    profiles: [production_server, minimal_server, router]
+  - id: LSA-DEBIAN13-NET-004
+    title: Ensure legacy clear-text remote-access servers are absent
+    severity: critical
+  - id: LSA-DEBIAN13-NET-005
+    title: Review listening network sockets
+    severity: medium
+  - id: LSA-DEBIAN13-SSH-003
+    title: Ensure SSH empty passwords are disabled
+    severity: critical
+  - id: LSA-DEBIAN13-SSH-004
+    title: Ensure SSH authentication attempts are limited
+    severity: medium
+  - id: LSA-DEBIAN13-SSH-005
+    title: Ensure SSH X11 forwarding is disabled
+    severity: medium
+  - id: LSA-DEBIAN13-SSH-006
+    title: Ensure SSH ignores rhosts authentication
+    severity: high
+  - id: LSA-DEBIAN13-KRN-002
+    title: Ensure full address-space randomization is enabled
+    severity: high
+  - id: LSA-DEBIAN13-KRN-003
+    title: Ensure kernel pointer exposure is restricted
+    severity: medium
+  - id: LSA-DEBIAN13-KRN-004
+    title: Ensure unprivileged kernel log access is restricted
+    severity: medium
+  - id: LSA-DEBIAN13-KRN-005
+    title: Ensure process tracing is restricted
+    severity: medium
+  - id: LSA-DEBIAN13-OBS-001
+    title: Ensure Linux audit is enabled and active
+    severity: high
+    profiles: [production_server, minimal_server, router]
+  - id: LSA-DEBIAN13-OBS-002
+    title: Ensure AppArmor is enabled with enforcing profiles
+    severity: high
+    profiles: [production_server, minimal_server, router]
+  - id: LSA-DEBIAN13-OBS-003
+    title: Ensure network time synchronization is healthy
+    severity: medium
+    profiles: [production_server, minimal_server, router]
+  - id: LSA-DEBIAN13-OBS-004
+    title: Ensure systemd journal persistence is configured
+    severity: medium
+    profiles: [production_server, minimal_server, router]

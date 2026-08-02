@@ -16,8 +16,7 @@
     "ip_addresses": {{ ansible_facts.all_ipv4_addresses | default([]) | to_json }},
     "tags": {{ lsa_host_tags | default({}) | to_json }}
   },
-  "scan": {"profile": {{ lsa_profile | to_json }}, "modules": {{ lsa_modules | to_json }}},
+  "scan": {"profile": {{ lsa_effective_profile | to_json }}, "modules": {{ lsa_modules | to_json }}},
   "summary": {{ lsa_summary | to_json }},
   "findings": {{ lsa_findings | to_json }}
 }
-
