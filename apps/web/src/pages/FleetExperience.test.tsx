@@ -32,7 +32,9 @@ describe('Fleet console experience', () => {
   it('opens the bottom-right host card with scanner OS inventory', async () => {
     render(<MemoryRouter><HostsPage /></MemoryRouter>)
     fireEvent.click(await screen.findByRole('button', { name: 'web-01' }))
-    expect(screen.getByRole('complementary', { name: 'web-01 details' })).toBeInTheDocument()
+    const hostCard = screen.getByRole('complementary', { name: 'web-01 details' })
+    expect(hostCard).toBeInTheDocument()
+    expect(hostCard.parentElement).toBe(document.body)
     expect(screen.getByText('Xeon Test')).toBeInTheDocument()
     expect(screen.getByText(/QEMU/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete host' })).toBeInTheDocument()
