@@ -1,0 +1,468 @@
+---
+- name: Inspect configured Debian security repositories
+  ansible.builtin.command:
+    argv: [grep, -RhsE, "security\\.debian\\.org|debian-security", /etc/apt]
+  register: lsa_security_repository
+  changed_when: false
+  failed_when: false
+
+- name: Simulate pending package upgrades
+  ansible.builtin.command:
+    argv: [apt-get, -s, -o, Debug::NoLocking=true, upgrade]
+  register: lsa_apt_simulation
+  changed_when: false
+  failed_when: false
+
+- name: Check whether a reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: lsa_reboot_required_file
+
+- name: Check whether unattended upgrades are enabled
+  ansible.builtin.command:
+    argv: [systemctl, is-enabled, unattended-upgrades]
+  register: lsa_unattended_enabled
+  changed_when: false
+  failed_when: false
+
+- name: Check nftables package state
+  ansible.builtin.command:
+    argv: [dpkg-query, -W, "-f=${db:Status}", nftables]
+  register: lsa_nftables_package
+  changed_when: false
+  failed_when: false
+
+- name: Read active nftables ruleset
+  ansible.builtin.command:
+    argv: [nft, list, ruleset]
+  register: lsa_nftables_ruleset
+  changed_when: false
+  failed_when: false
+
+- name: Find installed legacy remote-access servers
+  ansible.builtin.command:
+    argv: [dpkg-query, -W, "-f=${binary:Package}\\n", telnetd, inetutils-telnetd, rsh-server, rsh-redone-server]
+  register: lsa_legacy_remote_packages
+  changed_when: false
+  failed_when: false
+
+- name: Read listening network sockets
+  ansible.builtin.command:
+    argv: [ss, -H, -lntu]
+  register: lsa_listening_sockets
+  changed_when: false
+  failed_when: false
+
+- name: Read kernel hardening parameters
+  ansible.builtin.command:
+    argv: [sysctl, -n, "{{ item }}"]
+  loop:
+    - kernel.randomize_va_space
+    - kernel.kptr_restrict
+    - kernel.dmesg_restrict
+    - kernel.yama.ptrace_scope
+  register: lsa_kernel_hardening
+  changed_when: false
+  failed_when: false
+
+- name: Check whether auditd is enabled
+  ansible.builtin.command:
+    argv: [systemctl, is-enabled, auditd]
+  register: lsa_auditd_enabled
+  changed_when: false
+  failed_when: false
+
+- name: Check whether auditd is active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, auditd]
+  register: lsa_auditd_active
+  changed_when: false
+  failed_when: false
+
+- name: Read kernel audit subsystem status
+  ansible.builtin.command:
+    argv: [auditctl, -s]
+  register: lsa_audit_status
+  changed_when: false
+  failed_when: false
+
+- name: Read AppArmor status
+  ansible.builtin.command:
+    argv: [apparmor_status]
+  register: lsa_apparmor_status
+  changed_when: false
+  failed_when: false
+
+- name: Read network time synchronization state
+  ansible.builtin.command:
+    argv: [timedatectl, show, -p, NTPSynchronized, --value]
+  register: lsa_time_synchronized
+  changed_when: false
+  failed_when: false
+
+- name: Check persistent journal directory
+  ansible.builtin.stat:
+    path: /var/log/journal
+  register: lsa_persistent_journal
+
+- name: Resolve production control observations
+  ansible.builtin.set_fact:
+    lsa_pending_upgrades: "{{ lsa_apt_simulation.stdout_lines | default([]) | select('match', '^Inst ') | list | length }}"
+    lsa_sshd_empty_passwords: "{{ lsa_sshd_text.split('\n') | select('match', '^permitemptypasswords ') | list | first | default('sshd unavailable') }}"
+    lsa_sshd_max_auth_tries: "{{ lsa_sshd_text.split('\n') | select('match', '^maxauthtries ') | list | first | default('sshd unavailable') }}"
+    lsa_sshd_x11_forwarding: "{{ lsa_sshd_text.split('\n') | select('match', '^x11forwarding ') | list | first | default('sshd unavailable') }}"
+    lsa_sshd_ignore_rhosts: "{{ lsa_sshd_text.split('\n') | select('match', '^ignorerhosts ') | list | first | default('sshd unavailable') }}"
+    lsa_aslr_value: "{{ lsa_kernel_hardening.results[0].stdout | default('unknown') | trim }}"
+    lsa_kptr_value: "{{ lsa_kernel_hardening.results[1].stdout | default('unknown') | trim }}"
+    lsa_dmesg_value: "{{ lsa_kernel_hardening.results[2].stdout | default('unknown') | trim }}"
+    lsa_ptrace_value: "{{ lsa_kernel_hardening.results[3].stdout | default('unknown') | trim }}"
+
+- name: Add update posture controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-UPD-001',
+          'module': 'security_health',
+          'category': 'updates',
+          'title': 'Ensure a Debian security repository is configured',
+          'severity': 'critical',
+          'status': 'pass' if lsa_security_repository.rc == 0 and lsa_security_repository.stdout | trim != '' else 'fail',
+          'expected': 'A Debian security repository is configured',
+          'actual': (lsa_security_repository.stdout_lines | default([]) | first | default('No security repository found')),
+          'evidence': ['grep -R security.debian.org /etc/apt', 'grep -R debian-security /etc/apt'],
+          'remediation_summary': 'Configure the Debian 13 security repository using the deployment-approved mirror.',
+          'remediation_commands': [],
+          'verification_commands': ['apt-get update'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-UPD-002',
+          'module': 'security_health',
+          'category': 'updates',
+          'title': 'Review pending package upgrades',
+          'severity': 'high',
+          'status': 'error' if lsa_apt_simulation.rc != 0 else ('pass' if lsa_pending_upgrades | int == 0 else 'fail'),
+          'expected': '0 pending package upgrades',
+          'actual': (lsa_pending_upgrades | string) ~ ' pending package upgrades',
+          'evidence': ['apt-get -s upgrade'],
+          'remediation_summary': 'Review and apply approved package updates, prioritizing Debian security advisories.',
+          'remediation_commands': ['apt-get update', 'apt-get upgrade'],
+          'verification_commands': ['apt-get -s upgrade'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-UPD-003',
+          'module': 'security_health',
+          'category': 'updates',
+          'title': 'Ensure the system does not require a reboot',
+          'severity': 'medium',
+          'status': 'fail' if lsa_reboot_required_file.stat.exists else 'pass',
+          'expected': '/var/run/reboot-required absent',
+          'actual': 'reboot required' if lsa_reboot_required_file.stat.exists else 'no reboot marker',
+          'evidence': ['/var/run/reboot-required'],
+          'remediation_summary': 'Schedule a controlled reboot to activate updated kernels or libraries.',
+          'remediation_commands': ['systemctl reboot'],
+          'verification_commands': ['test ! -e /var/run/reboot-required'],
+          'reboot_required': true,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-UPD-004',
+          'module': 'security_health',
+          'category': 'updates',
+          'title': 'Ensure unattended upgrades are enabled',
+          'severity': 'high',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_unattended_enabled.stdout | trim in ['enabled', 'static'] else 'fail'),
+          'expected': 'enabled',
+          'actual': lsa_unattended_enabled.stdout | default('unavailable') | trim,
+          'evidence': ['systemctl is-enabled unattended-upgrades'],
+          'remediation_summary': 'Enable unattended upgrades after reviewing the approved update policy.',
+          'remediation_commands': ['systemctl enable unattended-upgrades'],
+          'verification_commands': ['systemctl is-enabled unattended-upgrades'],
+          'reboot_required': false,
+          'service_restart': true
+        }
+      ] }}
+
+- name: Add network exposure controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-NET-002',
+          'module': 'security_health',
+          'category': 'network',
+          'title': 'Ensure nftables is installed',
+          'severity': 'high',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_nftables_package.rc == 0 and 'install ok installed' in lsa_nftables_package.stdout else 'fail'),
+          'expected': 'nftables installed',
+          'actual': (lsa_nftables_package.stdout | default('') | trim) | default('package not installed', true),
+          'evidence': ['dpkg-query -W nftables'],
+          'remediation_summary': 'Install nftables and deploy the approved host-firewall policy.',
+          'remediation_commands': ['apt-get install nftables'],
+          'verification_commands': ['dpkg-query -W nftables'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-NET-003',
+          'module': 'security_health',
+          'category': 'network',
+          'title': 'Ensure an nftables ruleset is loaded',
+          'severity': 'high',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_nftables_ruleset.rc == 0 and lsa_nftables_ruleset.stdout | trim != '' else 'fail'),
+          'expected': 'A non-empty nftables ruleset',
+          'actual': ((lsa_nftables_ruleset.stdout_lines | default([]) | length) | string) ~ ' ruleset lines',
+          'evidence': ['nft list ruleset'],
+          'remediation_summary': 'Load and persist the deployment-approved nftables policy.',
+          'remediation_commands': ['systemctl enable --now nftables'],
+          'verification_commands': ['nft list ruleset'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-NET-004',
+          'module': 'security_health',
+          'category': 'network',
+          'title': 'Ensure legacy clear-text remote-access servers are absent',
+          'severity': 'critical',
+          'status': 'pass' if lsa_legacy_remote_packages.stdout | trim == '' else 'fail',
+          'expected': 'No telnet or rsh server packages installed',
+          'actual': (lsa_legacy_remote_packages.stdout | trim) | default('none installed', true),
+          'evidence': ['dpkg-query -W telnetd inetutils-telnetd rsh-server rsh-redone-server'],
+          'remediation_summary': 'Remove clear-text remote-access services and use SSH with approved authentication.',
+          'remediation_commands': ['apt-get purge LEGACY_PACKAGE'],
+          'verification_commands': ['dpkg-query -W telnetd inetutils-telnetd rsh-server rsh-redone-server'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-NET-005',
+          'module': 'security_health',
+          'category': 'network',
+          'title': 'Review listening network sockets',
+          'severity': 'medium',
+          'status': 'error' if lsa_listening_sockets.rc != 0 else 'manual',
+          'expected': 'Listening sockets match the approved service inventory',
+          'actual': (lsa_listening_sockets.stdout_lines | default([]))[:50] | join('\n'),
+          'evidence': ['ss -H -lntu'],
+          'remediation_summary': 'Disable unapproved listeners or restrict them to the intended interfaces and firewall zones.',
+          'remediation_commands': [],
+          'verification_commands': ['ss -H -lntu'],
+          'reboot_required': false,
+          'service_restart': false
+        }
+      ] }}
+
+- name: Add extended SSH controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-SSH-003',
+          'module': 'security_health',
+          'category': 'ssh',
+          'title': 'Ensure SSH empty passwords are disabled',
+          'severity': 'critical',
+          'status': 'error' if lsa_sshd_effective.rc != 0 else ('pass' if lsa_sshd_empty_passwords == 'permitemptypasswords no' else 'fail'),
+          'expected': 'permitemptypasswords no',
+          'actual': lsa_sshd_empty_passwords,
+          'evidence': ['sshd -T'],
+          'remediation_summary': 'Set PermitEmptyPasswords no in the effective SSH server configuration.',
+          'remediation_commands': ["printf '%s\\n' 'PermitEmptyPasswords no' > /etc/ssh/sshd_config.d/10-lsa-empty-passwords.conf"],
+          'verification_commands': ['sshd -T | grep ^permitemptypasswords'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-SSH-004',
+          'module': 'security_health',
+          'category': 'ssh',
+          'title': 'Ensure SSH authentication attempts are limited',
+          'severity': 'medium',
+          'status': 'error' if lsa_sshd_effective.rc != 0 else ('pass' if lsa_sshd_max_auth_tries.split(' ') | last | int <= 4 else 'fail'),
+          'expected': 'maxauthtries 4 or lower',
+          'actual': lsa_sshd_max_auth_tries,
+          'evidence': ['sshd -T'],
+          'remediation_summary': 'Limit MaxAuthTries after confirming operational access requirements.',
+          'remediation_commands': ["printf '%s\\n' 'MaxAuthTries 4' > /etc/ssh/sshd_config.d/10-lsa-max-auth.conf"],
+          'verification_commands': ['sshd -T | grep ^maxauthtries'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-SSH-005',
+          'module': 'security_health',
+          'category': 'ssh',
+          'title': 'Ensure SSH X11 forwarding is disabled',
+          'severity': 'medium',
+          'status': 'error' if lsa_sshd_effective.rc != 0 else ('pass' if lsa_sshd_x11_forwarding == 'x11forwarding no' else 'fail'),
+          'expected': 'x11forwarding no',
+          'actual': lsa_sshd_x11_forwarding,
+          'evidence': ['sshd -T'],
+          'remediation_summary': 'Disable X11 forwarding on server profiles unless explicitly required.',
+          'remediation_commands': ["printf '%s\\n' 'X11Forwarding no' > /etc/ssh/sshd_config.d/10-lsa-x11.conf"],
+          'verification_commands': ['sshd -T | grep ^x11forwarding'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-SSH-006',
+          'module': 'security_health',
+          'category': 'ssh',
+          'title': 'Ensure SSH ignores rhosts authentication',
+          'severity': 'high',
+          'status': 'error' if lsa_sshd_effective.rc != 0 else ('pass' if lsa_sshd_ignore_rhosts == 'ignorerhosts yes' else 'fail'),
+          'expected': 'ignorerhosts yes',
+          'actual': lsa_sshd_ignore_rhosts,
+          'evidence': ['sshd -T'],
+          'remediation_summary': 'Set IgnoreRhosts yes in the effective SSH server configuration.',
+          'remediation_commands': ["printf '%s\\n' 'IgnoreRhosts yes' > /etc/ssh/sshd_config.d/10-lsa-rhosts.conf"],
+          'verification_commands': ['sshd -T | grep ^ignorerhosts'],
+          'reboot_required': false,
+          'service_restart': true
+        }
+      ] }}
+
+- name: Add kernel hardening controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-KRN-002',
+          'module': 'security_health',
+          'category': 'kernel',
+          'title': 'Ensure full address-space randomization is enabled',
+          'severity': 'high',
+          'status': 'pass' if lsa_aslr_value == '2' else 'fail',
+          'expected': 'kernel.randomize_va_space = 2',
+          'actual': 'kernel.randomize_va_space = ' ~ lsa_aslr_value,
+          'evidence': ['sysctl -n kernel.randomize_va_space'],
+          'remediation_summary': 'Enable full address-space layout randomization.',
+          'remediation_commands': ["printf '%s\\n' 'kernel.randomize_va_space = 2' > /etc/sysctl.d/60-lsa-kernel.conf", 'sysctl --system'],
+          'verification_commands': ['sysctl kernel.randomize_va_space'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-KRN-003',
+          'module': 'security_health',
+          'category': 'kernel',
+          'title': 'Ensure kernel pointer exposure is restricted',
+          'severity': 'medium',
+          'status': 'pass' if lsa_kptr_value | int >= 1 else 'fail',
+          'expected': 'kernel.kptr_restrict >= 1',
+          'actual': 'kernel.kptr_restrict = ' ~ lsa_kptr_value,
+          'evidence': ['sysctl -n kernel.kptr_restrict'],
+          'remediation_summary': 'Restrict kernel pointer exposure to unprivileged users.',
+          'remediation_commands': ["printf '%s\\n' 'kernel.kptr_restrict = 1' >> /etc/sysctl.d/60-lsa-kernel.conf", 'sysctl --system'],
+          'verification_commands': ['sysctl kernel.kptr_restrict'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-KRN-004',
+          'module': 'security_health',
+          'category': 'kernel',
+          'title': 'Ensure unprivileged kernel log access is restricted',
+          'severity': 'medium',
+          'status': 'pass' if lsa_dmesg_value == '1' else 'fail',
+          'expected': 'kernel.dmesg_restrict = 1',
+          'actual': 'kernel.dmesg_restrict = ' ~ lsa_dmesg_value,
+          'evidence': ['sysctl -n kernel.dmesg_restrict'],
+          'remediation_summary': 'Restrict kernel log access to privileged users.',
+          'remediation_commands': ["printf '%s\\n' 'kernel.dmesg_restrict = 1' >> /etc/sysctl.d/60-lsa-kernel.conf", 'sysctl --system'],
+          'verification_commands': ['sysctl kernel.dmesg_restrict'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-KRN-005',
+          'module': 'security_health',
+          'category': 'kernel',
+          'title': 'Ensure process tracing is restricted',
+          'severity': 'medium',
+          'status': 'pass' if lsa_ptrace_value | int >= 1 else 'fail',
+          'expected': 'kernel.yama.ptrace_scope >= 1',
+          'actual': 'kernel.yama.ptrace_scope = ' ~ lsa_ptrace_value,
+          'evidence': ['sysctl -n kernel.yama.ptrace_scope'],
+          'remediation_summary': 'Restrict process tracing to parent processes or privileged debugging workflows.',
+          'remediation_commands': ["printf '%s\\n' 'kernel.yama.ptrace_scope = 1' >> /etc/sysctl.d/60-lsa-kernel.conf", 'sysctl --system'],
+          'verification_commands': ['sysctl kernel.yama.ptrace_scope'],
+          'reboot_required': false,
+          'service_restart': false
+        }
+      ] }}
+
+- name: Add audit and observability controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-OBS-001',
+          'module': 'security_health',
+          'category': 'audit',
+          'title': 'Ensure Linux audit is enabled and active',
+          'severity': 'high',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_auditd_enabled.stdout | trim in ['enabled', 'static'] and lsa_auditd_active.stdout | trim == 'active' and lsa_audit_status.rc == 0 else 'fail'),
+          'expected': 'auditd enabled and active with kernel audit status available',
+          'actual': (lsa_auditd_enabled.stdout | default('unknown') | trim) ~ ' / ' ~ (lsa_auditd_active.stdout | default('unknown') | trim),
+          'evidence': ['systemctl is-enabled auditd', 'systemctl is-active auditd', 'auditctl -s'],
+          'remediation_summary': 'Install, enable, and start auditd with the approved audit policy.',
+          'remediation_commands': ['apt-get install auditd', 'systemctl enable --now auditd'],
+          'verification_commands': ['auditctl -s', 'systemctl is-active auditd'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-OBS-002',
+          'module': 'security_health',
+          'category': 'mandatory_access',
+          'title': 'Ensure AppArmor is enabled with enforcing profiles',
+          'severity': 'high',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_apparmor_status.rc == 0 and lsa_apparmor_status.stdout | regex_search('[1-9][0-9]* profiles are in enforce mode') else 'fail'),
+          'expected': 'AppArmor enabled with at least one enforcing profile',
+          'actual': (lsa_apparmor_status.stdout_lines | default([]))[:8] | join('\n'),
+          'evidence': ['apparmor_status'],
+          'remediation_summary': 'Enable AppArmor and place deployed service profiles into enforce mode.',
+          'remediation_commands': ['apt-get install apparmor apparmor-utils', 'systemctl enable --now apparmor'],
+          'verification_commands': ['apparmor_status'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-OBS-003',
+          'module': 'security_health',
+          'category': 'time',
+          'title': 'Ensure network time synchronization is healthy',
+          'severity': 'medium',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_time_synchronized.rc == 0 and lsa_time_synchronized.stdout | trim == 'yes' else 'fail'),
+          'expected': 'NTPSynchronized=yes',
+          'actual': 'NTPSynchronized=' ~ (lsa_time_synchronized.stdout | default('unknown') | trim),
+          'evidence': ['timedatectl show -p NTPSynchronized --value'],
+          'remediation_summary': 'Enable the approved NTP client and investigate clock-synchronization failures.',
+          'remediation_commands': ['systemctl enable --now systemd-timesyncd'],
+          'verification_commands': ['timedatectl show -p NTPSynchronized --value'],
+          'reboot_required': false,
+          'service_restart': true
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-OBS-004',
+          'module': 'security_health',
+          'category': 'logging',
+          'title': 'Ensure systemd journal persistence is configured',
+          'severity': 'medium',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_persistent_journal.stat.exists and lsa_persistent_journal.stat.isdir else 'fail'),
+          'expected': '/var/log/journal exists',
+          'actual': 'persistent journal directory present' if lsa_persistent_journal.stat.exists else 'persistent journal directory absent',
+          'evidence': ['/var/log/journal'],
+          'remediation_summary': 'Configure persistent journal storage and apply the approved retention policy.',
+          'remediation_commands': ['mkdir -p /var/log/journal', 'systemctl restart systemd-journald'],
+          'verification_commands': ['test -d /var/log/journal'],
+          'reboot_required': false,
+          'service_restart': true
+        }
+      ] }}

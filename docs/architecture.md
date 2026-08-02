@@ -22,7 +22,7 @@ The canonical contract lives in `packages/contracts/report-v1.schema.json`. A re
 - Ubuntu 22.04 and 24.04
 - RHEL family 8 and 9
 
-The v0.1 scanner implementation focuses on Debian 13. The shared contract and plugin boundaries already admit the other supported families.
+The v0.3 scanner implementation focuses on Debian 13 with 32 executable controls and explicit production-server, minimal-server, router, and container profiles. The shared contract and plugin boundaries already admit the other supported families.
 
 ## Security invariants
 

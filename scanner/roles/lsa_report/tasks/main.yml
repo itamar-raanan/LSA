@@ -5,6 +5,7 @@
       - ansible_facts.os_family in ['Debian', 'RedHat']
       - lsa_host_id | length > 0
       - lsa_delivery_mode in ['offline', 'upload', 'upload_and_keep']
+      - lsa_profile in lsa_supported_profiles
     fail_msg: LSA requires Debian, Ubuntu, or RHEL family Linux and a platform host UUID.
 
 - name: Resolve normalized operating-system family
@@ -16,6 +17,7 @@
     lsa_report_id: "{{ lookup('pipe', 'python3 -c \"import uuid; print(uuid.uuid4())\"') }}"
     lsa_generated_at: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
     lsa_machine_id_hash: "sha256:{{ ansible_machine_id | hash('sha256') }}"
+    lsa_effective_profile: "{{ lsa_profile }}"
 
 - name: Initialize normalized findings
   ansible.builtin.set_fact:

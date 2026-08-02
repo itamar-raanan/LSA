@@ -1,7 +1,7 @@
 import { ArrowRight, CheckCircle, ShieldCheck } from '@phosphor-icons/react'
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { BrandMark } from '../components/BrandMark'
 
 export function LoginPage() {
@@ -69,4 +69,3 @@ export function LoginPage() {
     </main>
   )
 }
-

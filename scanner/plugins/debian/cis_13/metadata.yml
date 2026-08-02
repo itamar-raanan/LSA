@@ -1,8 +1,8 @@
 ---
-id: cis_debian_13
-name: CIS Debian Linux 13 baseline
-version: 0.2.0
+id: lsa_debian_13
+name: LSA Debian Linux 13 production baseline
+version: 0.3.0
 os_family: debian
 os_versions: ["13"]
-profile: cis_level1_server
-description: Twelve read-only filesystem, account, SSH, kernel, package, and service controls for Debian 13 servers.
+profiles: [production_server, minimal_server, router, container]
+description: Thirty-two read-only production controls for Debian 13 servers and containers.

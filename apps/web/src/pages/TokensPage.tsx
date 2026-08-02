@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { CreateTokenPanel } from '../components/CreateTokenPanel'
 import { PageHeader } from '../components/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { useApi } from '../hooks/useApi'
 import type { IngestionToken } from '../types'
 

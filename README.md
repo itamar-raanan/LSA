@@ -13,7 +13,7 @@ LSA does **not** SSH to servers, store privileged server credentials, or execute
 - Complete manifest and checksum verification for offline bundles
 - New, persistent, and resolved finding comparison
 - React fleet dashboard, enrollment, token lifecycle management, host profiles, report history, comparisons, findings, and upload
-- Twelve read-only Debian 13 controls for identity files, accounts, SSH, networking, packages, services, and core dumps
+- Thirty-two read-only Debian 13 controls for updates, identity, accounts, SSH, networking, kernel posture, auditing, mandatory access, packages, services, time, and logging
 - Versioned report JSON Schema
 - Ansible report generation and submission role
 - Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
@@ -72,7 +72,9 @@ ansible-playbook -i inventory.ini playbooks/scan.yml \
 
 Delivery modes are `offline`, `upload`, and `upload_and_keep`. The last mode is the production default because it preserves a local artifact even after successful submission.
 
-The current executable control pack targets Debian 13 and performs read-only checks. Other declared platform families remain accepted by the report contract but do not yet have executable control packs.
+The current executable control pack targets Debian 13 and performs read-only checks. Select `production_server`, `minimal_server`, `router`, or `container` with `lsa_profile`; profile-specific controls are emitted as `not_applicable` when they do not belong to the target. Other declared platform families remain accepted by the report contract but do not yet have executable control packs.
+
+GitHub Actions also executes the complete scanner inside an official Debian 13 container, validates the normalized report, verifies the portable bundle, and ingests it through the API.
 
 ## Repository map
 

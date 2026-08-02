@@ -8,7 +8,7 @@ import {
   UploadSimple,
 } from '@phosphor-icons/react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { BrandMark } from './BrandMark'
 
 const navigation = [

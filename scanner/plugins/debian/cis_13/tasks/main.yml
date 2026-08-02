@@ -78,7 +78,7 @@
     lsa_findings: >-
       {{ lsa_findings + [
         {
-          'control_id': 'CIS-DEBIAN13-6.2.3',
+          'control_id': 'LSA-DEBIAN13-FS-001',
           'module': 'cis',
           'category': 'filesystem',
           'title': 'Ensure permissions on /etc/passwd are configured',
@@ -94,7 +94,7 @@
           'service_restart': false
         },
         {
-          'control_id': 'CIS-DEBIAN13-6.2.4',
+          'control_id': 'LSA-DEBIAN13-FS-002',
           'module': 'cis',
           'category': 'filesystem',
           'title': 'Ensure permissions on /etc/shadow are configured',
@@ -197,7 +197,7 @@
           'category': 'packages',
           'title': 'Ensure unattended security upgrades are installed',
           'severity': 'high',
-          'status': 'pass' if lsa_unattended_upgrades.rc == 0 and 'install ok installed' in lsa_unattended_upgrades.stdout else 'fail',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_unattended_upgrades.rc == 0 and 'install ok installed' in lsa_unattended_upgrades.stdout else 'fail'),
           'expected': 'unattended-upgrades installed',
           'actual': (lsa_unattended_upgrades.stdout | default('') | trim) | default('package not installed', true),
           'evidence': ['dpkg-query -W unattended-upgrades'],
@@ -213,7 +213,7 @@
           'category': 'services',
           'title': 'Ensure the cron scheduler is enabled and active',
           'severity': 'low',
-          'status': 'pass' if lsa_cron_enabled.stdout | trim == 'enabled' and lsa_cron_active.stdout | trim == 'active' else 'fail',
+          'status': 'not_applicable' if lsa_effective_profile == 'container' else ('pass' if lsa_cron_enabled.stdout | trim == 'enabled' and lsa_cron_active.stdout | trim == 'active' else 'fail'),
           'expected': 'enabled and active',
           'actual': (lsa_cron_enabled.stdout | default('unknown') | trim) ~ ' / ' ~ (lsa_cron_active.stdout | default('unknown') | trim),
           'evidence': ['systemctl is-enabled cron', 'systemctl is-active cron'],
@@ -230,7 +230,7 @@
     lsa_findings: >-
       {{ lsa_findings + [
         {
-          'control_id': 'CIS-DEBIAN13-4.2.7',
+          'control_id': 'LSA-DEBIAN13-SSH-001',
           'module': 'cis',
           'category': 'ssh',
           'title': 'Ensure SSH root login is disabled',
@@ -246,7 +246,7 @@
           'service_restart': true
         },
         {
-          'control_id': 'CIS-DEBIAN13-4.2.10',
+          'control_id': 'LSA-DEBIAN13-SSH-002',
           'module': 'cis',
           'category': 'ssh',
           'title': 'Ensure SSH password authentication is disabled',
@@ -268,12 +268,12 @@
     lsa_findings: >-
       {{ lsa_findings + [
         {
-          'control_id': 'CIS-DEBIAN13-3.3.1',
+          'control_id': 'LSA-DEBIAN13-NET-001',
           'module': 'cis',
           'category': 'network',
           'title': 'Ensure IPv4 forwarding is disabled',
           'severity': 'medium',
-          'status': 'error' if lsa_ipv4_forward.rc != 0 else ('pass' if lsa_ipv4_forward.stdout | trim == '0' else 'fail'),
+          'status': 'not_applicable' if lsa_effective_profile == 'router' else ('error' if lsa_ipv4_forward.rc != 0 else ('pass' if lsa_ipv4_forward.stdout | trim == '0' else 'fail')),
           'expected': 'net.ipv4.ip_forward = 0',
           'actual': 'net.ipv4.ip_forward = ' ~ (lsa_ipv4_forward.stdout | default('unknown') | trim),
           'evidence': ['sysctl -n net.ipv4.ip_forward'],
@@ -284,7 +284,7 @@
           'service_restart': false
         },
         {
-          'control_id': 'CIS-DEBIAN13-1.5.1',
+          'control_id': 'LSA-DEBIAN13-KRN-001',
           'module': 'cis',
           'category': 'kernel',
           'title': 'Ensure setuid programs do not produce core dumps',
@@ -300,3 +300,6 @@
           'service_restart': false
         }
       ] }}
+
+- name: Run Debian 13 production posture controls
+  ansible.builtin.import_tasks: production.yml
