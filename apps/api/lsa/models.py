@@ -116,6 +116,7 @@ class SigningKey(Base):
 
 class Report(Base):
     __tablename__ = "reports"
+    __table_args__ = (Index("ix_reports_artifact_object_key", "artifact_object_key", unique=True),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
@@ -132,6 +133,13 @@ class Report(Base):
     security_score: Mapped[float] = mapped_column(Float)
     artifact_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    artifact_object_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    artifact_object_version: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    artifact_size_bytes: Mapped[int | None] = mapped_column(nullable=True)
+    artifact_content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    artifact_stored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    artifact_retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    artifact_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     signing_key_id: Mapped[str | None] = mapped_column(ForeignKey("signing_keys.id"), nullable=True)
     signature_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 

@@ -19,9 +19,9 @@ The canonical contract lives in `packages/contracts/report-v1.schema.json`. A re
 
 ## Container topology
 
-The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API and PostgreSQL communicate only on an internal Docker network; PostgreSQL has no published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.
+The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API, PostgreSQL, and MinIO communicate only on an internal Docker network; neither data service has a published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.
 
-Only the web gateway publishes a host port, bound to `127.0.0.1:8080` by default. Production internet exposure belongs at a host-level TLS proxy or load balancer. Platform state lives in the named PostgreSQL volume; containers themselves are disposable.
+Only the web gateway publishes a host port, bound to `127.0.0.1:8080` by default. Production internet exposure belongs at a host-level TLS proxy or load balancer. Platform state lives in named PostgreSQL and evidence-object volumes; containers themselves are disposable.
 
 ## Supported systems
 

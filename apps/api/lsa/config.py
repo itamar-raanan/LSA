@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +18,15 @@ class Settings(BaseSettings):
     seed_demo: bool = True
     max_upload_bytes: int = 25 * 1024 * 1024
     require_signed_bundles: bool = False
+    artifact_backend: Literal["filesystem", "s3"] = "filesystem"
+    artifact_path: str = "./artifacts"
+    artifact_retention_days: int = Field(default=365, ge=0)
+    s3_endpoint_url: str | None = None
+    s3_bucket: str = "lsa-evidence"
+    s3_region: str = "us-east-1"
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_server_side_encryption: Literal["AES256", "aws:kms", "none"] = "AES256"
 
 
 @lru_cache

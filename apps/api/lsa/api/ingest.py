@@ -4,8 +4,9 @@ import zipfile
 from base64 import b64decode
 from binascii import Error as BinasciiError
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from contextlib import suppress
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -16,9 +17,15 @@ from sqlalchemy.orm import Session
 from lsa.config import Settings, get_settings
 from lsa.database import get_db
 from lsa.dependencies import IngestionPrincipal, ingestion_principal
-from lsa.models import SigningKey
+from lsa.models import Report, SigningKey
 from lsa.schemas import IngestResponse, ReportInput
 from lsa.services.ingestion import ingest_report
+from lsa.services.artifacts import (
+    ArtifactStore,
+    ArtifactStoreError,
+    artifact_key,
+    get_artifact_store,
+)
 
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
@@ -148,6 +155,7 @@ async def submit_bundle(
     principal: IngestionPrincipal = Depends(ingestion_principal),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
 ) -> IngestResponse:
     data = await file.read(settings.max_upload_bytes + 1)
     if len(data) > settings.max_upload_bytes:
@@ -165,12 +173,42 @@ async def submit_bundle(
     except (json.JSONDecodeError, UnicodeDecodeError, ValidationError) as exc:
         raise HTTPException(status_code=422, detail="Invalid report.json") from exc
     signing_key_id = verify_signing_key(db, principal, report, verified)
-    return ingest_report(
-        db,
-        report,
-        principal,
-        file.filename,
-        data,
-        signing_key_id=signing_key_id,
-        signature_verified=signing_key_id is not None,
+    if db.get(Report, str(report.report_id)) is not None:
+        raise HTTPException(status_code=409, detail="Report already imported")
+    object_key = artifact_key(principal.tenant_id, str(report.report_id))
+    stored_at = datetime.now(UTC)
+    retention_until = (
+        stored_at + timedelta(days=settings.artifact_retention_days)
+        if settings.artifact_retention_days > 0
+        else None
     )
+    try:
+        artifact_store.ensure_ready()
+        object_version = artifact_store.put(
+            object_key,
+            data,
+            "application/zip",
+            retention_until,
+        )
+    except ArtifactStoreError as exc:
+        raise HTTPException(status_code=503, detail="Evidence vault is unavailable") from exc
+    try:
+        return ingest_report(
+            db,
+            report,
+            principal,
+            file.filename,
+            data,
+            signing_key_id=signing_key_id,
+            signature_verified=signing_key_id is not None,
+            artifact_object_key=object_key,
+            artifact_object_version=object_version,
+            artifact_size_bytes=len(data),
+            artifact_content_type="application/zip",
+            artifact_stored_at=stored_at,
+            artifact_retention_until=retention_until,
+        )
+    except Exception:
+        with suppress(ArtifactStoreError):
+            artifact_store.delete(object_key, object_version)
+        raise

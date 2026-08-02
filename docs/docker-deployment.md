@@ -1,12 +1,13 @@
 # Docker deployment
 
-LSA runs as three containers:
+LSA runs as four containers:
 
 - `web` serves the compiled React console and reverse-proxies API traffic.
 - `api` applies database migrations and runs the FastAPI application as a non-root user.
 - `postgres` stores all platform state in the persistent `lsa-postgres` volume.
+- `minio` stores original evidence bundles in the persistent `lsa-evidence` volume.
 
-Redis and object storage are intentionally absent until the application has a real consumer for them.
+The API creates an object-lock-enabled evidence bucket and verifies every object's SHA-256 digest before download. AWS S3 uses SSE-S3 by default; the bundled MinIO service relies on protected volume storage unless KMS-backed SSE is configured. Redis remains absent until the application has a real consumer for it.
 
 ## First start
 
@@ -18,6 +19,8 @@ chmod 600 deploy/.env
 ```
 
 Generate secrets with a password manager or a cryptographically secure generator. Keep the PostgreSQL password URL-safe because Compose embeds it in `LSA_DATABASE_URL`.
+
+Replace both S3 credential placeholders as well. MinIO is private to the Docker network and has no published console or API port.
 
 Validate and start the stack:
 
@@ -56,6 +59,8 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml \
 
 If the database or user names differ, substitute the values from `deploy/.env`. Store backups encrypted and test restores regularly.
 
+The database backup contains evidence metadata, not the original ZIP objects. Back up or replicate the `lsa-evidence` MinIO volume separately. A complete restore requires a matching PostgreSQL backup and evidence-volume snapshot from the same backup window.
+
 Restore into an empty database:
 
 ```bash
@@ -73,6 +78,8 @@ make up
 
 The API container applies pending Alembic migrations before accepting traffic. Review release notes before upgrades that change the PostgreSQL major version; those require a database migration rather than a simple image replacement.
 
+When upgrading an existing Docker deployment to the evidence-vault release, add `LSA_S3_ACCESS_KEY`, `LSA_S3_SECRET_KEY`, `LSA_S3_BUCKET`, `LSA_S3_REGION`, `LSA_S3_SERVER_SIDE_ENCRYPTION`, and `LSA_ARTIFACT_RETENTION_DAYS` to `deploy/.env` before running `make up`. Keep `LSA_S3_SERVER_SIDE_ENCRYPTION=none` for the bundled MinIO service unless MinIO KMS has been configured; AWS S3 deployments may use `AES256`.
+
 ## Operations
 
 ```bash
@@ -81,7 +88,7 @@ make logs
 make down
 ```
 
-`make down` preserves the database volume. Avoid `docker compose down --volumes` unless permanent deletion of all platform data is explicitly intended.
+`make down` preserves the database and evidence volumes. Avoid `docker compose down --volumes` unless permanent deletion of all platform data is explicitly intended.
 
 The external health endpoints are:
 

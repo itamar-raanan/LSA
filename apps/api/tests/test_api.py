@@ -10,8 +10,13 @@ from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from lsa.config import Settings, get_settings
+from lsa.database import SessionLocal
 from lsa.main import app
-from lsa.seed import DEMO_TOKEN
+from lsa.models import Report, Tenant
+from lsa.models import IngestionToken
+from lsa.seed import DEMO_TOKEN, bootstrap
+from lsa.security import hash_ingestion_token
+from sqlalchemy import select
 from scanner.scripts.build_bundle import build
 
 
@@ -91,8 +96,30 @@ def test_health(client):
     assert client.get("/health").json()["status"] == "ok"
 
 
+def test_production_bootstrap_does_not_create_demo_token():
+    with SessionLocal() as db:
+        bootstrap(
+            db,
+            Settings(
+                environment="production",
+                bootstrap_password="production-test-password",
+                seed_demo=False,
+            ),
+        )
+        token = db.scalar(
+            select(IngestionToken).where(
+                IngestionToken.token_hash == hash_ingestion_token(DEMO_TOKEN)
+            )
+        )
+        assert token is None
+
+
 def test_readiness_checks_database(client):
-    assert client.get("/ready").json() == {"status": "ready", "database": "connected"}
+    assert client.get("/ready").json() == {
+        "status": "ready",
+        "database": "connected",
+        "evidence_vault": "connected",
+    }
 
 
 def test_ingest_and_read_fleet(client):
@@ -255,6 +282,108 @@ def test_offline_bundle_verifies_all_checksums(client, tmp_path: Path):
     )
     assert response.status_code == 202
     assert response.json()["findings_imported"] == 1
+
+    session_headers = {"Authorization": f"Bearer {login(client)}"}
+    history = client.get(
+        f"/api/v1/hosts/{response.json()['host_id']}/reports", headers=session_headers
+    ).json()
+    assert history[0]["artifact_available"] is True
+    assert history[0]["artifact_size_bytes"] == bundle_path.stat().st_size
+    download = client.get(
+        f"/api/v1/reports/{response.json()['report_id']}/artifact",
+        headers=session_headers,
+    )
+    assert download.status_code == 200
+    assert download.content == bundle_path.read_bytes()
+    assert download.headers["x-lsa-artifact-sha256"] == hashlib.sha256(download.content).hexdigest()
+
+
+def test_evidence_download_rejects_vault_tampering(client, tmp_path: Path):
+    bundle_path = build(Path("tests/fixtures/report.json"), tmp_path)
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+    report_id = response.json()["report_id"]
+    with SessionLocal() as db:
+        report = db.get(Report, report_id)
+        object_path = Path("/tmp/lsa-test-artifacts") / report.artifact_object_key
+        object_path.write_bytes(b"tampered evidence")
+    download = client.get(
+        f"/api/v1/reports/{report_id}/artifact",
+        headers={"Authorization": f"Bearer {login(client)}"},
+    )
+    assert download.status_code == 409
+    assert download.json()["detail"] == "Evidence integrity verification failed"
+
+
+def test_evidence_retention_blocks_early_deletion(client, tmp_path: Path):
+    bundle_path = build(Path("tests/fixtures/report.json"), tmp_path)
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+    report_id = response.json()["report_id"]
+    session_headers = {"Authorization": f"Bearer {login(client)}"}
+    blocked = client.delete(f"/api/v1/reports/{report_id}/artifact", headers=session_headers)
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "Evidence retention period has not expired"
+
+    with SessionLocal() as db:
+        report = db.get(Report, report_id)
+        report.artifact_retention_until = datetime.now(UTC) - timedelta(minutes=1)
+        db.commit()
+    assert client.delete(
+        f"/api/v1/reports/{report_id}/artifact", headers=session_headers
+    ).status_code == 204
+    assert client.get(
+        f"/api/v1/reports/{report_id}/artifact", headers=session_headers
+    ).status_code == 404
+
+
+def test_expired_evidence_policy_purge(client, tmp_path: Path):
+    bundle_path = build(Path("tests/fixtures/report.json"), tmp_path)
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+    report_id = response.json()["report_id"]
+    with SessionLocal() as db:
+        report = db.get(Report, report_id)
+        report.artifact_retention_until = datetime.now(UTC) - timedelta(minutes=1)
+        db.commit()
+    session_headers = {"Authorization": f"Bearer {login(client)}"}
+    purge = client.post("/api/v1/artifacts/purge-expired", headers=session_headers)
+    assert purge.status_code == 200
+    assert purge.json() == {"deleted": 1}
+    assert client.get(
+        f"/api/v1/reports/{report_id}/artifact", headers=session_headers
+    ).status_code == 404
+
+
+def test_evidence_download_is_tenant_isolated(client, tmp_path: Path):
+    bundle_path = build(Path("tests/fixtures/report.json"), tmp_path)
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+    report_id = response.json()["report_id"]
+    with SessionLocal() as db:
+        other_tenant = Tenant(name="Another tenant", slug="another-tenant")
+        db.add(other_tenant)
+        db.flush()
+        report = db.get(Report, report_id)
+        report.tenant_id = other_tenant.id
+        db.commit()
+    response = client.get(
+        f"/api/v1/reports/{report_id}/artifact",
+        headers={"Authorization": f"Bearer {login(client)}"},
+    )
+    assert response.status_code == 404
 
 
 def test_offline_bundle_rejects_tampered_declared_file(client, tmp_path: Path):

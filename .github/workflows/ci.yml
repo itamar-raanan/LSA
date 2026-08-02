@@ -44,15 +44,16 @@ jobs:
         run: docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
       - name: Build and start platform
         run: docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build -d --wait --wait-timeout 180
-      - name: Smoke test web, API, and bootstrap login
+      - name: Smoke test web, API, database, and evidence vault
         run: |
           curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q "Linux Security Auditor"
           curl --fail --silent --show-error http://127.0.0.1:8080/health | grep -q '"status":"ok"'
           curl --fail --silent --show-error http://127.0.0.1:8080/ready | grep -q '"database":"connected"'
-          curl --fail --silent --show-error \
-            -H "Content-Type: application/json" \
-            --data '{"email":"admin@example.com","password":"replace-with-a-long-administrator-password"}' \
-            http://127.0.0.1:8080/api/v1/auth/login | grep -q '"access_token"'
+          curl --fail --silent --show-error http://127.0.0.1:8080/ready | grep -q '"evidence_vault":"connected"'
+          python3 deploy/smoke_test.py \
+            http://127.0.0.1:8080 \
+            admin@example.com \
+            replace-with-a-long-administrator-password
       - name: Show service logs on failure
         if: failure()
         run: docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs --no-color
