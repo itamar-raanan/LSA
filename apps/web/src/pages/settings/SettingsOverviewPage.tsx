@@ -16,11 +16,11 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../../components/PageHeader'
 
 const primarySettings = [
-  { to: '/settings/users', title: 'Users & access', detail: 'Invite users and enforce tenant roles and permissions.', status: 'Backend required', icon: UsersThree },
-  { to: '/settings/authentication', title: 'Authentication', detail: 'Configure local login, OIDC or SAML SSO, and RADIUS.', status: 'Local enabled', icon: LockKey },
+  { to: '/settings/users', title: 'Users & access', detail: 'Govern JIT users and enforce tenant roles and permissions.', status: 'Available', icon: UsersThree },
+  { to: '/settings/authentication', title: 'Authentication', detail: 'Configure OpenID Connect providers and RADIUS.', status: 'Available', icon: LockKey },
   { to: '/settings/tokens', title: 'Ingestion tokens', detail: 'Issue and revoke host-scoped scanner credentials.', status: 'Available', icon: Key },
   { to: '/settings/signing-keys', title: 'Signing keys', detail: 'Register public keys used to verify report provenance.', status: 'Available', icon: Fingerprint },
-  { to: '/settings/certificates', title: 'TLS certificates', detail: 'Install and rotate the HTTPS certificate chain.', status: 'External TLS', icon: Certificate },
+  { to: '/settings/certificates', title: 'TLS certificates', detail: 'Install and rotate the HTTPS certificate chain.', status: 'TLS · 8443', icon: Certificate },
 ]
 
 const recommended = [
@@ -39,7 +39,7 @@ export function SettingsOverviewPage() {
 
       <section className="overflow-hidden rounded-[22px] border border-stone-800 bg-[#151916]">
         <div className="grid border-b border-stone-800 px-6 py-5 md:grid-cols-[1fr_auto] md:items-center md:px-7">
-          <div><p className="section-label">Configuration posture</p><p className="mt-2 text-sm text-stone-400">Two controls are operational; identity integrations require backend enablement.</p></div>
+          <div><p className="section-label">Configuration posture</p><p className="mt-2 text-sm text-stone-400">Identity, credentials, signing trust, and TLS lifecycle controls are operational.</p></div>
           <span className="mt-4 inline-flex w-fit items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-emerald-300 md:mt-0"><span className="status-pulse" /> Evidence trust active</span>
         </div>
         <div className="divide-y divide-stone-800">

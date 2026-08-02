@@ -14,6 +14,18 @@ class ScannerInfo(BaseModel):
     version: str = Field(min_length=1, max_length=40)
 
 
+class SystemInfo(BaseModel):
+    cpu_model: str | None = Field(default=None, max_length=300)
+    cpu_cores: int | None = Field(default=None, ge=0)
+    memory_mb: int | None = Field(default=None, ge=0)
+    uptime_seconds: int | None = Field(default=None, ge=0)
+    virtualization_type: str | None = Field(default=None, max_length=80)
+    virtualization_role: str | None = Field(default=None, max_length=80)
+    system_vendor: str | None = Field(default=None, max_length=200)
+    product_name: str | None = Field(default=None, max_length=200)
+    timezone: str | None = Field(default=None, max_length=80)
+
+
 class HostInfo(BaseModel):
     host_id: UUID
     hostname: str = Field(min_length=1, max_length=253)
@@ -26,6 +38,7 @@ class HostInfo(BaseModel):
     architecture: str
     ip_addresses: list[str] = Field(default_factory=list, max_length=64)
     tags: dict[str, str] = Field(default_factory=dict)
+    system_info: SystemInfo = Field(default_factory=SystemInfo)
 
 
 class ScanInfo(BaseModel):
@@ -93,6 +106,88 @@ class LoginResponse(BaseModel):
     user: dict[str, str]
 
 
+class RadiusLoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class IdentityProviderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    provider_type: Literal["entra", "okta", "google", "adfs", "openid", "radius"]
+    issuer_url: str | None = Field(default=None, max_length=500)
+    client_id: str | None = Field(default=None, max_length=320)
+    secret: str | None = Field(default=None, max_length=2048)
+    config: dict[str, object] = Field(default_factory=dict)
+    is_enabled: bool = False
+
+
+class IdentityProviderUpdate(IdentityProviderCreate):
+    secret: str | None = Field(default=None, max_length=2048)
+
+
+class IdentityProviderResponse(BaseModel):
+    id: str
+    name: str
+    provider_type: str
+    issuer_url: str | None
+    client_id: str | None
+    config: dict[str, object]
+    is_enabled: bool
+    secret_configured: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PublicIdentityProvider(BaseModel):
+    id: str
+    name: str
+    provider_type: str
+
+
+class OidcStartResponse(BaseModel):
+    authorization_url: str
+
+
+class UserAdminResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: str
+    is_active: bool
+    auth_source: str
+    provider_name: str | None = None
+    last_login_at: datetime | None
+    created_at: datetime
+
+
+class UserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    display_name: str = Field(min_length=1, max_length=160)
+    role: Literal["admin", "analyst", "auditor"] = "auditor"
+    provider_id: str
+    external_subject: str = Field(min_length=1, max_length=320)
+
+
+class UserRoleUpdate(BaseModel):
+    role: Literal["admin", "analyst", "auditor"]
+
+
+class UserStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class TlsCertificateResponse(BaseModel):
+    id: str
+    fingerprint: str
+    subject: str
+    issuer: str
+    hostnames: list[str]
+    not_valid_before: datetime
+    not_valid_after: datetime
+    is_active: bool
+    created_at: datetime
+
+
 class HostResponse(BaseModel):
     id: str
     hostname: str
@@ -104,6 +199,7 @@ class HostResponse(BaseModel):
     architecture: str
     ip_addresses: list[str]
     tags: dict[str, str]
+    system_info: dict[str, object]
     compliance_score: float | None
     security_score: float | None
     last_scan_at: datetime | None

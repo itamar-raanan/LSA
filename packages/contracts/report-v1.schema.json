@@ -33,7 +33,22 @@
         "kernel": { "type": "string", "minLength": 1, "maxLength": 100 },
         "architecture": { "type": "string", "minLength": 1, "maxLength": 40 },
         "ip_addresses": { "type": "array", "items": { "type": "string" }, "maxItems": 64 },
-        "tags": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 120 } }
+        "tags": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 120 } },
+        "system_info": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu_model": { "type": "string", "maxLength": 300 },
+            "cpu_cores": { "type": "integer", "minimum": 0 },
+            "memory_mb": { "type": "integer", "minimum": 0 },
+            "uptime_seconds": { "type": "integer", "minimum": 0 },
+            "virtualization_type": { "type": "string", "maxLength": 80 },
+            "virtualization_role": { "type": "string", "maxLength": 80 },
+            "system_vendor": { "type": "string", "maxLength": 200 },
+            "product_name": { "type": "string", "maxLength": 200 },
+            "timezone": { "type": "string", "maxLength": 80 }
+          }
+        }
       }
     },
     "scan": {
@@ -89,4 +104,3 @@
     }
   }
 }
-

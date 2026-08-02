@@ -1,15 +1,35 @@
-import { ArrowRight, CheckCircle, ShieldCheck } from '@phosphor-icons/react'
-import { useState, type FormEvent } from 'react'
+import { ArrowRight, Buildings, CheckCircle, ShieldCheck } from '@phosphor-icons/react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
+import { api } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { BrandMark } from '../components/BrandMark'
+import type { PublicIdentityProvider, User } from '../types'
 
 export function LoginPage() {
-  const { user, login } = useAuth()
+  const { user, login, radiusLogin, acceptSession } = useAuth()
   const [email, setEmail] = useState('admin@lsa.local')
   const [password, setPassword] = useState('lsa-dev-password')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [providers, setProviders] = useState<PublicIdentityProvider[]>([])
+  const [method, setMethod] = useState<'organization' | 'radius' | 'emergency'>('organization')
+
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1))
+    const token = fragment.get('session')
+    const encodedUser = fragment.get('user')
+    if (token && encodedUser) {
+      try {
+        const padded = encodedUser + '='.repeat((4 - encodedUser.length % 4) % 4)
+        acceptSession(token, JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/'))) as User)
+        window.history.replaceState(null, '', '/login')
+      } catch {
+        setError('The identity-provider response could not be accepted.')
+      }
+    }
+    void api.publicProviders().then(setProviders).catch(() => setProviders([]))
+  }, [acceptSession])
 
   if (user) return <Navigate to="/" replace />
 
@@ -18,7 +38,8 @@ export function LoginPage() {
     setSubmitting(true)
     setError('')
     try {
-      await login(email, password)
+      if (method === 'radius') await radiusLogin(email, password)
+      else await login(email, password)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Sign in failed')
     } finally {
@@ -49,10 +70,17 @@ export function LoginPage() {
           <div className="mb-8 grid size-11 place-items-center rounded-2xl border border-stone-700 bg-stone-900 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]"><ShieldCheck size={22} weight="duotone" /></div>
           <h2 className="text-3xl font-medium tracking-[-0.045em]">Access the console</h2>
           <p className="mt-2 text-sm leading-6 text-stone-500">Use your organization account to review the Linux estate.</p>
-          <form className="mt-9 space-y-5" onSubmit={submit}>
+          {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="mt-8 space-y-2">
+            {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Buildings size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
+          </div>}
+          <div className="mt-7 flex gap-2 border-b border-stone-800 pb-3 text-[10px] uppercase tracking-wider text-stone-600">
+            {providers.some((provider) => provider.provider_type === 'radius') && <button className={method === 'radius' ? 'text-emerald-300' : ''} onClick={() => setMethod('radius')}>RADIUS</button>}
+            <button className={method === 'emergency' ? 'text-emerald-300' : ''} onClick={() => setMethod('emergency')}>Emergency admin</button>
+          </div>
+          {method !== 'organization' && <form className="mt-6 space-y-5" onSubmit={submit}>
             <label className="form-field">
-              <span>Email address</span>
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
+              <span>{method === 'radius' ? 'RADIUS username' : 'Email address'}</span>
+              <input type={method === 'radius' ? 'text' : 'email'} value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
             </label>
             <label className="form-field">
               <span>Password</span>
@@ -62,8 +90,9 @@ export function LoginPage() {
             <button className="button-primary w-full justify-between" disabled={submitting}>
               <span>{submitting ? 'Authenticating' : 'Continue'}</span><ArrowRight size={17} />
             </button>
-          </form>
-          <p className="mt-7 text-xs leading-5 text-stone-600">Development credentials are prefilled. Change the bootstrap password before deploying outside a local environment.</p>
+          </form>}
+          {!providers.length && method === 'organization' && <p className="mt-7 rounded-xl border border-stone-800 bg-[#151916] px-4 py-3 text-xs leading-5 text-stone-500">No organization identity provider is enabled. Use the emergency administrator to configure OpenID Connect or RADIUS.</p>}
+          <p className="mt-7 text-xs leading-5 text-stone-600">The local password is reserved for emergency administration. Regular users are provisioned from OpenID Connect or RADIUS.</p>
         </div>
       </section>
     </main>

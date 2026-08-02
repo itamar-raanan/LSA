@@ -37,6 +37,17 @@ def report_payload() -> dict:
             "os_version": "13",
             "kernel": "6.12.0",
             "architecture": "x86_64",
+            "system_info": {
+                "cpu_model": "Test CPU",
+                "cpu_cores": 4,
+                "memory_mb": 8192,
+                "uptime_seconds": 3600,
+                "virtualization_type": "kvm",
+                "virtualization_role": "guest",
+                "system_vendor": "Test Vendor",
+                "product_name": "Test VM",
+                "timezone": "UTC",
+            },
             "tags": {"environment": "test"},
         },
         "scan": {"profile": "cis_level1_server", "modules": ["cis"]},
@@ -137,6 +148,7 @@ def test_ingest_and_read_fleet(client):
     hosts = client.get("/api/v1/hosts", headers=headers)
     assert hosts.status_code == 200
     assert hosts.json()[0]["hostname"] == "test-web-01"
+    assert hosts.json()[0]["system_info"]["cpu_cores"] == 4
     dashboard = client.get("/api/v1/dashboard", headers=headers)
     assert dashboard.json()["total_hosts"] == 1
 
@@ -232,6 +244,32 @@ def test_enrolled_host_rejects_machine_identity_change(client):
     response = client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second)
     assert response.status_code == 409
     assert response.json()["detail"] == "Machine identity does not match the enrolled host"
+
+
+def test_admin_soft_deletes_host_and_preserves_report_history(client):
+    payload = report_payload()
+    ingested = client.post(
+        "/api/v1/ingest/reports",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        json=payload,
+    )
+    host_id = ingested.json()["host_id"]
+    session_headers = {"Authorization": f"Bearer {login(client)}"}
+    deleted = client.delete(f"/api/v1/hosts/{host_id}", headers=session_headers)
+    assert deleted.status_code == 204
+    assert client.get("/api/v1/hosts", headers=session_headers).json() == []
+    assert client.get(f"/api/v1/hosts/{host_id}", headers=session_headers).status_code == 404
+    with SessionLocal() as db:
+        report = db.get(Report, str(payload["report_id"]))
+        assert report is not None
+
+    payload["report_id"] = str(uuid.uuid4())
+    repeated = client.post(
+        "/api/v1/ingest/reports",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        json=payload,
+    )
+    assert repeated.status_code == 410
 
 
 def test_revoked_token_cannot_submit(client):

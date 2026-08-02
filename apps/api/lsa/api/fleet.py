@@ -66,6 +66,7 @@ def serialize_host(db: Session, host: Host) -> HostResponse:
         architecture=host.architecture,
         ip_addresses=host.ip_addresses or [],
         tags=host.tags or {},
+        system_info=host.system_info or {},
         compliance_score=host.compliance_score,
         security_score=host.security_score,
         last_scan_at=host.last_scan_at,
@@ -80,7 +81,7 @@ def list_hosts(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> list[HostResponse]:
-    query = select(Host).where(Host.tenant_id == user.tenant_id)
+    query = select(Host).where(Host.tenant_id == user.tenant_id, Host.deleted_at.is_(None))
     if search:
         query = query.where(Host.hostname.ilike(f"%{search}%"))
     if os_family:
@@ -96,7 +97,7 @@ def get_host(
     db: Session = Depends(get_db),
 ) -> HostResponse:
     host = db.get(Host, host_id)
-    if host is None or host.tenant_id != user.tenant_id:
+    if host is None or host.tenant_id != user.tenant_id or host.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Host not found")
     return serialize_host(db, host)
 
@@ -144,7 +145,7 @@ def list_host_reports(
     db: Session = Depends(get_db),
 ) -> list[ReportResponse]:
     host = db.get(Host, host_id)
-    if host is None or host.tenant_id != user.tenant_id:
+    if host is None or host.tenant_id != user.tenant_id or host.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Host not found")
     reports = db.scalars(
         select(Report)
@@ -204,6 +205,7 @@ def list_findings(
     severity: str | None = None,
     lifecycle: str | None = None,
     host_id: str | None = None,
+    category: str | None = None,
     limit: int = Query(default=200, ge=1, le=1000),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -217,6 +219,7 @@ def list_findings(
         .where(
             Finding.report_id.in_(report_ids),
             Finding.status.in_([FindingStatus.failed, FindingStatus.error, FindingStatus.manual]),
+            Host.deleted_at.is_(None),
         )
     )
     if severity:
@@ -225,6 +228,8 @@ def list_findings(
         query = query.where(Finding.lifecycle == lifecycle)
     if host_id:
         query = query.where(Finding.host_id == host_id)
+    if category:
+        query = query.where(Finding.category == category)
     rows = db.execute(query.order_by(Finding.severity, Finding.control_id).limit(limit)).all()
     return [
         FindingResponse(
@@ -254,7 +259,9 @@ def dashboard(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> DashboardResponse:
-    hosts = db.scalars(select(Host).where(Host.tenant_id == user.tenant_id)).all()
+    hosts = db.scalars(
+        select(Host).where(Host.tenant_id == user.tenant_id, Host.deleted_at.is_(None))
+    ).all()
     serialized = [serialize_host(db, host) for host in hosts]
     now = datetime.now(UTC)
     stale_cutoff = now - timedelta(days=7)

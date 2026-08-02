@@ -79,11 +79,49 @@ def create_host(
         architecture=host.architecture,
         ip_addresses=host.ip_addresses,
         tags=host.tags,
+        system_info=host.system_info or {},
         compliance_score=None,
         security_score=None,
         last_scan_at=None,
         finding_counts={severity: 0 for severity in ["critical", "high", "medium", "low", "info"]},
     )
+
+
+@router.delete("/hosts/{host_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_host(
+    host_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    require_admin(user)
+    host = db.get(Host, host_id)
+    if host is None or host.tenant_id != user.tenant_id or host.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Host not found")
+    deleted_at = now_utc()
+    host.deleted_at = deleted_at
+    for token in db.scalars(
+        select(IngestionToken).where(
+            IngestionToken.host_id == host.id, IngestionToken.revoked_at.is_(None)
+        )
+    ).all():
+        token.revoked_at = deleted_at
+    for key in db.scalars(
+        select(SigningKey).where(SigningKey.host_id == host.id, SigningKey.revoked_at.is_(None))
+    ).all():
+        key.revoked_at = deleted_at
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="host.deleted",
+            target_type="host",
+            target_id=host.id,
+            details={"hostname": host.hostname, "evidence_preserved": True},
+        )
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/ingestion-tokens", response_model=TokenCreated, status_code=status.HTTP_201_CREATED)
@@ -101,7 +139,7 @@ def create_ingestion_token(
             raise HTTPException(status_code=422, detail="Token expiry must be in the future")
     if request.host_id:
         host = db.get(Host, request.host_id)
-        if host is None or host.tenant_id != user.tenant_id:
+        if host is None or host.tenant_id != user.tenant_id or host.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Host not found")
     raw_token = f"lsa_ingest_{secrets.token_urlsafe(32)}"
     token = IngestionToken(
@@ -218,7 +256,7 @@ def create_signing_key(
             raise HTTPException(status_code=422, detail="Signing key expiry must be in the future")
     if request.host_id:
         host = db.get(Host, request.host_id)
-        if host is None or host.tenant_id != user.tenant_id:
+        if host is None or host.tenant_id != user.tenant_id or host.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Host not found")
     try:
         public_key_bytes = b64decode(request.public_key, validate=True)

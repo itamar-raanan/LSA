@@ -7,6 +7,15 @@ x-logging: &default-logging
     max-file: "3"
 
 services:
+  tls-permissions:
+    image: alpine:3.22
+    command: ["sh", "-c", "chgrp 101 /tls && chmod 0770 /tls"]
+    restart: "no"
+    volumes:
+      - lsa-tls-runtime:/tls
+    networks:
+      - backend
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -55,6 +64,12 @@ services:
       LSA_DATABASE_URL: postgresql+psycopg://${LSA_POSTGRES_USER:-lsa}:${LSA_POSTGRES_PASSWORD}@postgres:5432/${LSA_POSTGRES_DB:-lsa}
       LSA_CORS_ORIGINS: '[]'
       LSA_SESSION_SECRET: ${LSA_SESSION_SECRET:?Set LSA_SESSION_SECRET in deploy/.env}
+      LSA_SETTINGS_ENCRYPTION_KEY: ${LSA_SETTINGS_ENCRYPTION_KEY:?Set LSA_SETTINGS_ENCRYPTION_KEY in deploy/.env}
+      LSA_PUBLIC_URL: https://${LSA_TLS_HOST:-localhost}:${LSA_TLS_PORT:-8443}
+      LSA_ALLOW_PRIVATE_IDENTITY_PROVIDERS: ${LSA_ALLOW_PRIVATE_IDENTITY_PROVIDERS:-false}
+      LSA_TLS_CERTIFICATE_PATH: /tls/tls.crt
+      LSA_TLS_PRIVATE_KEY_PATH: /tls/tls.key
+      LSA_TLS_SHARED_GID: 101
       LSA_BOOTSTRAP_EMAIL: ${LSA_BOOTSTRAP_EMAIL:-admin@lsa.local}
       LSA_BOOTSTRAP_PASSWORD: ${LSA_BOOTSTRAP_PASSWORD:?Set LSA_BOOTSTRAP_PASSWORD in deploy/.env}
       LSA_SEED_DEMO: ${LSA_SEED_DEMO:-false}
@@ -72,6 +87,8 @@ services:
       # AES256 only after configuring MinIO KMS/SSE support.
       LSA_S3_SERVER_SIDE_ENCRYPTION: ${LSA_S3_SERVER_SIDE_ENCRYPTION:-none}
     depends_on:
+      tls-permissions:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       minio:
@@ -79,6 +96,10 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+    group_add:
+      - "101"
+    volumes:
+      - lsa-tls-runtime:/tls
     networks:
       - backend
     logging: *default-logging
@@ -94,7 +115,9 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "${LSA_HTTP_BIND:-127.0.0.1}:${LSA_HTTP_PORT:-8080}:8080"
+      - "${LSA_TLS_BIND:-127.0.0.1}:${LSA_TLS_PORT:-8443}:8443"
+    volumes:
+      - lsa-tls-runtime:/tls:ro
     networks:
       - edge
       - backend
@@ -103,6 +126,7 @@ services:
 volumes:
   lsa-postgres:
   lsa-evidence:
+  lsa-tls-runtime:
 
 networks:
   edge:

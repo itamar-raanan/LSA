@@ -6,11 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from lsa.api import admin, artifacts, auth, fleet, ingest
+from lsa.api import admin, artifacts, auth, fleet, ingest, settings as settings_api
 from lsa.config import get_settings
 from lsa.database import Base, SessionLocal, engine, get_db
 from lsa.seed import bootstrap
 from lsa.services.artifacts import ArtifactStore, get_artifact_store
+from lsa.services.certificates import bootstrap_tls
 
 
 settings = get_settings()
@@ -21,6 +22,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         bootstrap(db, settings)
+        bootstrap_tls(db, settings)
     yield
 
 
@@ -34,10 +36,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["DELETE", "GET", "POST", "OPTIONS"],
+    allow_methods=["DELETE", "GET", "PATCH", "POST", "PUT", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(settings_api.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(artifacts.router, prefix="/api/v1")

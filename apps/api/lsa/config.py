@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./lsa.sqlite3"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     session_secret: str = "development-session-secret-change-in-production"
+    settings_encryption_key: str | None = None
     session_ttl_minutes: int = 480
     bootstrap_email: str = "admin@lsa.local"
     bootstrap_password: str = "lsa-dev-password"
@@ -27,6 +28,11 @@ class Settings(BaseSettings):
     s3_access_key: str | None = None
     s3_secret_key: str | None = None
     s3_server_side_encryption: Literal["AES256", "aws:kms", "none"] = "AES256"
+    public_url: str = "https://localhost:8443"
+    allow_private_identity_providers: bool = False
+    tls_certificate_path: str = "/tmp/lsa-tls/tls.crt"
+    tls_private_key_path: str = "/tmp/lsa-tls/tls.key"
+    tls_shared_gid: int | None = None
 
 
 @lru_cache

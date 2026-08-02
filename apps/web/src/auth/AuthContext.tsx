@@ -25,7 +25,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('lsa_user', JSON.stringify(response.user))
         setUser(response.user)
       },
+      async radiusLogin(username, password) {
+        const response = await api.radiusLogin(username, password)
+        localStorage.setItem('lsa_session', response.access_token)
+        localStorage.setItem('lsa_user', JSON.stringify(response.user))
+        setUser(response.user)
+      },
+      acceptSession(token, acceptedUser) {
+        localStorage.setItem('lsa_session', token)
+        localStorage.setItem('lsa_user', JSON.stringify(acceptedUser))
+        setUser(acceptedUser)
+      },
       logout() {
+        void api.logout().catch(() => undefined)
         localStorage.removeItem('lsa_session')
         localStorage.removeItem('lsa_user')
         setUser(null)

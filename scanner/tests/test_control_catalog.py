@@ -20,6 +20,20 @@ def test_debian_13_control_catalog_matches_executable_tasks():
     assert all(control["severity"] in {"critical", "high", "medium", "low", "info"} for control in catalog)
     supported_profiles = {"production_server", "minimal_server", "router", "container"}
     assert all(set(control.get("profiles", supported_profiles)) <= supported_profiles for control in catalog)
+    assert set(re.findall(r"'category': '([^']+)'", task_source)) == {
+        "accounts",
+        "audit",
+        "filesystem",
+        "kernel",
+        "logging",
+        "mandatory_access",
+        "network",
+        "packages",
+        "services",
+        "ssh",
+        "time",
+        "updates",
+    }
 
 
 def test_debian_13_plugin_uses_only_read_only_remote_modules():

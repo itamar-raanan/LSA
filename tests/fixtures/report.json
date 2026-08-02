@@ -14,7 +14,8 @@
     "kernel": "6.12.0-amd64",
     "architecture": "x86_64",
     "ip_addresses": ["10.24.8.20"],
-    "tags": {"environment": "production", "owner": "platform"}
+    "tags": {"environment": "production", "owner": "platform"},
+    "system_info": {"cpu_model": "Intel Xeon", "cpu_cores": 4, "memory_mb": 8192, "uptime_seconds": 86400, "virtualization_type": "kvm", "virtualization_role": "guest", "system_vendor": "QEMU", "product_name": "Standard PC", "timezone": "UTC"}
   },
   "scan": {"profile": "cis_level2_server", "modules": ["cis", "security_health"]},
   "summary": {"pass": 240, "fail": 1, "manual": 0, "not_applicable": 31, "error": 0, "compliance_score": 99.6, "security_score": 92.0},
@@ -37,4 +38,3 @@
     }
   ]
 }
-

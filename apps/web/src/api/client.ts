@@ -8,9 +8,15 @@ import type {
   SigningKey,
   TokenCreated,
   User,
+  IdentityProvider,
+  ManagedUser,
+  ManagedUserCreate,
+  ProviderType,
+  PublicIdentityProvider,
+  TlsCertificate,
 } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
+const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
 
 export class ApiError extends Error {
   constructor(
@@ -44,6 +50,52 @@ export const api = {
   async login(email: string, password: string): Promise<{ access_token: string; user: User }> {
     return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
   },
+  async radiusLogin(username: string, password: string): Promise<{ access_token: string; user: User }> {
+    return request('/auth/radius/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+  },
+  logout(): Promise<void> {
+    return request('/auth/logout', { method: 'POST' })
+  },
+  publicProviders(): Promise<PublicIdentityProvider[]> {
+    return request('/auth/providers')
+  },
+  async startOidc(providerId: string): Promise<void> {
+    const response = await request<{ authorization_url: string }>(`/auth/oidc/${providerId}/start`)
+    window.location.assign(response.authorization_url)
+  },
+  providers(): Promise<IdentityProvider[]> {
+    return request('/settings/identity-providers')
+  },
+  createProvider(payload: { name: string; provider_type: ProviderType; issuer_url?: string; client_id?: string; secret?: string; config: Record<string, unknown>; is_enabled: boolean }): Promise<IdentityProvider> {
+    return request('/settings/identity-providers', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  updateProvider(id: string, payload: { name: string; provider_type: ProviderType; issuer_url?: string; client_id?: string; secret?: string; config: Record<string, unknown>; is_enabled: boolean }): Promise<IdentityProvider> {
+    return request(`/settings/identity-providers/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+  },
+  deleteProvider(id: string): Promise<void> {
+    return request(`/settings/identity-providers/${id}`, { method: 'DELETE' })
+  },
+  users(): Promise<ManagedUser[]> {
+    return request('/settings/users')
+  },
+  createUser(payload: ManagedUserCreate): Promise<ManagedUser> {
+    return request('/settings/users', { method: 'POST', body: JSON.stringify(payload) })
+  },
+  updateUserRole(id: string, role: string): Promise<ManagedUser> {
+    return request(`/settings/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) })
+  },
+  updateUserStatus(id: string, is_active: boolean): Promise<ManagedUser> {
+    return request(`/settings/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ is_active }) })
+  },
+  tlsCertificate(): Promise<TlsCertificate | null> {
+    return request('/settings/tls-certificate')
+  },
+  uploadTlsCertificate(certificate: File, privateKey: File): Promise<TlsCertificate> {
+    const body = new FormData()
+    body.append('certificate', certificate)
+    body.append('private_key', privateKey)
+    return request('/settings/tls-certificate', { method: 'POST', body })
+  },
   dashboard(): Promise<DashboardData> {
     return request('/dashboard')
   },
@@ -52,6 +104,9 @@ export const api = {
   },
   host(id: string): Promise<Host> {
     return request(`/hosts/${id}`)
+  },
+  deleteHost(id: string): Promise<void> {
+    return request(`/hosts/${id}`, { method: 'DELETE' })
   },
   reports(hostId: string): Promise<ReportSummary[]> {
     return request(`/hosts/${hostId}/reports`)
@@ -103,7 +158,7 @@ export const api = {
       checksum: response.headers.get('X-LSA-Artifact-SHA256'),
     }
   },
-  findings(filters: { severity?: string; lifecycle?: string; host_id?: string } = {}): Promise<Finding[]> {
+  findings(filters: { severity?: string; lifecycle?: string; host_id?: string; category?: string } = {}): Promise<Finding[]> {
     const params = new URLSearchParams()
     Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
     return request(`/findings${params.size ? `?${params}` : ''}`)

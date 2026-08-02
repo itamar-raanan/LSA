@@ -4,19 +4,23 @@
 import hashlib
 import io
 import json
+import ssl
 import sys
 import urllib.error
 import urllib.request
 import uuid
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 
 def request(url: str, method: str = "GET", data: bytes | None = None, headers=None):
+    context = ssl._create_unverified_context() if url.startswith("https://") else None
     try:
         with urllib.request.urlopen(
             urllib.request.Request(url, data=data, headers=headers or {}, method=method),
             timeout=30,
+            context=context,
         ) as response:
             return response.status, response.headers, response.read()
     except urllib.error.HTTPError as exc:
@@ -32,11 +36,14 @@ def json_request(url: str, payload: dict, token: str | None = None):
 
 
 def bundle_bytes(report_path: Path) -> bytes:
-    report = report_path.read_bytes()
+    report_payload = json.loads(report_path.read_text())
+    report_payload["report_id"] = str(uuid.uuid4())
+    report_payload["generated_at"] = datetime.now(UTC).isoformat()
+    report = json.dumps(report_payload, indent=2, sort_keys=True).encode()
     manifest = json.dumps(
         {
             "schema_version": "1.0",
-            "report_id": json.loads(report)["report_id"],
+            "report_id": report_payload["report_id"],
             "files": {"report.json": hashlib.sha256(report).hexdigest()},
             "signature": None,
         },
@@ -58,10 +65,14 @@ def bundle_bytes(report_path: Path) -> bytes:
 def multipart_file(name: str, content: bytes) -> tuple[bytes, str]:
     boundary = f"lsa-smoke-{uuid.uuid4().hex}"
     body = (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="file"; filename="{name}"\r\n'
-        "Content-Type: application/zip\r\n\r\n"
-    ).encode() + content + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{name}"\r\n'
+            "Content-Type: application/zip\r\n\r\n"
+        ).encode()
+        + content
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     return body, boundary
 
 
