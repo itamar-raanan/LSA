@@ -2,6 +2,7 @@ import {
   Bell,
   ChartDonut,
   HardDrives,
+  Key,
   ListMagnifyingGlass,
   SignOut,
   UploadSimple,
@@ -11,20 +12,22 @@ import { useAuth } from '../auth/AuthContext'
 import { BrandMark } from './BrandMark'
 
 const navigation = [
-  { to: '/', label: 'Overview', icon: ChartDonut, end: true },
-  { to: '/hosts', label: 'Hosts', icon: HardDrives },
-  { to: '/findings', label: 'Findings', icon: ListMagnifyingGlass },
-  { to: '/reports', label: 'Reports', icon: UploadSimple },
+  { to: '/', label: 'Overview', icon: ChartDonut, end: true, adminOnly: false },
+  { to: '/hosts', label: 'Hosts', icon: HardDrives, adminOnly: false },
+  { to: '/findings', label: 'Findings', icon: ListMagnifyingGlass, adminOnly: false },
+  { to: '/reports', label: 'Reports', icon: UploadSimple, adminOnly: false },
+  { to: '/tokens', label: 'Tokens', icon: Key, adminOnly: true },
 ]
 
 export function AppShell() {
   const { user, logout } = useAuth()
+  const visibleNavigation = navigation.filter((item) => !item.adminOnly || user?.role === 'admin')
   return (
     <div className="min-h-[100dvh] bg-[#111512] text-stone-100">
       <aside className="fixed inset-y-0 left-0 hidden w-[252px] flex-col border-r border-stone-800/80 bg-[#111512] p-5 lg:flex">
         <BrandMark />
         <nav className="mt-12 space-y-1" aria-label="Primary navigation">
-          {navigation.map(({ to, label, icon: Icon, end }) => (
+          {visibleNavigation.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>
               <Icon size={18} weight="duotone" />
               <span>{label}</span>
@@ -56,8 +59,8 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-stone-800 bg-[#111512]/95 px-2 py-2 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
-          {navigation.map(({ to, label, icon: Icon, end }) => (
+        <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-stone-800 bg-[#111512]/95 px-2 py-2 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
+          {visibleNavigation.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => `mobile-nav ${isActive ? 'text-emerald-300' : 'text-stone-600'}`}>
               <Icon size={19} weight="duotone" /><span>{label}</span>
             </NavLink>
@@ -67,4 +70,3 @@ export function AppShell() {
     </div>
   )
 }
-

@@ -80,6 +80,12 @@ def create_ingestion_token(
     db: Session = Depends(get_db),
 ) -> TokenCreated:
     require_admin(user)
+    expires_at = request.expires_at
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=now_utc().tzinfo)
+        if expires_at <= now_utc():
+            raise HTTPException(status_code=422, detail="Token expiry must be in the future")
     if request.host_id:
         host = db.get(Host, request.host_id)
         if host is None or host.tenant_id != user.tenant_id:
@@ -91,7 +97,7 @@ def create_ingestion_token(
         name=request.name,
         token_prefix=raw_token[:20],
         token_hash=hash_ingestion_token(raw_token),
-        expires_at=request.expires_at,
+        expires_at=expires_at,
     )
     db.add(token)
     db.flush()
@@ -153,6 +159,8 @@ def revoke_ingestion_token(
     token = db.get(IngestionToken, token_id)
     if token is None or token.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="Ingestion token not found")
+    if token.revoked_at is not None:
+        raise HTTPException(status_code=409, detail="Ingestion token is already revoked")
     token.revoked_at = now_utc()
     db.add(
         AuditEvent(
@@ -167,4 +175,3 @@ def revoke_ingestion_token(
     )
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

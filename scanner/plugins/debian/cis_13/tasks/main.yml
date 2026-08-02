@@ -5,6 +5,8 @@
   loop:
     - /etc/passwd
     - /etc/shadow
+    - /etc/group
+    - /etc/gshadow
   register: lsa_identity_files
 
 - name: Check effective SSH configuration
@@ -28,10 +30,47 @@
   changed_when: false
   failed_when: false
 
+- name: Find accounts with empty password fields
+  ansible.builtin.command:
+    argv: [awk, "-F:", "($2 == \"\") {print $1}", /etc/shadow]
+  register: lsa_empty_passwords
+  changed_when: false
+  failed_when: false
+
+- name: Find accounts with UID zero
+  ansible.builtin.command:
+    argv: [awk, "-F:", "($3 == 0) {print $1}", /etc/passwd]
+  register: lsa_uid_zero_accounts
+  changed_when: false
+  failed_when: false
+
+- name: Check unattended-upgrades package state
+  ansible.builtin.command:
+    argv: [dpkg-query, -W, "-f=${db:Status}", unattended-upgrades]
+  register: lsa_unattended_upgrades
+  changed_when: false
+  failed_when: false
+
+- name: Check whether cron is enabled
+  ansible.builtin.command:
+    argv: [systemctl, is-enabled, cron]
+  register: lsa_cron_enabled
+  changed_when: false
+  failed_when: false
+
+- name: Check whether cron is active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, cron]
+  register: lsa_cron_active
+  changed_when: false
+  failed_when: false
+
 - name: Resolve control observations
   ansible.builtin.set_fact:
     lsa_passwd_stat: "{{ lsa_identity_files.results[0].stat }}"
     lsa_shadow_stat: "{{ lsa_identity_files.results[1].stat }}"
+    lsa_group_stat: "{{ lsa_identity_files.results[2].stat }}"
+    lsa_gshadow_stat: "{{ lsa_identity_files.results[3].stat }}"
     lsa_sshd_text: "{{ lsa_sshd_effective.stdout | default('') }}"
 
 - name: Add identity-file controls
@@ -69,6 +108,120 @@
           'verification_commands': ["stat -c '%a %U:%G' /etc/shadow"],
           'reboot_required': false,
           'service_restart': false
+        }
+      ] }}
+
+- name: Add supplementary identity-file controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-FS-003',
+          'module': 'security_health',
+          'category': 'filesystem',
+          'title': 'Ensure permissions on /etc/group are configured',
+          'severity': 'medium',
+          'status': 'pass' if lsa_group_stat.exists and lsa_group_stat.mode == '0644' and lsa_group_stat.pw_name == 'root' and lsa_group_stat.gr_name == 'root' else 'fail',
+          'expected': '0644 root:root',
+          'actual': (lsa_group_stat.mode | default('missing')) ~ ' ' ~ (lsa_group_stat.pw_name | default('unknown')) ~ ':' ~ (lsa_group_stat.gr_name | default('unknown')),
+          'evidence': ['/etc/group'],
+          'remediation_summary': 'Restore root ownership and mode 0644 on /etc/group.',
+          'remediation_commands': ['chown root:root /etc/group', 'chmod 0644 /etc/group'],
+          'verification_commands': ["stat -c '%a %U:%G' /etc/group"],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-FS-004',
+          'module': 'security_health',
+          'category': 'filesystem',
+          'title': 'Ensure permissions on /etc/gshadow are configured',
+          'severity': 'critical',
+          'status': 'pass' if lsa_gshadow_stat.exists and lsa_gshadow_stat.mode in ['0000', '0640'] and lsa_gshadow_stat.pw_name == 'root' and lsa_gshadow_stat.gr_name in ['root', 'shadow'] else 'fail',
+          'expected': '0000 root:root or 0640 root:shadow',
+          'actual': (lsa_gshadow_stat.mode | default('missing')) ~ ' ' ~ (lsa_gshadow_stat.pw_name | default('unknown')) ~ ':' ~ (lsa_gshadow_stat.gr_name | default('unknown')),
+          'evidence': ['/etc/gshadow'],
+          'remediation_summary': 'Restrict /etc/gshadow to root and the shadow group.',
+          'remediation_commands': ['chown root:shadow /etc/gshadow', 'chmod 0640 /etc/gshadow'],
+          'verification_commands': ["stat -c '%a %U:%G' /etc/gshadow"],
+          'reboot_required': false,
+          'service_restart': false
+        }
+      ] }}
+
+- name: Add local-account controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-ACC-001',
+          'module': 'security_health',
+          'category': 'accounts',
+          'title': 'Ensure no local accounts have empty password fields',
+          'severity': 'high',
+          'status': 'error' if lsa_empty_passwords.rc != 0 else ('pass' if lsa_empty_passwords.stdout | trim == '' else 'fail'),
+          'expected': 'No accounts with an empty password field',
+          'actual': lsa_empty_passwords.stdout | trim | default('none', true),
+          'evidence': ["awk -F: '($2 == \"\") {print $1}' /etc/shadow"],
+          'remediation_summary': 'Lock or assign a strong credential to every account with an empty password field.',
+          'remediation_commands': ['passwd -l ACCOUNT'],
+          'verification_commands': ["awk -F: '($2 == \"\") {print $1}' /etc/shadow"],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-ACC-002',
+          'module': 'security_health',
+          'category': 'accounts',
+          'title': 'Ensure root is the only UID 0 account',
+          'severity': 'critical',
+          'status': 'error' if lsa_uid_zero_accounts.rc != 0 else ('pass' if lsa_uid_zero_accounts.stdout | trim == 'root' else 'fail'),
+          'expected': 'root',
+          'actual': lsa_uid_zero_accounts.stdout | trim | default('none', true),
+          'evidence': ["awk -F: '($3 == 0) {print $1}' /etc/passwd"],
+          'remediation_summary': 'Assign a unique nonzero UID to every privileged account other than root.',
+          'remediation_commands': ['usermod -u UNIQUE_UID ACCOUNT'],
+          'verification_commands': ["awk -F: '($3 == 0) {print $1}' /etc/passwd"],
+          'reboot_required': false,
+          'service_restart': false
+        }
+      ] }}
+
+- name: Add package and service controls
+  ansible.builtin.set_fact:
+    lsa_findings: >-
+      {{ lsa_findings + [
+        {
+          'control_id': 'LSA-DEBIAN13-PKG-001',
+          'module': 'security_health',
+          'category': 'packages',
+          'title': 'Ensure unattended security upgrades are installed',
+          'severity': 'high',
+          'status': 'pass' if lsa_unattended_upgrades.rc == 0 and 'install ok installed' in lsa_unattended_upgrades.stdout else 'fail',
+          'expected': 'unattended-upgrades installed',
+          'actual': (lsa_unattended_upgrades.stdout | default('') | trim) | default('package not installed', true),
+          'evidence': ['dpkg-query -W unattended-upgrades'],
+          'remediation_summary': 'Install unattended-upgrades and review the approved automatic-update policy.',
+          'remediation_commands': ['apt-get install unattended-upgrades'],
+          'verification_commands': ['dpkg-query -W unattended-upgrades'],
+          'reboot_required': false,
+          'service_restart': false
+        },
+        {
+          'control_id': 'LSA-DEBIAN13-SVC-001',
+          'module': 'security_health',
+          'category': 'services',
+          'title': 'Ensure the cron scheduler is enabled and active',
+          'severity': 'low',
+          'status': 'pass' if lsa_cron_enabled.stdout | trim == 'enabled' and lsa_cron_active.stdout | trim == 'active' else 'fail',
+          'expected': 'enabled and active',
+          'actual': (lsa_cron_enabled.stdout | default('unknown') | trim) ~ ' / ' ~ (lsa_cron_active.stdout | default('unknown') | trim),
+          'evidence': ['systemctl is-enabled cron', 'systemctl is-active cron'],
+          'remediation_summary': 'Enable and start cron after confirming scheduled-task policy.',
+          'remediation_commands': ['systemctl enable --now cron'],
+          'verification_commands': ['systemctl is-enabled cron', 'systemctl is-active cron'],
+          'reboot_required': false,
+          'service_restart': true
         }
       ] }}
 
@@ -147,4 +300,3 @@
           'service_restart': false
         }
       ] }}
-

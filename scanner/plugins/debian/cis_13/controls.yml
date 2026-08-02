@@ -18,4 +18,21 @@ controls:
   - id: CIS-DEBIAN13-1.5.1
     title: Ensure setuid programs do not produce core dumps
     severity: medium
-
+  - id: LSA-DEBIAN13-FS-003
+    title: Ensure permissions on /etc/group are configured
+    severity: medium
+  - id: LSA-DEBIAN13-FS-004
+    title: Ensure permissions on /etc/gshadow are configured
+    severity: critical
+  - id: LSA-DEBIAN13-ACC-001
+    title: Ensure no local accounts have empty password fields
+    severity: high
+  - id: LSA-DEBIAN13-ACC-002
+    title: Ensure root is the only UID 0 account
+    severity: critical
+  - id: LSA-DEBIAN13-PKG-001
+    title: Ensure unattended security upgrades are installed
+    severity: high
+  - id: LSA-DEBIAN13-SVC-001
+    title: Ensure the cron scheduler is enabled and active
+    severity: low

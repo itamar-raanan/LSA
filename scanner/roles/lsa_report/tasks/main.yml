@@ -21,8 +21,8 @@
   ansible.builtin.set_fact:
     lsa_findings: []
 
-- name: Run Debian 13 CIS baseline controls
-  ansible.builtin.include_tasks: "{{ playbook_dir }}/../plugins/debian/cis_13/tasks/main.yml"
+- name: Run Debian 13 baseline controls
+  ansible.builtin.import_tasks: "../../../plugins/debian/cis_13/tasks/main.yml"
   when:
     - ansible_facts.distribution == 'Debian'
     - ansible_facts.distribution_major_version == '13'

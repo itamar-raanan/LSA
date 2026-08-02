@@ -175,6 +175,26 @@ def test_revoked_token_cannot_submit(client):
     )
     assert response.status_code == 401
 
+    repeated = client.delete(
+        f"/api/v1/ingestion-tokens/{created['id']}", headers=headers
+    )
+    assert repeated.status_code == 409
+    assert repeated.json()["detail"] == "Ingestion token is already revoked"
+
+
+def test_token_expiry_must_be_in_the_future(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    response = client.post(
+        "/api/v1/ingestion-tokens",
+        headers=headers,
+        json={
+            "name": "already expired",
+            "expires_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Token expiry must be in the future"
+
 
 def test_offline_bundle_verifies_all_checksums(client, tmp_path: Path):
     bundle_path = build(Path("tests/fixtures/report.json"), tmp_path)
