@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, ArrowRight, CalendarClock, FileWarning, Server, ShieldCheck, ShieldX } from 'lucide-react'
+import { Activity, ArrowRight, CalendarClock, Server, ShieldAlert, ShieldX } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
@@ -27,9 +27,9 @@ export function DashboardPage() {
     return { dashboard, hosts, findings, certificate }
   }, [user?.role])
 
-  if (loading) return <><PageHeader eyebrow="Security operations" title="SOC overview" detail="Loading the current fleet posture and exposure queue." /><LoadingState /></>
-  if (error) return <><PageHeader eyebrow="Security operations" title="SOC overview" detail="Current fleet posture and exposure queue." /><ErrorState message={error} retry={reload} /></>
-  if (!data || data.dashboard.total_hosts === 0) return <><PageHeader eyebrow="Security operations" title="SOC overview" detail="Current fleet posture and exposure queue." /><EmptyState title="No telemetry available" detail="Enroll a Linux endpoint or import an offline report to establish the first fleet baseline." /></>
+  if (loading) return <><PageHeader eyebrow="Security operations" title="Security overview" detail="Loading the current fleet posture and exposure queue." /><LoadingState /></>
+  if (error) return <><PageHeader eyebrow="Security operations" title="Security overview" detail="Current fleet posture and exposure queue." /><ErrorState message={error} retry={reload} /></>
+  if (!data || data.dashboard.total_hosts === 0) return <><PageHeader eyebrow="Security operations" title="Security overview" detail="Current fleet posture and exposure queue." /><EmptyState title="No telemetry available" detail="Enroll a Linux endpoint or import an offline report to establish the first fleet baseline." /></>
 
   const { dashboard, hosts, findings, certificate } = data
   const criticalFindings = findings.filter((finding) => finding.severity === 'critical' || finding.severity === 'high')
@@ -48,14 +48,13 @@ export function DashboardPage() {
   }))
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Security operations" title="SOC overview" detail="Live fleet posture, exposure, and evidence activity from the latest accepted endpoint reports." action={<Button asChild><Link to="/reports">Import evidence <ArrowRight size={14} /></Link></Button>} />
+    <PageHeader eyebrow="Security operations" title="Security overview" detail="Understand fleet health, focus on the systems that need attention, and review the latest accepted evidence." action={<Button asChild variant="primary"><Link to="/reports">Import evidence <ArrowRight size={14} /></Link></Button>} />
 
     <section className="metric-grid" aria-label="Security metrics">
-      <SecurityMetricCard title="Total assets" value={dashboard.total_hosts} detail={`${dashboard.healthy_hosts} healthy`} tone="neutral" icon={Server} />
-      <SecurityMetricCard title="Active threats" value={dashboard.finding_counts.critical ?? 0} detail={`${dashboard.finding_counts.high ?? 0} high severity`} tone={(dashboard.finding_counts.critical ?? 0) ? 'critical' : 'success'} icon={ShieldX} />
-      <SecurityMetricCard title="Vulnerable systems" value={dashboard.at_risk_hosts} detail={`${dashboard.critical_hosts} critical hosts`} tone={dashboard.critical_hosts ? 'high' : 'success'} icon={FileWarning} />
-      <SecurityMetricCard title="Certificate expiry" value={certificateDays == null ? '—' : `${certificateDays}d`} detail={certificate ? certificate.subject : 'Not available'} tone={certificateTone} icon={CalendarClock} />
-      <SecurityMetricCard title="Compliance score" value={`${dashboard.compliance_score.toFixed(1)}%`} detail="Latest accepted evidence" tone={dashboard.compliance_score >= 90 ? 'success' : dashboard.compliance_score >= 75 ? 'medium' : 'high'} icon={ShieldCheck} />
+      <SecurityMetricCard title="Managed assets" value={dashboard.total_hosts} detail={`${dashboard.healthy_hosts} healthy · ${dashboard.stale_hosts} stale`} tone="neutral" icon={Server} />
+      <SecurityMetricCard title="Hosts requiring attention" value={dashboard.at_risk_hosts} detail={`${dashboard.critical_hosts} with critical exposure`} tone={dashboard.critical_hosts ? 'high' : 'success'} icon={ShieldX} />
+      <SecurityMetricCard title="Critical findings" value={dashboard.finding_counts.critical ?? 0} detail={`${dashboard.finding_counts.high ?? 0} high severity findings`} tone={(dashboard.finding_counts.critical ?? 0) ? 'critical' : 'success'} icon={ShieldAlert} />
+      <SecurityMetricCard title="TLS certificate" value={certificateDays == null ? '—' : `${certificateDays}d`} detail={certificate ? 'Until certificate expiry' : 'Certificate data unavailable'} tone={certificateTone} icon={CalendarClock} />
     </section>
 
     <section className="mt-4 grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
@@ -82,6 +81,5 @@ export function DashboardPage() {
       <article className="soc-panel overflow-hidden"><div className="panel-heading"><div><p className="panel-kicker">Telemetry</p><h2>Recent endpoint activity</h2></div></div><SecurityTimeline events={recentEvents} /></article>
     </section>
 
-    {dashboard.critical_hosts > 0 && <div className="soc-callout soc-callout-critical"><AlertTriangle size={17} /><div><strong>{dashboard.critical_hosts} systems require immediate review</strong><p>Prioritize hosts with critical controls before their next policy cycle.</p></div><Button asChild size="sm" variant="danger"><Link to="/hosts">Review assets</Link></Button></div>}
   </div>
 }

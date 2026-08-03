@@ -1,7 +1,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
-  Bell, Building2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, FileBarChart, FileKey2,
-  Gauge, LogOut, Menu, MonitorCog, Plus, Search, Server, Settings, ShieldAlert, ShieldCheck, SlidersHorizontal,
+  Bell, Building2, ChevronDown, ChevronLeft, ChevronRight, FileBarChart,
+  Gauge, LogOut, Menu, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, SlidersHorizontal,
 } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -13,24 +13,20 @@ import { StatusBadge } from './security/StatusBadge'
 import { Button } from './ui/Button'
 import { Tooltip, TooltipProvider } from './ui/Tooltip'
 
-interface NavigationItem { to: string; label: string; icon: typeof Gauge; end?: boolean; adminOnly?: boolean }
+interface NavigationItem { to: string; label: string; icon: typeof Gauge; adminOnly?: boolean }
 interface NavigationGroup { label: string; items: NavigationItem[] }
 
 const navigation: NavigationGroup[] = [
-  { label: 'Operations', items: [
-    { to: '/', label: 'Dashboard', icon: Gauge, end: true },
+  { label: 'Workspace', items: [
+    { to: '/', label: 'Overview', icon: Gauge },
     { to: '/hosts', label: 'Assets', icon: Server },
-    { to: '/agents', label: 'Endpoints', icon: MonitorCog, adminOnly: true },
-  ] },
-  { label: 'Exposure management', items: [
-    { to: '/findings', label: 'Vulnerabilities', icon: ShieldAlert },
+    { to: '/agents', label: 'Agents & groups', icon: MonitorCog, adminOnly: true },
+    { to: '/findings', label: 'Security findings', icon: ShieldAlert },
     { to: '/settings/certificates', label: 'Certificates', icon: ShieldCheck, adminOnly: true },
     { to: '/policies', label: 'Policies', icon: SlidersHorizontal, adminOnly: true },
-  ] },
-  { label: 'Intelligence', items: [
     { to: '/reports', label: 'Reports', icon: FileBarChart },
   ] },
-  { label: 'Platform', items: [
+  { label: 'System', items: [
     { to: '/settings', label: 'Administration', icon: Settings, adminOnly: true },
   ] },
 ]
@@ -43,7 +39,7 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const visibleNavigation = navigation.map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly || user?.role === 'admin') })).filter((group) => group.items.length)
   const flatNavigation = visibleNavigation.flatMap((group) => group.items)
-  const current = [...flatNavigation].reverse().find((item) => item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to))
+  const current = [...flatNavigation].sort((a, b) => b.to.length - a.to.length).find((item) => item.to === '/' ? location.pathname === '/' : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`))
   const initials = (user?.name || user?.email || 'LSA').split(/\s+|@/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 
   useEffect(() => {
@@ -59,7 +55,7 @@ export function AppShell() {
   const navigationMarkup = <nav className="soc-navigation" aria-label="Primary navigation">
     {visibleNavigation.map((group) => <div key={group.label} className="soc-nav-group">
       {!collapsed && <p className="soc-nav-label">{group.label}</p>}
-      {group.items.map(({ to, label, icon: Icon, end }) => { const isActive = end ? location.pathname === to : location.pathname.startsWith(to); return <Tooltip key={`${label}-${to}`} content={label} side="right">
+      {group.items.map(({ to, label, icon: Icon }) => { const isActive = current?.to === to; return <Tooltip key={`${label}-${to}`} content={label} side="right">
         <Link to={to} aria-current={isActive ? 'page' : undefined} aria-label={collapsed ? label : undefined} className={cn('soc-nav-item', isActive && 'soc-nav-item-active', collapsed && 'soc-nav-item-collapsed')}>
           <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{!collapsed && <ChevronRight className="nav-caret" size={13} />}
         </Link>
@@ -73,13 +69,7 @@ export function AppShell() {
       <aside className={cn('soc-sidebar hidden lg:flex', collapsed && 'soc-sidebar-collapsed')}>
         <div className="soc-logo-row"><BrandMark compact={collapsed} />{!collapsed && <span className="soc-edition">ENTERPRISE</span>}</div>
         {navigationMarkup}
-        <div className="mt-auto space-y-2">
-          {!collapsed && <div className="soc-sensor-state"><StatusBadge label="Platform operational" tone="online" pulse /><span>v0.4</span></div>}
-          <div className={cn('soc-user-card', collapsed && 'soc-user-card-collapsed')}>
-            <span className="soc-avatar">{initials}</span>{!collapsed && <span className="min-w-0 flex-1"><strong>{user?.name}</strong><small>{user?.role}</small></span>}
-            {!collapsed && <button onClick={logout} aria-label="Sign out"><LogOut size={15} /></button>}
-          </div>
-        </div>
+        {!collapsed && <div className="soc-sensor-state mt-auto"><StatusBadge label="Platform healthy" tone="online" pulse /><span>v0.4</span></div>}
         <button className="sidebar-collapse" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}</button>
       </aside>
 
@@ -97,11 +87,9 @@ export function AppShell() {
               <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Label className="soc-menu-label">Environment</DropdownMenu.Label><DropdownMenu.Item className="soc-menu-item"><span className="soc-menu-check">✓</span>Production</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>
             </DropdownMenu.Root>
             <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild><Button variant="primary" size="sm" className="hidden md:inline-flex"><Plus size={14} />Quick action<ChevronDown size={12} /></Button></DropdownMenu.Trigger>
-              <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Item asChild className="soc-menu-item"><Link to="/reports"><FileBarChart size={14} />Import evidence report</Link></DropdownMenu.Item><DropdownMenu.Item asChild className="soc-menu-item"><Link to="/settings/tokens"><FileKey2 size={14} />Create ingestion token</Link></DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>
+              <DropdownMenu.Trigger className="soc-icon-button notification-button" aria-label="Notifications"><Bell size={17} /><span /></DropdownMenu.Trigger>
+              <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content notifications-menu"><DropdownMenu.Label className="soc-menu-label">Notifications</DropdownMenu.Label><div className="notification-empty"><Bell size={17} /><strong>You’re all caught up</strong><span>New security events will appear here.</span></div></DropdownMenu.Content></DropdownMenu.Portal>
             </DropdownMenu.Root>
-            <button className="soc-icon-button" aria-label="Help"><CircleHelp size={17} /></button>
-            <button className="soc-icon-button notification-button" aria-label="Notifications"><Bell size={17} /><span /></button>
             <DropdownMenu.Root>
               <DropdownMenu.Trigger className="soc-avatar soc-avatar-button" aria-label="User menu">{initials}</DropdownMenu.Trigger>
               <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Label className="soc-profile-label"><strong>{user?.name}</strong><span>{user?.email}</span></DropdownMenu.Label><DropdownMenu.Separator className="soc-menu-separator" /><DropdownMenu.Item className="soc-menu-item" onSelect={logout}><LogOut size={14} />Sign out</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>

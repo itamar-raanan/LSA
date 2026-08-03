@@ -14,6 +14,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { api } from '../../api/client'
 import { AgentDownloadPanel } from '../../components/AgentDownloadPanel'
 import { PageHeader } from '../../components/PageHeader'
@@ -123,6 +124,8 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
 }
 
 export function AgentsSettingsPage() {
+  const location = useLocation()
+  const policyRoute = location.pathname === '/policies'
   const { data, error, loading, reload, refresh } = useApi(async () => {
     const [agents, groups, policies, controls, enrollmentTokens, packages] = await Promise.all([
       api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(),
@@ -130,7 +133,7 @@ export function AgentsSettingsPage() {
     return { agents, groups, policies, controls, enrollmentTokens, packages }
   }, [])
   const [selectedGroupId, setSelectedGroupId] = useState('all')
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('hosts')
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(policyRoute ? 'policy' : 'hosts')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | AgentStatus>('all')
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set())
@@ -152,6 +155,12 @@ export function AgentsSettingsPage() {
   const [draftSchedule, setDraftSchedule] = useState(60)
 
   const selectedGroup = data?.groups.find(group => group.id === selectedGroupId) ?? null
+
+  useEffect(() => {
+    if (!policyRoute || !data?.groups.length || selectedGroupId !== 'all') return
+    setSelectedGroupId(data.groups[0].id)
+    setActiveTab('policy')
+  }, [data?.groups, policyRoute, selectedGroupId])
   const assignedPolicy = selectedGroup ? data?.policies.find(policy => policy.id === selectedGroup.policy_id) ?? null : null
   const categories = useMemo(() => {
     const grouped = new Map<string, ControlCatalogItem[]>()
@@ -301,8 +310,8 @@ export function AgentsSettingsPage() {
   return <div className="page-reveal">
     <PageHeader
       eyebrow="Managed Linux fleet"
-      title="Agents"
-      detail="Scope hosts by group, apply an independent policy to each fleet, and keep enrollment and deployment in one operational workspace."
+      title={policyRoute ? 'Policies' : 'Agents & groups'}
+      detail={policyRoute ? 'Choose a fleet group, review its effective policy, and control which checks are audited or remediated.' : 'Scope hosts by group, inspect agent health, and keep enrollment and deployment in one operational workspace.'}
       action={<div className="flex flex-wrap gap-2">
         <button className="button-secondary" onClick={() => setShowDownloads(true)}><DownloadSimple size={16} /> Install agent</button>
         <button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Enrollment token</button>
