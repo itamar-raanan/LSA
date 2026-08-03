@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
-  Bell, Building2, ChevronDown, ChevronLeft, ChevronRight, FileBarChart,
+  ChevronLeft, ChevronRight, FileBarChart,
   Gauge, LogOut, Menu, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck,
 } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
@@ -10,7 +10,6 @@ import { cn } from '../lib/utils'
 import { BrandMark } from './BrandMark'
 import { CommandPalette } from './CommandPalette'
 import { StatusBadge } from './security/StatusBadge'
-import { Button } from './ui/Button'
 import { Tooltip, TooltipProvider } from './ui/Tooltip'
 
 interface NavigationItem { to: string; label: string; icon: typeof Gauge; adminOnly?: boolean }
@@ -81,14 +80,6 @@ export function AppShell() {
           <div className="soc-breadcrumbs"><span>LSA</span><ChevronRight size={12} /><strong>{current?.label ?? 'Console'}</strong></div>
           <button className="global-search-trigger" onClick={() => setCommandOpen(true)}><Search size={15} /><span>Search the console</span><kbd>⌘ K</kbd></button>
           <div className="soc-topbar-actions">
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild><Button className="environment-trigger" size="sm"><Building2 size={14} /><span className="hidden sm:inline">Production</span><ChevronDown size={12} /></Button></DropdownMenu.Trigger>
-              <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Label className="soc-menu-label">Environment</DropdownMenu.Label><DropdownMenu.Item className="soc-menu-item"><span className="soc-menu-check">✓</span>Production</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>
-            </DropdownMenu.Root>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger className="soc-icon-button notification-button" aria-label="Notifications"><Bell size={17} /><span /></DropdownMenu.Trigger>
-              <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content notifications-menu"><DropdownMenu.Label className="soc-menu-label">Notifications</DropdownMenu.Label><div className="notification-empty"><Bell size={17} /><strong>You’re all caught up</strong><span>New security events will appear here.</span></div></DropdownMenu.Content></DropdownMenu.Portal>
-            </DropdownMenu.Root>
             <DropdownMenu.Root>
               <DropdownMenu.Trigger className="soc-avatar soc-avatar-button" aria-label="User menu">{initials}</DropdownMenu.Trigger>
               <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Label className="soc-profile-label"><strong>{user?.name}</strong><span>{user?.email}</span></DropdownMenu.Label><DropdownMenu.Separator className="soc-menu-separator" /><DropdownMenu.Item className="soc-menu-item" onSelect={logout}><LogOut size={14} />Sign out</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>

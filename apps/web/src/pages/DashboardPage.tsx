@@ -10,7 +10,6 @@ import { SecurityTimeline } from '../components/security/SecurityTimeline'
 import { StatusBadge } from '../components/security/StatusBadge'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
-import { Button } from '../components/ui/Button'
 import { useApi } from '../hooks/useApi'
 import type { Severity } from '../types'
 
@@ -48,7 +47,7 @@ export function DashboardPage() {
   }))
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Security operations" title="Security overview" detail="Understand fleet health, focus on the systems that need attention, and review the latest accepted evidence." action={<Button asChild variant="primary"><Link to="/reports">Import evidence <ArrowRight size={14} /></Link></Button>} />
+    <PageHeader eyebrow="Security operations" title="Security overview" detail="Understand fleet health, focus on the systems that need attention, and review the latest accepted evidence." />
 
     <section className="metric-grid" aria-label="Security metrics">
       <SecurityMetricCard title="Managed assets" value={dashboard.total_hosts} detail={`${dashboard.healthy_hosts} healthy · ${dashboard.stale_hosts} stale`} tone="neutral" icon={Server} />

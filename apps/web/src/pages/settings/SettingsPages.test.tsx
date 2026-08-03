@@ -1,10 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AuthenticationSettingsPage } from './AuthenticationSettingsPage'
 import { CertificatesSettingsPage } from './CertificatesSettingsPage'
 import { SettingsLayout } from './SettingsLayout'
-import { SettingsOverviewPage } from './SettingsOverviewPage'
 import { UsersSettingsPage } from './UsersSettingsPage'
 
 vi.mock('../../auth/useAuth', () => ({
@@ -24,7 +23,7 @@ function renderSettings() {
     <MemoryRouter initialEntries={['/settings']}>
       <Routes>
         <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<SettingsOverviewPage />} />
+          <Route index element={<Navigate to="users" replace />} />
           <Route path="users" element={<UsersSettingsPage />} />
           <Route path="authentication" element={<AuthenticationSettingsPage />} />
           <Route path="certificates" element={<CertificatesSettingsPage />} />
@@ -42,8 +41,8 @@ describe('Settings', () => {
   it('organizes administration controls and navigates to authentication', async () => {
     renderSettings()
 
-    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
-    expect(screen.getByText('Recommended next controls')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Users, roles & permissions' })).toBeInTheDocument()
+    expect(settingsNavigation().getByRole('link', { name: /Users & access/ })).toHaveAttribute('aria-current', 'page')
     fireEvent.click(settingsNavigation().getByRole('link', { name: /Authentication/ }))
 
     expect(screen.getByRole('heading', { name: 'Authentication' })).toBeInTheDocument()

@@ -80,23 +80,23 @@ export function AgentDownloadPanel({ packages, enrollmentToken, close }: AgentDo
 
     {error && <div className="border-b border-rose-900/40 bg-rose-950/10 px-6 py-3 text-xs text-rose-300">{error}</div>}
 
-    {!packages.length ? <div className="px-6 py-10 text-sm text-stone-500">No agent release is available.</div> : packages.map(agentPackage => <div key={agentPackage.id} className={`grid gap-6 border-b border-stone-800 px-6 py-6 last:border-b-0 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center ${selectedPackage?.id === agentPackage.id ? 'bg-[#edf1eb]' : ''}`}>
+    {!selectedPackage ? <div className="px-6 py-10 text-sm text-stone-500">No agent release is available.</div> : <div className="grid gap-5 border-b border-stone-800 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
       <div className="flex min-w-0 items-start gap-4">
         <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[#b8c5ba] bg-[#edf1eb] text-[#4f6f5c]"><Package size={21} /></div>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-medium text-stone-200">LSA Agent {agentPackage.version}</h3><span className="settings-state">{agentPackage.package_format.toUpperCase()}</span><span className="settings-state">{agentPackage.release_channel}</span>{agentPackage.audit_only && <span className="settings-state">Audit only</span>}</div>
-          <p className="mt-2 text-xs text-stone-500">{agentPackage.operating_system} · {agentPackage.architecture} · {formatBytes(agentPackage.size_bytes)}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-medium text-stone-200">LSA Agent {selectedPackage.version}</h3><span className="settings-state">{selectedPackage.release_channel}</span>{selectedPackage.audit_only && <span className="settings-state">Audit only</span>}</div>
+          <p className="mt-2 text-xs text-stone-500">{selectedPackage.operating_system} · {selectedPackage.architecture} · {formatBytes(selectedPackage.size_bytes)}</p>
           <div className="mt-3 flex min-w-0 items-center gap-2">
-            <code className="truncate font-mono text-[10px] text-stone-600" title={agentPackage.sha256}>SHA-256 {agentPackage.sha256}</code>
-            <button className="text-stone-500 transition hover:text-[#4f6f5c] active:scale-[0.98]" onClick={() => void copy('checksum', agentPackage.sha256)} aria-label="Copy package checksum">{copied === 'checksum' ? <Check size={14} /> : <Copy size={14} />}</button>
+            <code className="truncate font-mono text-[10px] text-stone-600" title={selectedPackage.sha256}>SHA-256 {selectedPackage.sha256}</code>
+            <button className="text-stone-500 transition hover:text-[#4f6f5c] active:scale-[0.98]" onClick={() => void copy('checksum', selectedPackage.sha256)} aria-label="Copy package checksum">{copied === 'checksum' ? <Check size={14} /> : <Copy size={14} />}</button>
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap justify-end gap-2">
-        <button className="button-secondary min-w-28" onClick={() => setSelectedPackageId(agentPackage.id)}>{selectedPackage?.id === agentPackage.id ? <Check size={16} /> : <TerminalWindow size={16} />} {selectedPackage?.id === agentPackage.id ? 'Selected' : 'Install steps'}</button>
-        <button className="button-primary min-w-40" disabled={downloading === agentPackage.id} onClick={() => { setSelectedPackageId(agentPackage.id); void download(agentPackage) }}><DownloadSimple size={16} /> {downloading === agentPackage.id ? 'Downloading…' : 'Download package'}</button>
+      <div className="grid gap-3">
+        <label className="form-field">Package<select className="select-input w-full" aria-label="Agent package" value={selectedPackage.id} onChange={event => setSelectedPackageId(event.target.value)}>{packages.map(agentPackage => <option key={agentPackage.id} value={agentPackage.id}>{agentPackage.package_format.toUpperCase()} · {agentPackage.operating_system}</option>)}</select></label>
+        <button className="button-primary w-full" disabled={downloading === selectedPackage.id} onClick={() => void download(selectedPackage)}><DownloadSimple size={16} /> {downloading === selectedPackage.id ? 'Downloading…' : 'Download Package'}</button>
       </div>
-    </div>)}
+    </div>}
 
     <div className="border-t border-stone-800 bg-[#f7f3eb] px-6 py-6">
       <div className="flex items-center justify-between gap-4">

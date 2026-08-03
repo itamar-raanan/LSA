@@ -1,7 +1,6 @@
 import {
   Certificate,
   Fingerprint,
-  GearSix,
   Key,
   LockKey,
   UsersThree,
@@ -11,7 +10,6 @@ import { useAuth } from '../../auth/useAuth'
 import { ErrorState } from '../../components/StatePanel'
 
 const sections = [
-  { to: '/settings', label: 'Overview', detail: 'Platform configuration', icon: GearSix, end: true },
   { to: '/settings/users', label: 'Users & access', detail: 'Roles and permissions', icon: UsersThree },
   { to: '/settings/authentication', label: 'Authentication', detail: 'SSO and RADIUS', icon: LockKey },
   { to: '/settings/tokens', label: 'Tokens', detail: 'Scanner credentials', icon: Key },
@@ -31,8 +29,8 @@ export function SettingsLayout() {
           <p className="mt-2 text-xs leading-5 text-stone-600">Identity, trust, and platform policy.</p>
         </div>
         <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1" aria-label="Settings sections">
-          {sections.map(({ to, label, detail, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} className={({ isActive }) => `settings-nav-item ${isActive ? 'settings-nav-item-active' : ''}`}>
+          {sections.map(({ to, label, detail, icon: Icon }) => (
+            <NavLink key={to} to={to} className={({ isActive }) => `settings-nav-item ${isActive ? 'settings-nav-item-active' : ''}`}>
               <Icon size={17} weight="duotone" />
               <span className="min-w-0"><strong>{label}</strong><small>{detail}</small></span>
             </NavLink>

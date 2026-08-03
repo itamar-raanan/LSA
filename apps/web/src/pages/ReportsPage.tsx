@@ -8,7 +8,7 @@ type UploadStatus = 'idle' | 'ready' | 'uploading' | 'success' | 'error'
 export function ReportsPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
-  const [token, setToken] = useState('lsa_ingest_demo_secret')
+  const [token, setToken] = useState('')
   const [status, setStatus] = useState<UploadStatus>('idle')
   const [message, setMessage] = useState('')
 
