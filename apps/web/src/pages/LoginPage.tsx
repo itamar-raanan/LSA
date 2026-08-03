@@ -1,4 +1,4 @@
-import { ArrowRight, Buildings, CheckCircle, ShieldCheck } from '@phosphor-icons/react'
+import { ArrowRight, Building2, CircleCheck, ShieldCheck } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -53,17 +53,17 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-[100dvh] bg-[#0c100d] text-stone-100 lg:grid-cols-[1.1fr_0.9fr]">
+    <main className="grid min-h-[100dvh] bg-[#080c13] text-slate-100 lg:grid-cols-[1.1fr_0.9fr]">
       <section className="login-aside relative hidden overflow-hidden border-r border-white/[.06] p-12 lg:flex lg:flex-col">
         <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(113,124,115,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(113,124,115,.08)_1px,transparent_1px)] [background-size:56px_56px]" />
         <div className="relative"><BrandMark /></div>
         <div className="relative mt-auto max-w-[660px] pb-10">
-          <p className="mb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">Estate-wide assurance</p>
+          <p className="mb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-sky-400">Estate-wide assurance</p>
           <h1 className="max-w-[12ch] text-5xl font-medium leading-[0.98] tracking-[-0.065em] text-stone-50 xl:text-6xl">Every Linux host. One security picture.</h1>
           <p className="mt-7 max-w-[55ch] text-[15px] leading-7 text-stone-400">Collect signed audit evidence without granting the platform access to your servers. Track exposure, compliance, and change across the entire estate.</p>
           <div className="mt-10 grid grid-cols-2 gap-x-12 gap-y-5 border-t border-stone-800 pt-7 text-xs text-stone-400">
             {['No remote execution', 'Customer-controlled scans', 'Offline-capable bundles', 'Immutable report history'].map((item) => (
-              <div key={item} className="flex items-center gap-2"><CheckCircle size={16} className="text-emerald-400" />{item}</div>
+              <div key={item} className="flex items-center gap-2"><CircleCheck size={16} className="text-sky-400" />{item}</div>
             ))}
           </div>
         </div>
@@ -72,16 +72,16 @@ export function LoginPage() {
       <section className="flex items-center justify-center px-5 py-12 sm:px-10">
         <div className="login-form-shell w-full max-w-[470px]">
           <div className="mb-12 lg:hidden"><BrandMark /></div>
-          <div className="mb-8 grid size-11 place-items-center rounded-2xl border border-stone-700 bg-stone-900 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]"><ShieldCheck size={22} weight="duotone" /></div>
+          <div className="mb-8 grid size-11 place-items-center rounded-md border border-slate-700 bg-slate-900 text-sky-300 shadow-[inset_0_1px_0_rgba(255,255,255,.04)]"><ShieldCheck size={21} /></div>
           <h2 className="text-3xl font-medium tracking-[-0.045em]">Access the console</h2>
           <p className="mt-2 text-sm leading-6 text-stone-500">Use your organization account to review the Linux estate.</p>
           {sessionNotice && <p className="mt-6 rounded-xl border border-amber-900/40 bg-amber-950/10 px-4 py-3 text-xs leading-5 text-amber-200">{sessionNotice}</p>}
           {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="mt-8 space-y-2">
-            {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Buildings size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
+            {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Building2 size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
           </div>}
           {providers.some((provider) => provider.provider_type === 'radius') && <div className="mt-7 flex gap-4 border-b border-stone-800 pb-3 text-[10px] uppercase tracking-wider text-stone-600">
-            <button className={method === 'local' ? 'text-emerald-300' : ''} onClick={() => setMethod('local')}>Local</button>
-            <button className={method === 'radius' ? 'text-emerald-300' : ''} onClick={() => setMethod('radius')}>RADIUS</button>
+            <button className={method === 'local' ? 'text-sky-300' : ''} onClick={() => setMethod('local')}>Local</button>
+            <button className={method === 'radius' ? 'text-sky-300' : ''} onClick={() => setMethod('radius')}>RADIUS</button>
           </div>}
           <form className="mt-7 space-y-5" onSubmit={submit}>
             <label className="form-field">

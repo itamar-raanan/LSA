@@ -1,56 +1,53 @@
-import { DesktopTower, MagnifyingGlass, Plus } from '@phosphor-icons/react'
+import { Cpu, Network, Plus, Server, ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../api/client'
-import { PageHeader } from '../components/PageHeader'
 import { EnrollHostPanel } from '../components/EnrollHostPanel'
-import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
-import { useApi } from '../hooks/useApi'
 import { HostQuickView } from '../components/HostQuickView'
+import { PageHeader } from '../components/PageHeader'
+import { RiskScore } from '../components/security/RiskScore'
+import { type SecurityColumn, SecurityTable } from '../components/security/SecurityTable'
+import { StatusBadge } from '../components/security/StatusBadge'
+import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
+import { Button } from '../components/ui/Button'
+import { useApi } from '../hooks/useApi'
 import type { Host } from '../types'
 
+function hostStatus(host: Host) {
+  if (!host.last_scan_at) return { label: 'Never seen', tone: 'offline' as const }
+  const age = Date.now() - new Date(host.last_scan_at).getTime()
+  if (age > 86_400_000) return { label: 'Stale', tone: 'warning' as const }
+  return { label: 'Online', tone: 'online' as const }
+}
+
 export function HostsPage() {
-  const [search, setSearch] = useState('')
-  const [risk, setRisk] = useState<'all' | 'critical' | 'healthy'>('all')
+  const [risk, setRisk] = useState<'all' | 'critical' | 'healthy' | 'stale'>('all')
   const [enrolling, setEnrolling] = useState(false)
   const [selected, setSelected] = useState<Host | null>(null)
   const { data, error, loading, reload } = useApi(() => api.hosts(), [])
   const hosts = data?.filter((host) => {
-    const matchesSearch = host.hostname.toLowerCase().includes(search.toLowerCase())
-    const matchesRisk = risk === 'all' || (risk === 'critical' ? host.finding_counts.critical > 0 : host.finding_counts.critical === 0 && (host.security_score ?? 0) >= 80)
-    return matchesSearch && matchesRisk
+    if (risk === 'critical') return host.finding_counts.critical > 0
+    if (risk === 'healthy') return host.finding_counts.critical === 0 && (host.security_score ?? 0) >= 80
+    if (risk === 'stale') return hostStatus(host).tone !== 'online'
+    return true
   }) ?? []
-  function score(value: number | null) {
-    return <div className="score-cell"><span className="score-value">{value?.toFixed(1) ?? '—'}</span><span className="score-track"><span style={{ transform: `scaleX(${(value ?? 0) / 100})` }} /></span></div>
-  }
-  return (
-    <div className="page-reveal">
-      <PageHeader eyebrow="Asset inventory" title="Linux hosts" detail="Persistent identities and the most recent accepted posture for every reporting server." action={<button className="button-primary" onClick={() => setEnrolling(true)}><Plus size={16} /> Enroll host</button>} />
-      {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !data?.length ? <EmptyState title="No hosts registered" detail="A host is registered automatically when its first authenticated report is accepted." /> : (
-        <section className="panel overflow-hidden">
-          <div className="flex flex-col gap-4 px-5 py-5 xl:flex-row xl:items-center xl:justify-between md:px-7">
-            <label className="relative block w-full sm:max-w-sm"><span className="sr-only">Search hosts by hostname</span><MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-600" size={16} /><input className="search-input" type="search" placeholder="Search hostname" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-            <div className="flex flex-wrap items-center gap-2">{(['all', 'critical', 'healthy'] as const).map((value) => <button key={value} className={`filter-chip ${risk === value ? 'filter-chip-active' : ''}`} onClick={() => setRisk(value)}>{value === 'all' ? 'All hosts' : value === 'critical' ? 'Critical exposure' : 'Healthy'}</button>)}<span className="ml-2 font-mono text-[10px] uppercase tracking-[0.15em] text-stone-600">{hosts.length} shown</span></div>
-          </div>
-          <div className="overflow-x-auto border-t border-stone-800">
-            <table className="data-table min-w-[850px]">
-              <thead><tr><th>Host</th><th>Operating system</th><th>Environment</th><th>Security</th><th>Compliance</th><th>Open risk</th></tr></thead>
-              <tbody>{hosts.map((host) => (
-                <tr key={host.id} className="cursor-pointer" onClick={() => setSelected(host)}>
-                  <td><div className="flex items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-stone-800 bg-[#101411] text-emerald-500"><DesktopTower size={17} weight="duotone" /></span><span><button className="font-medium text-stone-200 hover:text-emerald-300" onClick={() => setSelected(host)}>{host.hostname}</button><span className="table-subtitle">{host.ip_addresses[0] ?? 'No address reported'}</span></span></div></td>
-                  <td>{host.operating_system} {host.os_version}<span className="table-subtitle">Kernel {host.kernel}</span></td>
-                  <td className="capitalize">{host.tags.environment ?? 'Unassigned'}<span className="table-subtitle">{host.tags.owner ?? 'No owner'}</span></td>
-                  <td>{score(host.security_score)}</td>
-                  <td>{score(host.compliance_score)}</td>
-                  <td><span className={host.finding_counts.critical ? 'text-rose-400' : 'text-stone-300'}>{host.finding_counts.critical} critical</span><span className="table-subtitle">{host.finding_counts.high} high</span></td>
-                </tr>
-              ))}</tbody>
-            </table>
-            {!hosts.length && <div className="p-10 text-center text-sm text-stone-500">No hosts match “{search}”.</div>}
-          </div>
-        </section>
-      )}
-      {enrolling && <EnrollHostPanel close={() => setEnrolling(false)} created={() => void reload()} />}
-      {selected && <HostQuickView key={selected.id} host={selected} close={() => setSelected(null)} deleted={() => { setSelected(null); void reload() }} />}
-    </div>
-  )
+
+  const columns: SecurityColumn<Host>[] = [
+    { id: 'asset', header: 'Asset', hideable: false, sortValue: (host) => host.hostname, exportValue: (host) => host.hostname, cell: (host) => <button className="asset-identity" aria-label={host.hostname} onClick={() => setSelected(host)}><span className="asset-icon"><Server size={16} /></span><span><strong>{host.hostname}</strong><small>{host.fqdn ?? host.ip_addresses[0] ?? 'No address reported'}</small></span></button> },
+    { id: 'status', header: 'Sensor status', sortValue: (host) => hostStatus(host).label, exportValue: (host) => hostStatus(host).label, cell: (host) => { const status = hostStatus(host); return <StatusBadge label={status.label} tone={status.tone} pulse={status.tone === 'online'} /> } },
+    { id: 'os', header: 'Operating system', sortValue: (host) => `${host.operating_system} ${host.os_version}`, exportValue: (host) => `${host.operating_system} ${host.os_version}`, cell: (host) => <span className="table-primary">{host.operating_system} {host.os_version}<small>Kernel {host.kernel}</small></span> },
+    { id: 'environment', header: 'Environment', sortValue: (host) => host.tags.environment ?? '', exportValue: (host) => host.tags.environment ?? '', cell: (host) => <span className="table-primary capitalize">{host.tags.environment ?? 'Unassigned'}<small>{host.tags.owner ?? 'No owner'}</small></span> },
+    { id: 'risk', header: 'Security score', sortValue: (host) => host.security_score ?? -1, exportValue: (host) => host.security_score, cell: (host) => <div className="flex items-center gap-3"><RiskScore value={host.security_score ?? 0} label="posture" size="sm" /><span className="table-primary"><strong className="font-mono">{host.security_score?.toFixed(1) ?? '—'}</strong><small>Security posture</small></span></div> },
+    { id: 'findings', header: 'Open exposure', sortValue: (host) => host.finding_counts.critical * 1000 + host.finding_counts.high, exportValue: (host) => `${host.finding_counts.critical} critical; ${host.finding_counts.high} high`, cell: (host) => <span className="table-primary"><span className={host.finding_counts.critical ? 'text-rose-400' : 'text-slate-300'}>{host.finding_counts.critical} critical</span><small>{host.finding_counts.high} high · {host.finding_counts.medium} medium</small></span> },
+    { id: 'last_seen', header: 'Last seen', sortValue: (host) => host.last_scan_at ?? '', exportValue: (host) => host.last_scan_at, cell: (host) => <span className="font-mono text-[10px] text-slate-400">{host.last_scan_at ? new Date(host.last_scan_at).toLocaleString() : 'Never'}</span> },
+  ]
+
+  return <div className="page-reveal">
+    <PageHeader eyebrow="Asset management" title="Linux assets" detail="Inventory, sensor health, exposure, and the latest accepted posture for every reporting endpoint." action={<Button variant="primary" onClick={() => setEnrolling(true)}><Plus size={15} />Enroll asset</Button>} />
+    {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !data?.length ? <EmptyState title="No assets registered" detail="An asset appears automatically when its first authenticated report or agent check-in is accepted." /> : <section className="soc-panel overflow-hidden">
+      <div className="asset-filter-row"><div className="filter-tabs" role="group" aria-label="Asset risk filter">{(['all', 'critical', 'healthy', 'stale'] as const).map((value) => <button key={value} className={risk === value ? 'active' : ''} onClick={() => setRisk(value)}>{value === 'all' ? 'All assets' : value === 'critical' ? 'Critical exposure' : value === 'healthy' ? 'Healthy' : 'Stale sensors'}<span>{value === 'all' ? data.length : value === 'critical' ? data.filter((host) => host.finding_counts.critical > 0).length : value === 'healthy' ? data.filter((host) => host.finding_counts.critical === 0 && (host.security_score ?? 0) >= 80).length : data.filter((host) => hostStatus(host).tone !== 'online').length}</span></button>)}</div></div>
+      <SecurityTable rows={hosts} columns={columns} searchText={(host) => `${host.hostname} ${host.fqdn ?? ''} ${host.ip_addresses.join(' ')} ${host.operating_system} ${host.tags.environment ?? ''}`} searchPlaceholder="Search hostname, IP, OS, or environment" filename="lsa-assets.csv" emptyTitle="No assets match this view" renderExpanded={(host) => <div className="asset-expanded"><div><Network size={15} /><span><small>Network identity</small><strong>{host.ip_addresses.join(', ') || 'No address reported'}</strong></span></div><div><Cpu size={15} /><span><small>Platform</small><strong>{String(host.system_info?.cpu_model ?? host.architecture)}</strong></span></div><div><ShieldAlert size={15} /><span><small>Compliance</small><strong>{host.compliance_score?.toFixed(1) ?? '—'}%</strong></span></div><Button size="sm" onClick={() => setSelected(host)}>Open asset details</Button></div>} />
+    </section>}
+    {enrolling && <EnrollHostPanel close={() => setEnrolling(false)} created={() => void reload()} />}
+    {selected && <HostQuickView key={selected.id} host={selected} close={() => setSelected(null)} deleted={() => { setSelected(null); void reload() }} />}
+  </div>
 }

@@ -1,117 +1,87 @@
-import { ArrowRight, ClockCounterClockwise, HardDrives, Pulse, ShieldWarning } from '@phosphor-icons/react'
+import { Activity, AlertTriangle, ArrowRight, CalendarClock, FileWarning, Server, ShieldCheck, ShieldX } from 'lucide-react'
+import { lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { ErrorState, LoadingState, EmptyState } from '../components/StatePanel'
+import { useAuth } from '../auth/useAuth'
 import { PageHeader } from '../components/PageHeader'
-import { ScoreRing } from '../components/ScoreRing'
+import { RiskScore } from '../components/security/RiskScore'
+import { SecurityMetricCard } from '../components/security/SecurityMetricCard'
+import { SecurityTimeline } from '../components/security/SecurityTimeline'
+import { StatusBadge } from '../components/security/StatusBadge'
+import { SeverityBadge } from '../components/SeverityBadge'
+import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
+import { Button } from '../components/ui/Button'
 import { useApi } from '../hooks/useApi'
+import type { Severity } from '../types'
 
-const severityRows = [
-  { key: 'critical', label: 'Critical', color: 'bg-rose-500' },
-  { key: 'high', label: 'High', color: 'bg-orange-400' },
-  { key: 'medium', label: 'Medium', color: 'bg-amber-300' },
-  { key: 'low', label: 'Low', color: 'bg-sky-400' },
-] as const
-
-const postureStats = [
-  ['Reporting', HardDrives],
-  ['Healthy', Pulse],
-  ['Critical', ShieldWarning],
-  ['Stale', ClockCounterClockwise],
-] as const
+const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
+const severityColors: Record<Severity, string> = { critical: '#ef476f', high: '#f59e55', medium: '#e3bd56', low: '#4aa3df', info: '#64748b' }
+const DashboardChart = lazy(() => import('../components/security/DashboardChart'))
 
 export function DashboardPage() {
-  const { data, error, loading, reload } = useApi(() => api.dashboard(), [])
-  if (loading) return <><PageHeader eyebrow="Fleet posture" title="Security overview" detail="Loading the latest accepted reports." /><LoadingState /></>
-  if (error) return <><PageHeader eyebrow="Fleet posture" title="Security overview" detail="Current security and compliance state." /><ErrorState message={error} retry={reload} /></>
-  if (!data || data.total_hosts === 0) return <><PageHeader eyebrow="Fleet posture" title="Security overview" detail="Current security and compliance state." /><EmptyState title="No hosts have reported yet" detail="Run the scanner in upload mode or import an offline report bundle to establish the fleet baseline." /></>
+  const { user } = useAuth()
+  const { data, error, loading, reload } = useApi(async () => {
+    const [dashboard, hosts, findings, certificate] = await Promise.all([
+      api.dashboard(), api.hosts(), api.findings(), user?.role === 'admin' ? api.tlsCertificate().catch(() => null) : Promise.resolve(null),
+    ])
+    return { dashboard, hosts, findings, certificate }
+  }, [user?.role])
 
-  const maxFindings = Math.max(...severityRows.map(({ key }) => data.finding_counts[key] ?? 0), 1)
-  const postureLabel = data.overall_security_score >= 90 ? 'Strong posture' : data.overall_security_score >= 75 ? 'Attention required' : 'Elevated exposure'
-  const postureTone = data.overall_security_score >= 90 ? 'text-emerald-300' : data.overall_security_score >= 75 ? 'text-amber-300' : 'text-rose-300'
-  return (
-    <div className="page-reveal">
-      <PageHeader
-        eyebrow="Fleet posture"
-        title="Security overview"
-        detail="A live view of accepted evidence across every reporting Linux host."
-        action={<Link to="/reports" className="button-secondary">Import report <ArrowRight size={16} /></Link>}
-      />
+  if (loading) return <><PageHeader eyebrow="Security operations" title="SOC overview" detail="Loading the current fleet posture and exposure queue." /><LoadingState /></>
+  if (error) return <><PageHeader eyebrow="Security operations" title="SOC overview" detail="Current fleet posture and exposure queue." /><ErrorState message={error} retry={reload} /></>
+  if (!data || data.dashboard.total_hosts === 0) return <><PageHeader eyebrow="Security operations" title="SOC overview" detail="Current fleet posture and exposure queue." /><EmptyState title="No telemetry available" detail="Enroll a Linux endpoint or import an offline report to establish the first fleet baseline." /></>
 
-      <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <div className="panel relative overflow-hidden p-6 md:p-8">
-          <div className="absolute -right-20 -top-24 size-80 rounded-full border border-emerald-800/10 opacity-50 [background:radial-gradient(circle,rgba(76,145,103,.16),transparent_68%)]" />
-          <div className="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="flex items-center gap-3"><p className="section-label">Overall security score</p><span className={`font-mono text-[9px] uppercase tracking-[.1em] ${postureTone}`}>{postureLabel}</span></div>
-              <div className="mt-5 flex items-end gap-3">
-                <strong className="font-mono text-6xl font-medium tracking-[-0.09em] text-stone-50 md:text-7xl">{data.overall_security_score.toFixed(1)}</strong>
-                <span className="mb-2 text-sm text-stone-600">/ 100</span>
-              </div>
-              <p className="mt-5 max-w-[48ch] text-sm leading-6 text-stone-400">The estate is measured from the most recent accepted report for each host. Older evidence remains available in report history.</p>
-            </div>
-            <ScoreRing value={data.compliance_score} label="Compliance" />
-          </div>
-          <div className="relative mt-8 grid grid-cols-2 divide-x divide-stone-800 border-t border-stone-800 pt-6 sm:grid-cols-4">
-            {postureStats.map(([label, Icon], index) => {
-              const value = [data.total_hosts, data.healthy_hosts, data.critical_hosts, data.stale_hosts][index]
-              return (
-              <div key={String(label)} className={`px-4 first:pl-0 ${index > 1 ? 'mt-5 border-t border-stone-800 pt-5 sm:mt-0 sm:border-t-0 sm:pt-0' : ''}`}>
-                <Icon size={17} weight="duotone" className="mb-3 text-stone-500" />
-                <p className="font-mono text-2xl tracking-[-0.06em] text-stone-100">{value}</p>
-                <p className="mt-1 text-[11px] text-stone-600">{label as string}</p>
-              </div>
-              )
-            })}
-          </div>
+  const { dashboard, hosts, findings, certificate } = data
+  const criticalFindings = findings.filter((finding) => finding.severity === 'critical' || finding.severity === 'high')
+  const certificateDays = certificate ? Math.ceil((new Date(certificate.not_valid_after).getTime() - Date.now()) / 86_400_000) : null
+  const certificateTone = certificateDays == null ? 'neutral' : certificateDays <= 14 ? 'critical' : certificateDays <= 45 ? 'medium' : 'success'
+  const healthData = [
+    { name: 'Healthy', value: dashboard.healthy_hosts, color: '#36b37e' },
+    { name: 'At risk', value: Math.max(0, dashboard.at_risk_hosts - dashboard.critical_hosts), color: '#e3bd56' },
+    { name: 'Critical', value: dashboard.critical_hosts, color: '#ef476f' },
+    { name: 'Unclassified', value: Math.max(0, dashboard.total_hosts - dashboard.healthy_hosts - dashboard.at_risk_hosts), color: '#45536a' },
+  ].filter((item) => item.value > 0)
+  const severityData = severityOrder.map((severity) => ({ severity, name: severity[0].toUpperCase() + severity.slice(1), count: dashboard.finding_counts[severity] ?? 0, fill: severityColors[severity] }))
+  const recentEvents = [...hosts].sort((a, b) => String(b.last_scan_at ?? '').localeCompare(String(a.last_scan_at ?? ''))).slice(0, 6).map((host) => ({
+    id: host.id, title: `${host.hostname} reported posture`, detail: `${host.operating_system} ${host.os_version} · ${host.finding_counts.critical} critical findings`, timestamp: host.last_scan_at,
+    tone: host.finding_counts.critical ? 'critical' as const : host.security_score != null && host.security_score < 75 ? 'high' as const : 'success' as const, icon: Activity,
+  }))
+
+  return <div className="page-reveal">
+    <PageHeader eyebrow="Security operations" title="SOC overview" detail="Live fleet posture, exposure, and evidence activity from the latest accepted endpoint reports." action={<Button asChild><Link to="/reports">Import evidence <ArrowRight size={14} /></Link></Button>} />
+
+    <section className="metric-grid" aria-label="Security metrics">
+      <SecurityMetricCard title="Total assets" value={dashboard.total_hosts} detail={`${dashboard.healthy_hosts} healthy`} tone="neutral" icon={Server} />
+      <SecurityMetricCard title="Active threats" value={dashboard.finding_counts.critical ?? 0} detail={`${dashboard.finding_counts.high ?? 0} high severity`} tone={(dashboard.finding_counts.critical ?? 0) ? 'critical' : 'success'} icon={ShieldX} />
+      <SecurityMetricCard title="Vulnerable systems" value={dashboard.at_risk_hosts} detail={`${dashboard.critical_hosts} critical hosts`} tone={dashboard.critical_hosts ? 'high' : 'success'} icon={FileWarning} />
+      <SecurityMetricCard title="Certificate expiry" value={certificateDays == null ? '—' : `${certificateDays}d`} detail={certificate ? certificate.subject : 'Not available'} tone={certificateTone} icon={CalendarClock} />
+      <SecurityMetricCard title="Compliance score" value={`${dashboard.compliance_score.toFixed(1)}%`} detail="Latest accepted evidence" tone={dashboard.compliance_score >= 90 ? 'success' : dashboard.compliance_score >= 75 ? 'medium' : 'high'} icon={ShieldCheck} />
+    </section>
+
+    <section className="mt-4 grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
+      <article className="soc-panel posture-panel">
+        <div className="panel-heading"><div><p className="panel-kicker">Estate posture</p><h2>Asset health distribution</h2></div><StatusBadge label={`${dashboard.stale_hosts} stale`} tone={dashboard.stale_hosts ? 'warning' : 'online'} /></div>
+        <div className="posture-content">
+          <RiskScore value={dashboard.overall_security_score} />
+          <div className="posture-chart" aria-label="Asset health distribution chart"><Suspense fallback={<div className="chart-skeleton" />}><DashboardChart type="health" data={healthData} /></Suspense></div>
+          <div className="posture-legend">{healthData.map((item) => <div key={item.name}><span style={{ backgroundColor: item.color }} /><p><strong>{item.value}</strong><small>{item.name}</small></p></div>)}</div>
         </div>
+      </article>
 
-        <div className="panel p-6 md:p-8">
-          <div className="flex items-center justify-between"><p className="section-label">Open findings</p><span className="font-mono text-[10px] text-stone-600">LATEST SCANS</span></div>
-          <div className="mt-8 space-y-6">
-            {severityRows.map(({ key, label, color }) => {
-              const value = data.finding_counts[key] ?? 0
-              return (
-                <div key={key}>
-                  <div className="mb-2 flex items-center justify-between text-xs"><span className="text-stone-400">{label}</span><span className="font-mono text-stone-200">{value}</span></div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-stone-800"><div className={`h-full rounded-full ${color} transition-[transform] duration-700 origin-left`} style={{ transform: `scaleX(${value / maxFindings})` }} /></div>
-                </div>
-              )
-            })}
-          </div>
-          <Link to="/findings" className="mt-8 flex items-center justify-between border-t border-stone-800 pt-5 text-xs text-stone-400 transition hover:text-stone-100">Review finding queue <ArrowRight size={15} /></Link>
-        </div>
-      </section>
+      <article className="soc-panel">
+        <div className="panel-heading"><div><p className="panel-kicker">Exposure</p><h2>Vulnerability severity</h2></div><Link to="/findings" className="panel-link">Open queue <ArrowRight size={13} /></Link></div>
+        <div className="severity-chart" aria-label="Vulnerability severity chart"><Suspense fallback={<div className="chart-skeleton" />}><DashboardChart type="severity" data={severityData} /></Suspense></div>
+      </article>
+    </section>
 
-      <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_0.72fr]">
-        <div className="panel overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-5 md:px-8"><div><p className="section-label">Highest-risk hosts</p><p className="mt-2 text-xs text-stone-600">Prioritized by current security score</p></div><Link to="/hosts" className="text-xs text-emerald-400 hover:text-emerald-300">View all</Link></div>
-          <div className="divide-y divide-stone-800 border-t border-stone-800">
-            {data.highest_risk_hosts.map((host) => (
-              <Link to={`/hosts/${host.id}`} key={host.id} className="group grid grid-cols-[1fr_auto] items-center gap-5 px-6 py-4 transition hover:bg-stone-800/30 md:grid-cols-[1.2fr_0.7fr_0.45fr] md:px-8">
-                <div className="min-w-0"><p className="truncate text-sm font-medium text-stone-200 group-hover:text-white">{host.hostname}</p><p className="mt-1 truncate font-mono text-[10px] text-stone-600">{host.ip_addresses[0] ?? 'No address'} · {host.os_family.toUpperCase()} {host.os_version}</p></div>
-                <span className="hidden text-xs text-stone-500 md:block">{host.tags.environment ?? 'Unassigned'}</span>
-                <div className="flex items-center justify-end gap-3"><div className="score-track"><span style={{ transform: `scaleX(${(host.security_score ?? 0) / 100})` }} /></div><div className="text-right"><strong className="font-mono text-lg font-medium text-stone-100">{host.security_score?.toFixed(1) ?? '—'}</strong><p className="text-[9px] uppercase tracking-widest text-stone-700">score</p></div></div>
-              </Link>
-            ))}
-          </div>
-        </div>
+    <section className="mt-4 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+      <article className="soc-panel overflow-hidden">
+        <div className="panel-heading"><div><p className="panel-kicker">Priority queue</p><h2>Critical findings</h2></div><span className="panel-count">{criticalFindings.length} open</span></div>
+        <div className="overflow-x-auto"><table className="compact-security-table"><thead><tr><th>Finding</th><th>Asset</th><th>Severity</th><th>Lifecycle</th></tr></thead><tbody>{criticalFindings.slice(0, 7).map((finding) => <tr key={finding.id}><td><Link to="/findings" className="finding-link">{finding.title}</Link><span>{finding.control_id}</span></td><td>{finding.hostname}</td><td><SeverityBadge severity={finding.severity} /></td><td><StatusBadge label={finding.lifecycle} tone={finding.lifecycle === 'new' ? 'warning' : 'neutral'} /></td></tr>)}</tbody></table>{!criticalFindings.length && <div className="grid min-h-44 place-items-center"><div className="text-center"><ShieldCheck className="mx-auto text-emerald-400" size={22} /><p className="mt-3 text-xs text-slate-300">No critical or high findings</p></div></div>}</div>
+      </article>
+      <article className="soc-panel overflow-hidden"><div className="panel-heading"><div><p className="panel-kicker">Telemetry</p><h2>Recent endpoint activity</h2></div></div><SecurityTimeline events={recentEvents} /></article>
+    </section>
 
-        <div className="panel p-6 md:p-8">
-          <p className="section-label">Operating systems</p>
-          <div className="mt-8 flex h-3 overflow-hidden rounded-full bg-stone-800">
-            {Object.entries(data.os_distribution).map(([name, value], index) => (
-              <div key={name} className={['bg-emerald-500', 'bg-emerald-300', 'bg-teal-700'][index % 3]} style={{ width: `${(value / data.total_hosts) * 100}%` }} />
-            ))}
-          </div>
-          <div className="mt-7 space-y-4">
-            {Object.entries(data.os_distribution).map(([name, value], index) => (
-              <div key={name} className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 capitalize text-stone-400"><span className={`size-1.5 rounded-full ${['bg-emerald-500', 'bg-emerald-300', 'bg-teal-700'][index % 3]}`} />{name}</span><span className="font-mono text-stone-300">{value}</span></div>
-            ))}
-          </div>
-          <div className="mt-8 border-t border-stone-800 pt-5"><p className="text-xs leading-5 text-stone-600">Only Debian, Ubuntu, and the RHEL family are accepted by report contract v1.</p></div>
-        </div>
-      </section>
-    </div>
-  )
+    {dashboard.critical_hosts > 0 && <div className="soc-callout soc-callout-critical"><AlertTriangle size={17} /><div><strong>{dashboard.critical_hosts} systems require immediate review</strong><p>Prioritize hosts with critical controls before their next policy cycle.</p></div><Button asChild size="sm" variant="danger"><Link to="/hosts">Review assets</Link></Button></div>}
+  </div>
 }

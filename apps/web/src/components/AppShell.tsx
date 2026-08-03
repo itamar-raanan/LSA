@@ -1,85 +1,116 @@
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
-  Bell,
-  ChartDonut,
-  GearSix,
-  HardDrives,
-  ListMagnifyingGlass,
-  SignOut,
-  UploadSimple,
-  DesktopTower,
-  CaretRight,
-  Pulse,
-} from '@phosphor-icons/react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+  Bell, Building2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, FileBarChart, FileKey2,
+  Gauge, LogOut, Menu, MonitorCog, Plus, Search, Server, Settings, ShieldAlert, ShieldCheck, SlidersHorizontal,
+} from 'lucide-react'
+import { Suspense, useEffect, useState } from 'react'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { cn } from '../lib/utils'
 import { BrandMark } from './BrandMark'
+import { CommandPalette } from './CommandPalette'
+import { StatusBadge } from './security/StatusBadge'
+import { Button } from './ui/Button'
+import { Tooltip, TooltipProvider } from './ui/Tooltip'
 
-const navigation = [
-  { to: '/', label: 'Overview', icon: ChartDonut, end: true, adminOnly: false },
-  { to: '/hosts', label: 'Hosts', icon: HardDrives, adminOnly: false },
-  { to: '/findings', label: 'Findings', icon: ListMagnifyingGlass, adminOnly: false },
-  { to: '/reports', label: 'Reports', icon: UploadSimple, adminOnly: false },
-  { to: '/agents', label: 'Agents', icon: DesktopTower, adminOnly: true },
-  { to: '/settings', label: 'Settings', icon: GearSix, adminOnly: true },
+interface NavigationItem { to: string; label: string; icon: typeof Gauge; end?: boolean; adminOnly?: boolean }
+interface NavigationGroup { label: string; items: NavigationItem[] }
+
+const navigation: NavigationGroup[] = [
+  { label: 'Operations', items: [
+    { to: '/', label: 'Dashboard', icon: Gauge, end: true },
+    { to: '/hosts', label: 'Assets', icon: Server },
+    { to: '/agents', label: 'Endpoints', icon: MonitorCog, adminOnly: true },
+  ] },
+  { label: 'Exposure management', items: [
+    { to: '/findings', label: 'Vulnerabilities', icon: ShieldAlert },
+    { to: '/settings/certificates', label: 'Certificates', icon: ShieldCheck, adminOnly: true },
+    { to: '/policies', label: 'Policies', icon: SlidersHorizontal, adminOnly: true },
+  ] },
+  { label: 'Intelligence', items: [
+    { to: '/reports', label: 'Reports', icon: FileBarChart },
+  ] },
+  { label: 'Platform', items: [
+    { to: '/settings', label: 'Administration', icon: Settings, adminOnly: true },
+  ] },
 ]
 
 export function AppShell() {
   const { user, logout } = useAuth()
   const location = useLocation()
-  const visibleNavigation = navigation.filter((item) => !item.adminOnly || user?.role === 'admin')
-  const current = [...navigation].reverse().find((item) => item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to))
+  const [collapsed, setCollapsed] = useState(false)
+  const [commandOpen, setCommandOpen] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const visibleNavigation = navigation.map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly || user?.role === 'admin') })).filter((group) => group.items.length)
+  const flatNavigation = visibleNavigation.flatMap((group) => group.items)
+  const current = [...flatNavigation].reverse().find((item) => item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to))
   const initials = (user?.name || user?.email || 'LSA').split(/\s+|@/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
-  return (
-    <div className="min-h-[100dvh] text-stone-100">
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setCommandOpen((value) => !value) }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => setMobileOpen(false), [location.pathname])
+
+  const navigationMarkup = <nav className="soc-navigation" aria-label="Primary navigation">
+    {visibleNavigation.map((group) => <div key={group.label} className="soc-nav-group">
+      {!collapsed && <p className="soc-nav-label">{group.label}</p>}
+      {group.items.map(({ to, label, icon: Icon, end }) => { const isActive = end ? location.pathname === to : location.pathname.startsWith(to); return <Tooltip key={`${label}-${to}`} content={label} side="right">
+        <Link to={to} aria-current={isActive ? 'page' : undefined} aria-label={collapsed ? label : undefined} className={cn('soc-nav-item', isActive && 'soc-nav-item-active', collapsed && 'soc-nav-item-collapsed')}>
+          <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{!collapsed && <ChevronRight className="nav-caret" size={13} />}
+        </Link>
+      </Tooltip> })}
+    </div>)}
+  </nav>
+
+  return <TooltipProvider>
+    <div className="min-h-[100dvh] text-slate-100">
       <a href="#main-content" className="skip-link">Skip to content</a>
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-[256px] flex-col border-r border-white/[.06] p-5 lg:flex">
-        <BrandMark />
-        <div className="mt-11 px-3"><p className="section-label">Workspace</p></div>
-        <nav className="mt-3 space-y-1" aria-label="Primary navigation">
-          {visibleNavigation.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>
-              <Icon size={18} weight="duotone" />
-              <span className="flex-1">{label}</span>
-              <CaretRight size={12} className="opacity-30" />
-            </NavLink>
-          ))}
-        </nav>
-        <div className="mt-auto space-y-3">
-          <div className="flex items-center gap-3 border-y border-white/[.06] py-4 text-[11px] text-stone-500"><span className="status-pulse" /><span className="flex-1">Platform operational</span><Pulse size={15} /></div>
-          <div className="user-card">
-            <div className="flex items-center gap-3">
-              <div className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-emerald-800/40 bg-emerald-950/30 text-[10px] font-semibold text-emerald-200">{initials}</div>
-              <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-stone-300">{user?.name}</p><p className="mt-1 truncate font-mono text-[9px] text-stone-600">{user?.role}</p></div>
-              <button className="grid size-8 place-items-center rounded-lg text-stone-600 transition hover:bg-white/[.04] hover:text-stone-200" onClick={logout} aria-label="Sign out"><SignOut size={15} /></button>
-            </div>
+      <aside className={cn('soc-sidebar hidden lg:flex', collapsed && 'soc-sidebar-collapsed')}>
+        <div className="soc-logo-row"><BrandMark compact={collapsed} />{!collapsed && <span className="soc-edition">ENTERPRISE</span>}</div>
+        {navigationMarkup}
+        <div className="mt-auto space-y-2">
+          {!collapsed && <div className="soc-sensor-state"><StatusBadge label="Platform operational" tone="online" pulse /><span>v0.4</span></div>}
+          <div className={cn('soc-user-card', collapsed && 'soc-user-card-collapsed')}>
+            <span className="soc-avatar">{initials}</span>{!collapsed && <span className="min-w-0 flex-1"><strong>{user?.name}</strong><small>{user?.role}</small></span>}
+            {!collapsed && <button onClick={logout} aria-label="Sign out"><LogOut size={15} /></button>}
           </div>
         </div>
+        <button className="sidebar-collapse" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>{collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}</button>
       </aside>
 
-      <div className="lg:pl-[256px]">
-        <header className="app-topbar sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-white/[.06] px-4 backdrop-blur-xl md:px-8 lg:px-10">
-          <div className="lg:hidden"><BrandMark compact /></div>
-          <div className="topbar-context hidden lg:flex">
-            <span>LSA</span><CaretRight size={11} /><strong>{current?.label ?? 'Console'}</strong>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="icon-button" aria-label="Notifications"><Bell size={18} /></button>
-            <div className="grid size-9 place-items-center rounded-[10px] border border-emerald-800/30 bg-emerald-950/30 text-[10px] font-semibold text-emerald-200">{initials}</div>
+      {mobileOpen && <button className="mobile-sidebar-backdrop lg:hidden" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
+      <aside aria-hidden={!mobileOpen} className={cn('mobile-sidebar lg:hidden', mobileOpen && 'mobile-sidebar-open')}><div className="soc-logo-row"><BrandMark /></div>{navigationMarkup}</aside>
+
+      <div className={cn('soc-workspace', collapsed && 'soc-workspace-expanded')}>
+        <header className="soc-topbar">
+          <button className="soc-icon-button lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={18} /></button>
+          <div className="soc-breadcrumbs"><span>LSA</span><ChevronRight size={12} /><strong>{current?.label ?? 'Console'}</strong></div>
+          <button className="global-search-trigger" onClick={() => setCommandOpen(true)}><Search size={15} /><span>Search the console</span><kbd>⌘ K</kbd></button>
+          <div className="soc-topbar-actions">
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild><Button className="environment-trigger" size="sm"><Building2 size={14} /><span className="hidden sm:inline">Production</span><ChevronDown size={12} /></Button></DropdownMenu.Trigger>
+              <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Label className="soc-menu-label">Environment</DropdownMenu.Label><DropdownMenu.Item className="soc-menu-item"><span className="soc-menu-check">✓</span>Production</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>
+            </DropdownMenu.Root>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild><Button variant="primary" size="sm" className="hidden md:inline-flex"><Plus size={14} />Quick action<ChevronDown size={12} /></Button></DropdownMenu.Trigger>
+              <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Item asChild className="soc-menu-item"><Link to="/reports"><FileBarChart size={14} />Import evidence report</Link></DropdownMenu.Item><DropdownMenu.Item asChild className="soc-menu-item"><Link to="/settings/tokens"><FileKey2 size={14} />Create ingestion token</Link></DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>
+            </DropdownMenu.Root>
+            <button className="soc-icon-button" aria-label="Help"><CircleHelp size={17} /></button>
+            <button className="soc-icon-button notification-button" aria-label="Notifications"><Bell size={17} /><span /></button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger className="soc-avatar soc-avatar-button" aria-label="User menu">{initials}</DropdownMenu.Trigger>
+              <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content"><DropdownMenu.Label className="soc-profile-label"><strong>{user?.name}</strong><span>{user?.email}</span></DropdownMenu.Label><DropdownMenu.Separator className="soc-menu-separator" /><DropdownMenu.Item className="soc-menu-item" onSelect={logout}><LogOut size={14} />Sign out</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
         </header>
-
-        <main id="main-content" className="mx-auto max-w-[1500px] px-4 pb-24 pt-8 md:px-8 lg:px-10 lg:pb-14 lg:pt-10">
-          <Outlet />
-        </main>
-
-        <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-white/[.08] bg-[#0c100d]/95 px-2 py-2 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
-          {visibleNavigation.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} className={({ isActive }) => `mobile-nav ${isActive ? 'text-emerald-300' : 'text-stone-600'}`}>
-              <Icon size={19} weight="duotone" /><span>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
+        <main id="main-content" className="soc-main"><Suspense fallback={<div className="route-loading route-loading-contained" aria-label="Loading console view"><span /><span /><span /></div>}><Outlet /></Suspense></main>
       </div>
+      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
     </div>
-  )
+  </TooltipProvider>
 }
