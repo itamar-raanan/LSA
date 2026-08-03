@@ -11,7 +11,9 @@ describe('App', () => {
   it('shows the authentication screen for signed-out users', async () => {
     render(<MemoryRouter initialEntries={['/']}><AuthProvider><App /></AuthProvider></MemoryRouter>)
     expect(screen.getByRole('heading', { name: 'Access the console' })).toBeInTheDocument()
-    expect(await screen.findByText(/No organization identity provider is enabled/)).toBeInTheDocument()
+    expect(await screen.findByRole('textbox', { name: 'Username' })).toHaveValue('')
+    expect(screen.getByLabelText('Password')).toHaveValue('')
+    expect(screen.queryByText('Emergency admin')).not.toBeInTheDocument()
   })
 
   it('clears a rejected stored session and returns to login', async () => {
