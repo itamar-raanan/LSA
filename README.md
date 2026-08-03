@@ -43,6 +43,28 @@ The server is delivered as a Docker Compose stack. Only the TLS gateway is publi
 | **MinIO evidence vault** | Retention-enforced storage of original report artifacts with integrity verification | Internal network |
 | **Alembic migrations** | Applies versioned database changes before the API starts | Startup job |
 
+### Server resource requirements
+
+The following values are planning baselines for the bundled single-node Docker Compose deployment, not tested capacity limits. Production sizing must account for host count, audit frequency, concurrent ingestion, report size, retention, and console/API traffic.
+
+| Resource | Evaluation or small lab | Recommended production starting point |
+| --- | --- | --- |
+| **CPU** | 2 vCPU | 4 vCPU; add capacity for concurrent report ingestion |
+| **Memory** | 4 GiB RAM | 8 GiB RAM; monitor PostgreSQL, API workers, and MinIO under real load |
+| **System and database disk** | 20 GiB free in addition to evidence storage | 50 GiB or more on SSD-backed storage, with database growth monitored |
+| **Evidence storage** | 10 GiB or enough for the test retention period | Size separately from measured bundle size, audit frequency, host count, and retention |
+| **Network** | Inbound TCP 8443 from administrators, scanners, and agents | Stable TLS endpoint on TCP 8443 plus DNS and time synchronization |
+
+Estimate raw evidence capacity with:
+
+```text
+host count × reports per host per day × average bundle size × retention days
+```
+
+Add at least 20% working headroom, plus separate capacity for PostgreSQL, container images, backups, and filesystem or object-store overhead. For example, 1,000 hosts uploading one 1 MiB bundle daily with 365-day retention require roughly 430 GiB after 20% headroom. The default maximum upload is 25 MiB and the default artifact retention is 365 days; actual bundles are normally much smaller, so measure them in the intended control profile before final sizing.
+
+The server host also requires Docker Engine with the Compose plugin. It must be able to resolve DNS, maintain accurate time, reach configured identity or RADIUS providers, and reach an external S3 endpoint when the bundled MinIO service is replaced. Image and dependency access is required during installation or upgrades unless an internal registry or offline mirror is provided.
+
 ### Server data flow
 
 1. The gateway accepts a request over HTTPS on port 8443 and routes it to the console or API.
@@ -93,6 +115,19 @@ The offline workflow is appropriate when an agent cannot be installed, the targe
 ### Managed agents
 
 The unified Linux agent is available as Debian/Ubuntu (`.deb`), RHEL-family (`.rpm`), and universal (`.tar.gz`) packages downloadable from the console. Package installation stages the agent without starting it. A one-time enrollment command then creates a root-only configuration, generates the host signing key, assigns the agent to exactly one group, and enables its systemd service.
+
+Agent sizing is per managed host. The figures below describe available headroom during an audit, not the total resources the host must have for its other workloads.
+
+| Resource | Minimum baseline | Recommended headroom |
+| --- | --- | --- |
+| **CPU** | 1 available vCPU | 2 available vCPU during larger audit profiles |
+| **Memory** | 512 MiB available | 1 GiB available during an audit |
+| **Disk** | 500 MiB free for runtime, virtual environment, controls, state, and initial reports | 1 GiB or more, plus capacity for retained report history |
+| **Network** | Outbound TCP 8443 to the LSA platform | Reliable DNS, time synchronization, and TLS trust for the platform certificate |
+
+The host requires Python 3.11 or newer, `venv` support, systemd, and root privileges so read-only controls can inspect protected system state. Enrollment installs constrained Python dependencies into `/opt/lsa-agent/venv`, so it also requires access to the dependency source or an internal/offline package mirror. No inbound agent port is required.
+
+Audit bundles retained by the agent under `/var/lib/lsa-agent/reports` consume additional disk over time. Plan that capacity as `average bundle size × retained audits`, and monitor or rotate the directory according to the organization's evidence policy. CPU and memory use peak while the local Ansible audit is running; the polling daemon is otherwise lightweight.
 
 Every group has an effective policy. Policies can select controls by category and set their intended mode, allowing different fleets to have different audit scopes. Publishing a change creates an immutable version. The current safety lock permits audit execution only; write/remediation behavior remains disabled.
 
