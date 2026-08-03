@@ -4,14 +4,13 @@ from lsa.api.admin import require_admin
 from lsa.dependencies import current_user
 from lsa.models import User
 from lsa.schemas import AgentPackageResponse
-from lsa.services.agent_packages import get_agent_package, linux_agent_package
+from lsa.services.agent_packages import AgentPackage, agent_packages, get_agent_package
 
 
 router = APIRouter(tags=["agent packages"])
 
 
-def _response() -> AgentPackageResponse:
-    package = linux_agent_package()
+def _response(package: AgentPackage) -> AgentPackageResponse:
     return AgentPackageResponse(
         id=package.package_id,
         version=package.version,
@@ -19,6 +18,9 @@ def _response() -> AgentPackageResponse:
         content_type=package.content_type,
         operating_system=package.operating_system,
         architecture=package.architecture,
+        package_format=package.package_format,
+        release_channel=package.release_channel,
+        audit_only=package.audit_only,
         size_bytes=package.size_bytes,
         sha256=package.sha256,
     )
@@ -27,7 +29,7 @@ def _response() -> AgentPackageResponse:
 @router.get("/agent-packages", response_model=list[AgentPackageResponse])
 def list_agent_packages(user: User = Depends(current_user)) -> list[AgentPackageResponse]:
     require_admin(user)
-    return [_response()]
+    return [_response(package) for package in agent_packages()]
 
 
 @router.get("/agent-packages/{package_id}/download")

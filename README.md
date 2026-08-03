@@ -66,15 +66,14 @@ For cryptographic report provenance, generate an Ed25519 key on the controller w
 
 ## Enroll a managed agent
 
-Open **Agents** in the primary console navigation, choose **Install agent**, and download the versioned universal Linux package. The console displays the package SHA-256 and an installation command for the current platform URL. Assign a policy to a group and create a short-lived one-time enrollment token, then transfer the package to the host and run:
+Open **Agents** in the primary console navigation, choose **Install agent**, and download the versioned Debian/Ubuntu package, RHEL-family package, or universal archive. The console displays the SHA-256 and package-specific installation command for the current platform URL. Assign a policy to a group and create a short-lived one-time enrollment token, then transfer the package to the host. For example, on Debian or Ubuntu:
 
 ```bash
-tar -xzf lsa-agent-0.2.0-linux-universal.tar.gz
-cd lsa-agent-0.2.0
-sudo ./install.sh --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
+sudo apt install ./lsa-agent_0.3.0_all.deb
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
 ```
 
-The installer places the runtime and audit controls under `/opt/lsa-agent`, creates an isolated Python environment, writes the root-only configuration, enrolls the host, and enables the systemd service. The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for installation and trust details.
+Package installation stages the runtime and audit controls under `/opt/lsa-agent` without starting the service. The enrollment command creates an isolated Python environment, writes the root-only configuration, enrolls the host, and enables the systemd service. The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for all package formats and trust details.
 
 The **Agents** workspace opens on **All hosts**. Select a group from the left fleet rail to see only its hosts and its effective policy. Every group can apply a different policy, create a group-owned policy, or copy a shared policy before changing categorized control overrides. Publishing policy changes creates a new immutable version; an earlier snapshot can be restored only by publishing another new version.
 

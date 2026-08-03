@@ -1,0 +1,95 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  echo "Usage: sudo lsa-agent-enroll --platform-url https://lsa.example.com:8443 --token lsa_enroll_... [--ca-bundle /path/to/ca.pem]" >&2
+  exit 2
+}
+
+PLATFORM_URL=""
+ENROLLMENT_TOKEN=""
+CA_BUNDLE=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --platform-url) [ "$#" -ge 2 ] || usage; PLATFORM_URL="$2"; shift 2 ;;
+    --token) [ "$#" -ge 2 ] || usage; ENROLLMENT_TOKEN="$2"; shift 2 ;;
+    --ca-bundle) [ "$#" -ge 2 ] || usage; CA_BUNDLE="$2"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+[ "$(id -u)" -eq 0 ] || { echo "Run enrollment as root." >&2; exit 1; }
+[ -n "$PLATFORM_URL" ] && [ -n "$ENROLLMENT_TOKEN" ] || usage
+case "$PLATFORM_URL" in
+  https://*) ;;
+  *) echo "The platform URL must use HTTPS." >&2; exit 1 ;;
+esac
+
+if [ -z "$CA_BUNDLE" ]; then
+  for candidate in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt; do
+    if [ -f "$candidate" ]; then CA_BUNDLE="$candidate"; break; fi
+  done
+fi
+[ -f "$CA_BUNDLE" ] || { echo "A readable system or private CA bundle is required." >&2; exit 1; }
+
+PYTHON=""
+for candidate in python3.13 python3.12 python3.11 python3; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'; then
+    PYTHON=$(command -v "$candidate")
+    break
+  fi
+done
+[ -n "$PYTHON" ] || { echo "Python 3.11 or newer is required." >&2; exit 1; }
+
+INSTALL_DIR=/opt/lsa-agent
+CONFIG_DIR=/etc/lsa-agent
+STATE_DIR=/var/lib/lsa-agent
+[ -f "$INSTALL_DIR/agent/lsa_agent.py" ] || { echo "LSA agent runtime is not installed." >&2; exit 1; }
+[ -f "$INSTALL_DIR/requirements.txt" ] || { echo "LSA agent requirements are not installed." >&2; exit 1; }
+
+install -d -m 0755 "$INSTALL_DIR" "$CONFIG_DIR"
+install -d -m 0700 "$STATE_DIR"
+if [ ! -x "$INSTALL_DIR/venv/bin/python" ]; then
+  "$PYTHON" -m venv "$INSTALL_DIR/venv"
+fi
+"$INSTALL_DIR/venv/bin/pip" install --disable-pip-version-check --no-cache-dir -r "$INSTALL_DIR/requirements.txt"
+
+"$PYTHON" - "$CONFIG_DIR/config.json" "$PLATFORM_URL" "$CA_BUNDLE" <<'PY'
+import json
+import os
+import sys
+import tempfile
+
+path, platform_url, ca_bundle = sys.argv[1:]
+payload = {
+    "platform_url": platform_url.rstrip("/"),
+    "scanner_dir": "/opt/lsa-agent/scanner",
+    "state_dir": "/var/lib/lsa-agent",
+    "ansible_playbook": "/opt/lsa-agent/venv/bin/ansible-playbook",
+    "ca_bundle": ca_bundle,
+    "tags": {},
+}
+descriptor, temporary = tempfile.mkstemp(prefix=".config.", dir=os.path.dirname(path))
+with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2)
+    handle.write("\n")
+    handle.flush()
+    os.fsync(handle.fileno())
+os.chmod(temporary, 0o600)
+os.replace(temporary, path)
+PY
+
+TOKEN_FILE=$(mktemp "$STATE_DIR/.enrollment-token.XXXXXX")
+trap 'rm -f "$TOKEN_FILE"' EXIT HUP INT TERM
+chmod 0600 "$TOKEN_FILE"
+printf '%s' "$ENROLLMENT_TOKEN" > "$TOKEN_FILE"
+unset ENROLLMENT_TOKEN
+"$INSTALL_DIR/venv/bin/python" "$INSTALL_DIR/agent/lsa_agent.py" \
+  --config "$CONFIG_DIR/config.json" enroll --token-file "$TOKEN_FILE"
+rm -f "$TOKEN_FILE"
+trap - EXIT HUP INT TERM
+
+systemctl daemon-reload
+systemctl enable --now lsa-agent.service
+echo "LSA agent installed, enrolled, and started in audit-only mode."

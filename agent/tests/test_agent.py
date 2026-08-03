@@ -1,11 +1,16 @@
 import base64
 import hashlib
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from agent.lsa_agent import _scan_due, platform_url, signed_headers
+from agent.lsa_agent import VERSION, _scan_due, platform_url, signed_headers
+
+
+def test_runtime_version_matches_packaging_release():
+    assert Path("agent/VERSION").read_text(encoding="utf-8").strip() == VERSION
 
 
 def test_platform_requires_https_by_default():

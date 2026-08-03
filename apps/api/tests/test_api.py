@@ -87,6 +87,9 @@ def test_admin_can_download_versioned_agent_package(client):
     assert package["id"] == "linux-universal"
     assert package["filename"].endswith("-linux-universal.tar.gz")
     assert package["operating_system"] == "Linux (Debian, Ubuntu, RHEL)"
+    assert package["package_format"] == "tar.gz"
+    assert package["release_channel"] == "stable"
+    assert package["audit_only"] is True
 
     downloaded = client.get(
         f"/api/v1/agent-packages/{package['id']}/download", headers=headers
@@ -103,6 +106,7 @@ def test_admin_can_download_versioned_agent_package(client):
         root = f"lsa-agent-{package['version']}"
         assert f"{root}/install.sh" in names
         assert f"{root}/agent/lsa_agent.py" in names
+        assert f"{root}/agent/lsa-agent-enroll" in names
         assert f"{root}/agent/lsa-agent.service" in names
         assert f"{root}/scanner/playbooks/scan.yml" in names
         assert f"{root}/scanner/roles/lsa_report/tasks/main.yml" in names

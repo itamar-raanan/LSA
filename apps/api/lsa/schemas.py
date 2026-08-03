@@ -544,5 +544,8 @@ class AgentPackageResponse(BaseModel):
     content_type: str
     operating_system: str
     architecture: str
+    package_format: Literal["deb", "rpm", "tar.gz"]
+    release_channel: Literal["stable"]
+    audit_only: bool
     size_bytes: int
     sha256: str

@@ -1,0 +1,12 @@
+Package: lsa-agent
+Version: @VERSION@
+Section: admin
+Priority: optional
+Architecture: all
+Maintainer: Linux Security Auditor
+Depends: systemd, ca-certificates
+Recommends: python3 (>= 3.11), python3-venv
+Description: Linux Security Auditor unified agent
+ Outbound-only, audit-only Linux security agent for the LSA platform.
+ It enrolls with a one-time token, retrieves group policy, runs the bundled
+ scanner, signs evidence locally, and uploads reports over HTTPS.

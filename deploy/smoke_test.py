@@ -84,6 +84,28 @@ def smoke(base_url: str, email: str, password: str) -> None:
     if status != 200:
         raise RuntimeError("Bootstrap login was not accepted")
     session = login["access_token"]
+    status, _, package_body = request(
+        f"{base_url}/api/v1/agent-packages",
+        headers={"Authorization": f"Bearer {session}"},
+    )
+    packages = json.loads(package_body)
+    formats = {package["package_format"] for package in packages}
+    if status != 200 or formats != {"deb", "rpm", "tar.gz"}:
+        raise RuntimeError(f"Expected native and universal agent packages, received {formats}")
+    for package in packages:
+        status, package_headers, package_data = request(
+            f"{base_url}/api/v1/agent-packages/{package['id']}/download",
+            headers={"Authorization": f"Bearer {session}"},
+        )
+        if status != 200 or hashlib.sha256(package_data).hexdigest() != package["sha256"]:
+            raise RuntimeError(f"Agent package {package['id']} failed checksum validation")
+        if package_headers.get("X-LSA-Agent-SHA256") != package["sha256"]:
+            raise RuntimeError(f"Agent package {package['id']} omitted its checksum header")
+        if package["package_format"] == "deb" and not package_data.startswith(b"!<arch>\n"):
+            raise RuntimeError("Debian agent package has an invalid archive header")
+        if package["package_format"] == "rpm" and not package_data.startswith(b"\xed\xab\xee\xdb"):
+            raise RuntimeError("RPM agent package has an invalid lead header")
+
     status, token = json_request(
         f"{base_url}/api/v1/ingestion-tokens",
         {"name": "Docker evidence smoke test"},
@@ -115,7 +137,7 @@ def smoke(base_url: str, email: str, password: str) -> None:
         raise RuntimeError("Vault download did not match the original artifact")
     if headers.get("X-LSA-Artifact-SHA256") != hashlib.sha256(artifact).hexdigest():
         raise RuntimeError("Vault download checksum header is invalid")
-    print("Docker evidence-vault smoke test passed")
+    print("Docker agent-package and evidence-vault smoke tests passed")
 
 
 if __name__ == "__main__":

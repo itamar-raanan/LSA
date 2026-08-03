@@ -30,7 +30,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 
@@ -363,14 +363,21 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     subparsers = parser.add_subparsers(dest="command", required=True)
     enroll_parser = subparsers.add_parser("enroll", help="enroll with a one-time token")
-    enroll_parser.add_argument("--token", required=True)
+    enrollment_source = enroll_parser.add_mutually_exclusive_group(required=True)
+    enrollment_source.add_argument("--token")
+    enrollment_source.add_argument("--token-file", type=Path)
     subparsers.add_parser("once", help="poll policy and run one audit")
     subparsers.add_parser("daemon", help="continuously poll and audit")
     arguments = parser.parse_args()
     try:
         config = read_json(arguments.config)
         if arguments.command == "enroll":
-            enroll(config, arguments.token)
+            token = arguments.token
+            if arguments.token_file:
+                token = arguments.token_file.read_text(encoding="utf-8").strip()
+            if not token:
+                raise ValueError("enrollment token is empty")
+            enroll(config, token)
         elif arguments.command == "once":
             run_once(config)
         else:
