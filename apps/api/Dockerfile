@@ -1,16 +1,31 @@
+FROM debian:13-slim AS agent-package-builder
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dpkg-dev rpm \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /source
+COPY agent ./agent
+COPY scanner ./scanner
+COPY packaging ./packaging
+RUN chmod 0755 packaging/build-agent-packages.sh agent/lsa-agent-enroll \
+    && packaging/build-agent-packages.sh /agent-dist
+
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/apps/api
+    PYTHONPATH=/app/apps/api \
+    LSA_AGENT_PACKAGE_DIR=/app/agent-dist
 
 WORKDIR /app
 
 COPY pyproject.toml README.md alembic.ini ./
 COPY apps/api ./apps/api
+RUN pip install --no-cache-dir .
+
 COPY agent ./agent
 COPY scanner ./scanner
-RUN pip install --no-cache-dir .
+COPY --from=agent-package-builder /agent-dist ./agent-dist
 
 RUN groupadd --system lsa \
     && useradd --system --gid lsa --home-dir /app --shell /usr/sbin/nologin lsa \

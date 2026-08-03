@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+systemctl daemon-reload >/dev/null 2>&1 || true
+if [ -s /var/lib/lsa-agent/state.json ] && [ -s /etc/lsa-agent/config.json ]; then
+  systemctl enable lsa-agent.service >/dev/null 2>&1 || true
+  systemctl try-restart lsa-agent.service >/dev/null 2>&1 || true
+fi
+
+exit 0

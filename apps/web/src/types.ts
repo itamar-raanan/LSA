@@ -275,6 +275,9 @@ export interface AgentPackage {
   content_type: string
   operating_system: string
   architecture: string
+  package_format: 'deb' | 'rpm' | 'tar.gz'
+  release_channel: 'stable'
+  audit_only: boolean
   size_bytes: number
   sha256: string
 }

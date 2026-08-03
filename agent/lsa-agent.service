@@ -13,10 +13,22 @@ Group=root
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=read-only
 ProtectSystem=strict
 ReadOnlyPaths=/
 ReadWritePaths=/var/lib/lsa-agent
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
