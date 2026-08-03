@@ -97,12 +97,12 @@ The offline scanner and managed agent share normalized contracts and control log
 | **Connectivity** | None required for scanning; upload is optional | Outbound HTTPS to LSA on port 8443 |
 | **Platform connection** | Signed ZIP transfer or token-authenticated JSON/ZIP upload | Enrolled Ed25519 machine identity |
 | **Policy source** | Scanner inventory and variables | Group policy retrieved from LSA |
-| **Reporting** | HTML, CSV, JSON, checksum, manifest, and ZIP | Signed heartbeat, policy state, audit task, and report exchange |
+| **Reporting** | HTML, findings CSV, application CSV, JSON, checksum, manifest, and ZIP | Signed heartbeat, policy state, audit task, application inventory, and report exchange |
 | **Best fit** | Isolated, air-gapped, approval-driven, or occasional audits | Continuous fleet visibility and centrally managed audit scope |
 
 ### Offline reports
 
-The Ansible scanner collects security observations without changing host configuration. Each enrolled host has a persistent platform UUID and may use a host-scoped ingestion token. For stronger provenance, the controller can sign bundles with an Ed25519 private key while LSA stores only the registered public key.
+The Ansible scanner collects security observations, installed package versions, and systemd service state without changing host configuration. Each enrolled host has a persistent platform UUID and may use a host-scoped ingestion token. For stronger provenance, the controller can sign bundles with an Ed25519 private key while LSA stores only the registered public key.
 
 Delivery modes are:
 
@@ -131,7 +131,7 @@ Audit bundles retained by the agent under `/var/lib/lsa-agent/reports` consume a
 
 Every group has an effective policy. Policies can select controls by category and set their intended mode, allowing different fleets to have different audit scopes. Publishing a change creates an immutable version. The current safety lock permits audit execution only; write/remediation behavior remains disabled.
 
-Agents poll the platform rather than accepting inbound connections. Their signed heartbeats drive online, stale, and offline status. On-demand audits are persisted, allow-listed tasks consumed on the next poll—not remote shell commands.
+Agents poll the platform rather than accepting inbound connections. Their signed heartbeats drive online, stale, and offline status. Each audit uses the shared scanner to report the same package and service inventory as offline mode. On-demand audits are persisted, allow-listed tasks consumed on the next poll—not remote shell commands.
 
 See [the agent guide](agent/README.md) for package installation, enrollment, certificate trust, and service operation, and [the report-format guide](docs/report-format.md) for normalized and signed report contracts.
 

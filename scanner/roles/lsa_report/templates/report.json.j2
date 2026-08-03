@@ -27,6 +27,7 @@
       "timezone": {{ ansible_facts.date_time.tz | default('unknown') | to_json }}
     }
   },
+  "applications": {{ lsa_applications | to_json }},
   "scan": {"profile": {{ lsa_effective_profile | to_json }}, "modules": {{ lsa_effective_modules | to_json }}},
   "summary": {{ lsa_summary | to_json }},
   "findings": {{ lsa_findings | to_json }}

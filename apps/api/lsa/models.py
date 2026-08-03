@@ -182,6 +182,32 @@ class Host(Base):
     reports: Mapped[list["Report"]] = relationship(back_populates="host")
 
 
+class HostApplication(Base):
+    __tablename__ = "host_applications"
+    __table_args__ = (
+        Index("ix_host_applications_host_active", "host_id", "removed_at"),
+        UniqueConstraint("host_id", "inventory_key", name="uq_host_application_identity"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    host_id: Mapped[str] = mapped_column(ForeignKey("hosts.id"), index=True)
+    inventory_key: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(20), index=True)
+    name: Mapped[str] = mapped_column(String(300), index=True)
+    version: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    architecture: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source: Mapped[str] = mapped_column(String(30), index=True)
+    publisher: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(80))
+    enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    running: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AgentPolicy(Base):
     __tablename__ = "agent_policies"
     __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_agent_policy_name"),)

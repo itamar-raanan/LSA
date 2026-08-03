@@ -1,4 +1,5 @@
 import type {
+  ApplicationInventoryItem,
   DashboardData,
   Finding,
   Host,
@@ -123,6 +124,9 @@ export const api = {
   },
   host(id: string): Promise<Host> {
     return request(`/hosts/${id}`)
+  },
+  applications(hostId: string): Promise<ApplicationInventoryItem[]> {
+    return request(`/hosts/${hostId}/applications`)
   },
   deleteHost(id: string): Promise<void> {
     return request(`/hosts/${id}`, { method: 'DELETE' })

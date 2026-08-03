@@ -63,6 +63,7 @@ export function HostQuickView({ host, close, deleted }: { host: Host; close: () 
         <div className="flex gap-3"><Clock className="mt-0.5 shrink-0 text-emerald-500" size={16} /><div><p className="text-stone-200">Uptime {formatUptime(info.uptime_seconds)}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.timezone ?? 'Timezone not reported')} · {host.last_scan_at ? `scanned ${new Date(host.last_scan_at).toLocaleString()}` : 'never scanned'}</p></div></div>
       </div>
       <div className="mt-5 border-t border-stone-800 pt-5"><p className="detail-label">Platform</p><p className="mt-2 text-xs text-stone-300">{String(info.system_vendor ?? 'Unknown vendor')} · {String(info.product_name ?? 'Unknown model')}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.virtualization_type ?? 'unknown')} / {String(info.virtualization_role ?? 'unknown')}</p></div>
+      <div className="mt-5 border-t border-stone-800 pt-5"><p className="detail-label">Applications</p><p className="mt-2 text-xs text-stone-300">{host.application_count ?? 0} installed packages and services</p><p className="mt-1 font-mono text-[10px] text-stone-600">Open the full record to search the latest inventory.</p></div>
       {error && <p className="mt-4 text-xs text-rose-400">{error}</p>}
     </div>
     <div className="flex shrink-0 items-center justify-between gap-3 border-t border-stone-800 px-5 py-4">

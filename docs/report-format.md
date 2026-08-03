@@ -6,6 +6,8 @@ Required sections are `scanner`, `host`, `scan`, `summary`, and `findings`. Find
 
 The host section includes the OS distribution, version, kernel, architecture, addresses, and optional `system_info` inventory. Current scanners report CPU model and core count, total memory, uptime, virtualization type and role, hardware vendor and product, and timezone. Older version 1.0 reports without `system_info` remain valid.
 
+The optional top-level `applications` array contains the read-only software inventory collected by scanner 0.6.0 and newer. Package entries come from `dpkg` or `rpm` and include name, version, architecture, source, and publisher when available. Service entries come from systemd and include unit name, description, active state, and boot-enabled state. The scanner does not collect process arguments, environment variables, open files, or application configuration. Older version 1.0 reports without `applications` remain valid and do not clear previously reported inventory.
+
 An offline bundle contains:
 
 ```text
@@ -13,6 +15,7 @@ manifest.json
 report.json
 report.html
 report.csv
+applications.csv
 checksums.sha256
 metadata/host.json
 metadata/scanner.json

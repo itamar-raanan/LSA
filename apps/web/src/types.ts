@@ -19,10 +19,29 @@ export interface Host {
   ip_addresses: string[]
   tags: Record<string, string>
   system_info?: Record<string, string | number | boolean | null>
+  application_count?: number
   compliance_score: number | null
   security_score: number | null
   last_scan_at: string | null
   finding_counts: Record<Severity, number>
+}
+
+export interface ApplicationInventoryItem {
+  id: string
+  host_id: string
+  kind: 'package' | 'service'
+  name: string
+  version: string | null
+  architecture: string | null
+  source: 'dpkg' | 'rpm' | 'systemd'
+  publisher: string | null
+  description: string | null
+  status: string
+  enabled: boolean | null
+  running: boolean | null
+  first_seen_at: string
+  last_seen_at: string
+  removed_at: string | null
 }
 
 export interface Finding {

@@ -2,6 +2,7 @@ import { ArrowLeft, Copy, HardDrive, Network, ShieldCheck } from '@phosphor-icon
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
+import { ApplicationInventory } from '../components/ApplicationInventory'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { ReportHistory } from '../components/ReportHistory'
 import { ErrorState, LoadingState } from '../components/StatePanel'
@@ -47,6 +48,7 @@ export function HostDetailPage() {
           </div>
         </div>
       </section>
+      <ApplicationInventory hostId={host.id} />
       <ReportHistory hostId={host.id} />
       <section className="panel mt-4 overflow-hidden">
         <div className="px-6 py-5 md:px-8"><p className="section-label">Open findings</p></div>

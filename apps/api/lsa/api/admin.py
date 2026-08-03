@@ -83,6 +83,7 @@ def create_host(
         compliance_score=None,
         security_score=None,
         last_scan_at=None,
+        application_count=0,
         finding_counts={severity: 0 for severity in ["critical", "high", "medium", "low", "info"]},
     )
 

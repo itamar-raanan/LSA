@@ -51,6 +51,29 @@ def report_payload() -> dict:
             },
             "tags": {"environment": "test"},
         },
+        "applications": [
+            {
+                "kind": "package",
+                "name": "openssl",
+                "version": "3.0.14-1",
+                "architecture": "amd64",
+                "source": "dpkg",
+                "status": "installed",
+                "enabled": None,
+                "running": None,
+            },
+            {
+                "kind": "service",
+                "name": "ssh.service",
+                "version": None,
+                "architecture": None,
+                "source": "systemd",
+                "description": "OpenBSD Secure Shell server",
+                "status": "active",
+                "enabled": True,
+                "running": True,
+            },
+        ],
         "scan": {"profile": "cis_level1_server", "modules": ["cis"]},
         "summary": {"pass": 12, "fail": 1, "manual": 0, "not_applicable": 2, "error": 0},
         "findings": [
@@ -109,6 +132,7 @@ def test_admin_can_download_versioned_agent_package(client):
         assert f"{root}/agent/lsa-agent-enroll" in names
         assert f"{root}/agent/lsa-agent.service" in names
         assert f"{root}/scanner/playbooks/scan.yml" in names
+        assert f"{root}/scanner/library/lsa_application_inventory.py" in names
         assert f"{root}/scanner/roles/lsa_report/tasks/main.yml" in names
         assert archive.getmember(f"{root}/install.sh").mode == 0o755
 
@@ -411,8 +435,57 @@ def test_ingest_and_read_fleet(client):
     assert hosts.status_code == 200
     assert hosts.json()[0]["hostname"] == "test-web-01"
     assert hosts.json()[0]["system_info"]["cpu_cores"] == 4
+    assert hosts.json()[0]["application_count"] == 2
+    applications = client.get(
+        f"/api/v1/hosts/{payload['host']['host_id']}/applications", headers=headers
+    )
+    assert applications.status_code == 200
+    assert [(item["kind"], item["name"]) for item in applications.json()] == [
+        ("package", "openssl"),
+        ("service", "ssh.service"),
+    ]
     dashboard = client.get("/api/v1/dashboard", headers=headers)
     assert dashboard.json()["total_hosts"] == 1
+
+
+def test_application_inventory_tracks_versions_and_removals(client):
+    first = report_payload()
+    ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=first).status_code == 202
+
+    second = report_payload()
+    second["host"]["host_id"] = first["host"]["host_id"]
+    second["host"]["machine_id_hash"] = first["host"]["machine_id_hash"]
+    second["applications"] = [{**first["applications"][0], "version": "3.0.15-1"}]
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
+
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    active = client.get(
+        f"/api/v1/hosts/{first['host']['host_id']}/applications", headers=headers
+    ).json()
+    assert [(item["name"], item["version"]) for item in active] == [("openssl", "3.0.15-1")]
+    history = client.get(
+        f"/api/v1/hosts/{first['host']['host_id']}/applications?include_removed=true",
+        headers=headers,
+    ).json()
+    assert len(history) == 3
+    assert len([item for item in history if item["removed_at"] is not None]) == 2
+
+
+def test_legacy_report_without_inventory_does_not_remove_existing_applications(client):
+    first = report_payload()
+    ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=first).status_code == 202
+    second = report_payload()
+    second["host"]["host_id"] = first["host"]["host_id"]
+    second["host"]["machine_id_hash"] = first["host"]["machine_id_hash"]
+    second.pop("applications")
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    applications = client.get(
+        f"/api/v1/hosts/{first['host']['host_id']}/applications", headers=headers
+    ).json()
+    assert len(applications) == 2
 
 
 def test_findings_default_limit_covers_expanded_scanner_catalog(client):
