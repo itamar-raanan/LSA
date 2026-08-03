@@ -22,9 +22,9 @@ vi.mock('../api/client', () => ({
     controlCatalog: vi.fn().mockResolvedValue([{ control_id: 'CIS-DEBIAN13-1.1.1', title: 'Disable unused filesystem', category: 'filesystem', module: 'cis_debian13' }]),
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
     agentPackages: vi.fn().mockResolvedValue([
-      { id: 'linux-deb', version: '0.3.0', filename: 'lsa-agent_0.3.0_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
-      { id: 'linux-rpm', version: '0.3.0', filename: 'lsa-agent-0.3.0-1.noarch.rpm', content_type: 'application/x-rpm', operating_system: 'RHEL / Rocky / AlmaLinux 9+', architecture: 'noarch', package_format: 'rpm', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'b'.repeat(64) },
-      { id: 'linux-universal', version: '0.3.0', filename: 'lsa-agent-0.3.0-linux-universal.tar.gz', content_type: 'application/gzip', operating_system: 'Linux (Debian, Ubuntu, RHEL)', architecture: 'x86_64 / arm64', package_format: 'tar.gz', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'c'.repeat(64) },
+      { id: 'linux-deb', version: '0.4.0', filename: 'lsa-agent_0.4.0_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
+      { id: 'linux-rpm', version: '0.4.0', filename: 'lsa-agent-0.4.0-1.noarch.rpm', content_type: 'application/x-rpm', operating_system: 'RHEL / Rocky / AlmaLinux 9+', architecture: 'noarch', package_format: 'rpm', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'b'.repeat(64) },
+      { id: 'linux-universal', version: '0.4.0', filename: 'lsa-agent-0.4.0-linux-universal.tar.gz', content_type: 'application/gzip', operating_system: 'Linux (Debian, Ubuntu, RHEL)', architecture: 'x86_64 / arm64', package_format: 'tar.gz', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'c'.repeat(64) },
     ]),
     downloadAgentPackage: vi.fn(),
     agentPolicyVersions: vi.fn().mockResolvedValue([
@@ -77,9 +77,9 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: /Install agent/ }))
     expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Download package' })).toHaveLength(3)
-    expect(screen.getByText(/sudo apt install .*lsa-agent_0.3.0_all.deb/)).toBeInTheDocument()
+    expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.0_all.deb/)).toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: /Install steps/ })[0])
-    expect(screen.getByText(/sudo dnf install .*lsa-agent-0.3.0-1.noarch.rpm/)).toBeInTheDocument()
+    expect(screen.getByText(/sudo dnf install .*lsa-agent-0.4.0-1.noarch.rpm/)).toBeInTheDocument()
     expect(screen.getAllByText(/SHA-256/)).toHaveLength(3)
   })
 })

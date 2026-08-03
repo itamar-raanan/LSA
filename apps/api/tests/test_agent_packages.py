@@ -1,4 +1,32 @@
-from lsa.services.agent_packages import AGENT_VERSION, native_agent_packages
+import hashlib
+import io
+import json
+import tarfile
+from pathlib import Path
+
+from lsa.services.agent_packages import (
+    AGENT_VERSION,
+    PACKAGE_ROOT,
+    linux_agent_package,
+    native_agent_packages,
+)
+
+
+def test_runtime_and_api_package_versions_match():
+    assert Path("agent/VERSION").read_text(encoding="utf-8").strip() == AGENT_VERSION
+
+
+def test_universal_package_contains_a_valid_runtime_manifest():
+    linux_agent_package.cache_clear()
+    package = linux_agent_package()
+    with tarfile.open(fileobj=io.BytesIO(package.data), mode="r:gz") as archive:
+        manifest = json.loads(
+            archive.extractfile(f"{PACKAGE_ROOT}/integrity-manifest.json").read()
+        )
+        assert manifest["manifest_version"] == 1
+        for relative, expected in manifest["files"].items():
+            content = archive.extractfile(f"{PACKAGE_ROOT}/{relative}").read()
+            assert hashlib.sha256(content).hexdigest() == expected
 
 
 def test_native_release_artifacts_are_discovered_with_audit_only_metadata(tmp_path, monkeypatch):

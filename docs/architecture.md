@@ -53,7 +53,7 @@ Deleting a host is a logical deletion: it removes the asset from active fleet, d
 - Ubuntu 22.04 and 24.04
 - RHEL family 8 and 9
 
-The v0.5 scanner runs on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9. Debian 13 combines 334 benchmark controls with 24 non-overlapping portable checks for 358 findings. The benchmark contains 322 automated read-only checks and 12 explicit manual reviews. The full portable catalog contains 62 controls; 38 controls declare an exact Debian benchmark overlap and are suppressed while that benchmark is active. Other supported systems execute all 62 portable controls.
+The v0.6 scanner runs on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9. Debian 13 combines 334 benchmark controls with 56 non-overlapping portable checks for 390 findings. The benchmark contains 322 automated read-only checks and 12 explicit manual reviews. The full portable catalog contains 98 controls; 42 controls declare an exact Debian benchmark overlap and are suppressed while that benchmark is active. Other supported systems execute all 98 portable controls. Agent-only self-protection controls return not applicable during offline scans or on hosts where the agent is not installed.
 
 ## Security invariants
 
@@ -61,6 +61,8 @@ The v0.5 scanner runs on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux
 - Agents initiate every connection; the server has no host connection mechanism.
 - One-time enrollment tokens expire within 30 days and cannot be reused.
 - Agent private keys remain local with mode `0600`; revoking an agent also revokes its exact ingestion token and signing key.
+- Agent packages contain a deterministic SHA-256 runtime manifest. The installer validates it before copying files, and the agent validates it before every policy and scan cycle.
+- An enrolled agent persists the highest accepted policy version and rejects lower versions; restoring server policy creates a new higher version instead of rolling agents back.
 - Policy versions are immutable, and one effective group eliminates policy precedence ambiguity.
 - Remediation enforcement is hard-disabled in this release even when remediation intent is staged in a policy.
 - Scanner audit tasks may read privileged host state but cannot run package, service, account, permission, mount, firewall, kernel, or filesystem mutation commands; automated tests enforce this boundary.

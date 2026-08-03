@@ -26,8 +26,8 @@ LSA does **not** SSH to managed servers, store their privileged credentials, or 
 
 The current control surface includes:
 
-- A deduplicated 358-control Debian 13 audit: 334 benchmark controls plus 24 non-overlapping portable Linux checks.
-- A 62-control portable Linux audit for Debian 12, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9.
+- A deduplicated 390-control Debian 13 audit: 334 benchmark controls plus 56 non-overlapping portable Linux checks.
+- A 98-control portable Linux audit for Debian 12, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9.
 - Deployment and benchmark profiles that determine which applicable controls are evaluated.
 - New, persistent, and resolved finding comparison across report history.
 
@@ -196,11 +196,13 @@ curl --fail-with-body \
 Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
 
 ```bash
-sudo apt install ./lsa-agent_0.3.0_all.deb
+sudo apt install ./lsa-agent_0.4.0_all.deb
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
 ```
 
 The **Agents** workspace opens on **All hosts**. Select a group in the left fleet rail to view its hosts and effective policy. From there, administrators can publish categorized control overrides, request an audit, move agents to another group, or revoke them.
+
+Agent 0.4 verifies a package-generated SHA-256 manifest before each cycle and refuses to run a scan when its runtime or local control catalog has changed. It also remembers the highest accepted group-policy version and rejects policy rollback. Package transport checksums remain available in the console; the runtime manifest protects the installed executable and scanner content after download.
 
 ## Repository map
 

@@ -23,9 +23,14 @@
     file: expanded_controls.yml
   when: security_health_enabled | bool
 
+- name: Load agent security and threat-hunting controls
+  ansible.builtin.include_vars:
+    file: agent_security_controls.yml
+  when: security_health_enabled | bool
+
 - name: Assemble and validate portable Linux control catalog
   ansible.builtin.set_fact:
-    security_health_catalog: "{{ security_health_controls + security_health_expanded_controls }}"
+    security_health_catalog: "{{ security_health_controls + security_health_expanded_controls + security_health_agent_controls }}"
   changed_when: false
   when: security_health_enabled | bool
 

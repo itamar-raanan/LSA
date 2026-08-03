@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import io
+import json
 import os
 import tarfile
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 
-AGENT_VERSION = "0.3.0"
+AGENT_VERSION = "0.4.0"
 PACKAGE_ID = "linux-universal"
 PACKAGE_FILENAME = f"lsa-agent-{AGENT_VERSION}-linux-universal.tar.gz"
 PACKAGE_ROOT = f"lsa-agent-{AGENT_VERSION}"
@@ -65,12 +66,15 @@ SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 INSTALL_DIR=/opt/lsa-agent
 CONFIG_DIR=/etc/lsa-agent
 
-install -d -m 0755 "$INSTALL_DIR" "$CONFIG_DIR"
+python3 "$SOURCE_DIR/agent/integrity.py" verify --root "$SOURCE_DIR" --manifest "$SOURCE_DIR/integrity-manifest.json"
+install -d -m 0755 "$INSTALL_DIR"
+install -d -m 0700 "$CONFIG_DIR"
 install -d -m 0755 /usr/lib/systemd/system /usr/sbin
 rm -rf "$INSTALL_DIR/agent" "$INSTALL_DIR/scanner"
 cp -R "$SOURCE_DIR/agent" "$INSTALL_DIR/agent"
 cp -R "$SOURCE_DIR/scanner" "$INSTALL_DIR/scanner"
 cp "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/requirements.txt"
+cp "$SOURCE_DIR/integrity-manifest.json" "$INSTALL_DIR/integrity-manifest.json"
 
 install -m 0644 "$SOURCE_DIR/agent/lsa-agent.service" /usr/lib/systemd/system/lsa-agent.service
 install -m 0755 "$SOURCE_DIR/agent/lsa-agent-enroll" /usr/sbin/lsa-agent-enroll
@@ -140,6 +144,24 @@ def _add_bytes(archive: tarfile.TarFile, name: str, data: bytes, mode: int) -> N
     archive.addfile(info, io.BytesIO(data))
 
 
+def _integrity_manifest(source_root: Path) -> bytes:
+    files = {
+        path.relative_to(source_root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path, _, _ in _package_files(source_root)
+    }
+    files["requirements.txt"] = hashlib.sha256(
+        (source_root / "agent" / "requirements.txt").read_bytes()
+    ).hexdigest()
+    return (
+        json.dumps(
+            {"algorithm": "sha256", "files": files, "manifest_version": 1},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode()
+
+
 @lru_cache(maxsize=1)
 def linux_agent_package() -> AgentPackage:
     source_root = _source_root()
@@ -154,6 +176,12 @@ def linux_agent_package() -> AgentPackage:
             archive,
             f"{PACKAGE_ROOT}/requirements.txt",
             (source_root / "agent" / "requirements.txt").read_bytes(),
+            0o644,
+        )
+        _add_bytes(
+            archive,
+            f"{PACKAGE_ROOT}/integrity-manifest.json",
+            _integrity_manifest(source_root),
             0o644,
         )
         _add_bytes(

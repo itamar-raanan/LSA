@@ -364,8 +364,8 @@ def test_control_catalog_is_available_before_first_report(client):
     )
 
     assert response.status_code == 200
-    assert len(response.json()) == 396
-    assert len({item["control_id"] for item in response.json()}) == 396
+    assert len(response.json()) == 432
+    assert len({item["control_id"] for item in response.json()}) == 432
 
 
 def test_unused_agent_enrollment_token_can_be_revoked(client):

@@ -1,18 +1,18 @@
 # Debian 13 audit profiles
 
-The Debian 13 v0.5 scanner emits a deduplicated 358-control catalog in every report. Applicable controls are audited; controls outside the selected profile are emitted as `not_applicable`. This keeps comparisons stable when profiles or host roles change.
+The Debian 13 v0.6 scanner emits a deduplicated 390-control catalog in every report. Applicable controls are audited; controls outside the selected profile are emitted as `not_applicable`. This keeps comparisons stable when profiles or host roles change.
 
 ## Coverage
 
 - 334 Debian 13 benchmark controls across sections 1 through 7
 - 322 automated read-only benchmark checks
 - 12 explicit manual benchmark reviews
-- 24 non-overlapping portable Linux checks
-- 358 unique normalized findings in every Debian 13 report
+- 56 non-overlapping portable Linux checks
+- 390 unique normalized findings in every Debian 13 report
 
-The full portable catalog contains 62 controls and runs on Debian 12, Ubuntu 22.04/24.04, and RHEL-family 8/9. Thirty-eight portable controls identify an equivalent Debian 13 benchmark control and are automatically suppressed when that benchmark is active.
+The full portable catalog contains 98 controls and runs on Debian 12, Ubuntu 22.04/24.04, and RHEL-family 8/9. Forty-two portable controls identify an equivalent Debian 13 benchmark control and are automatically suppressed when that benchmark is active.
 
-The portable checks cover authentication and authorization, filesystem and boot security, SSH, network hardening, audit and logging, packages, services, local vulnerability signals, kernel state, and time synchronization.
+The portable checks cover authentication and authorization, filesystem and boot security, SSH, network hardening, audit and logging, packages, services, local vulnerability signals, kernel state, time synchronization, persistence signals, container exposure, repository trust, and agent self-protection. Inventory controls that require a host-specific allowlist emit `review`; agent self-protection controls emit `not_applicable` when the agent is absent.
 
 ## Finding-category mapping
 

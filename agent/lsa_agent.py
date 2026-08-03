@@ -29,8 +29,13 @@ import httpx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+try:
+    from .integrity import verify_manifest
+except ImportError:  # executed directly by the systemd unit
+    from integrity import verify_manifest
 
-VERSION = "0.3.0"
+
+VERSION = "0.4.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 
@@ -65,6 +70,27 @@ def platform_url(config: dict[str, Any]) -> str:
 def state_paths(config: dict[str, Any]) -> tuple[Path, Path]:
     root = Path(config.get("state_dir", DEFAULT_STATE_DIR))
     return root / "state.json", root / "agent-key.pem"
+
+
+def runtime_integrity(config: dict[str, Any]) -> str:
+    scanner_dir = Path(config.get("scanner_dir", "/opt/lsa-agent/scanner")).resolve()
+    install_root = scanner_dir.parent
+    manifest_path = Path(config.get("integrity_manifest", install_root / "integrity-manifest.json"))
+    return f"sha256:{verify_manifest(install_root, manifest_path)}"
+
+
+def accept_policy_version(state: dict[str, Any], policy: dict[str, Any]) -> int:
+    value = policy.get("policy_version")
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise RuntimeError("server returned an invalid policy version")
+    highest = state.get("highest_policy_version", state.get("policy_version", 0))
+    if not isinstance(highest, int) or isinstance(highest, bool) or highest < 0:
+        raise RuntimeError("local policy rollback state is invalid")
+    if value < highest:
+        raise RuntimeError(f"policy rollback rejected: received {value}, highest accepted {highest}")
+    state["policy_version"] = value
+    state["highest_policy_version"] = max(value, highest)
+    return value
 
 
 def ensure_private_key(path: Path) -> Ed25519PrivateKey:
@@ -216,6 +242,7 @@ def enroll(config: dict[str, Any], token: str) -> None:
         response.raise_for_status()
         state = response.json()
     state["enrolled_at"] = datetime.now(UTC).isoformat()
+    state["highest_policy_version"] = state.get("policy_version", 0)
     atomic_json(state_path, state)
     print(f"Enrolled agent {state['agent_id']} for host {state['host_id']}")
 
@@ -298,7 +325,10 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
     state_path, key_path = state_paths(config)
     state = read_json(state_path)
     key = ensure_private_key(key_path)
+    integrity_digest = runtime_integrity(config)
     policy = signed_get(config, state, key, "/api/v1/agent/policy")
+    policy_version = accept_policy_version(state, policy)
+    capabilities = ["audit", "runtime-integrity", "policy-rollback-protection"]
     heartbeat = signed_post(
         config,
         state,
@@ -306,11 +336,11 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
         "/api/v1/agent/heartbeat",
         {
             "agent_version": VERSION,
-            "capabilities": ["audit"],
-            "policy_version": state.get("policy_version"),
+            "capabilities": capabilities,
+            "policy_version": policy_version,
         },
     )
-    state["policy_version"] = policy["policy_version"]
+    state["integrity_manifest_sha256"] = integrity_digest
     task = signed_get(config, state, key, "/api/v1/agent/tasks/next")
     should_scan = always_scan or task is not None or _scan_due(state)
     if should_scan:
