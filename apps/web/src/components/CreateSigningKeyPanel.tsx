@@ -50,8 +50,8 @@ export function CreateSigningKeyPanel({ hosts, close, created }: { hosts: Host[]
         </div>
         {!result ? (
           <form className="mt-8 space-y-5" onSubmit={submit}>
-            <div className="rounded-xl border border-stone-800 bg-stone-950/50 px-4 py-3 text-xs leading-5 text-stone-400">
-              Generate the private key on the scanner controller: <code className="font-mono text-emerald-300">python3 scanner/scripts/generate_signing_key.py /secure/path/lsa-signing-key.pem</code>. Paste only the printed public key below.
+            <div className="rounded-xl border border-stone-800 bg-[#eee8dd]/50 px-4 py-3 text-xs leading-5 text-stone-400">
+              Generate the private key on the scanner controller: <code className="font-mono text-[#4f6f5c]">python3 scanner/scripts/generate_signing_key.py /secure/path/lsa-signing-key.pem</code>. Paste only the printed public key below.
             </div>
             <label className="form-field"><span>Key name</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Production controller signing key" /></label>
             <label className="form-field"><span>Ed25519 public key</span><input required value={publicKey} onChange={(event) => setPublicKey(event.target.value)} placeholder="Base64-encoded public key" spellCheck={false} autoComplete="off" /><small>The private key never leaves the controller and must not be pasted here.</small></label>
@@ -63,8 +63,8 @@ export function CreateSigningKeyPanel({ hosts, close, created }: { hosts: Host[]
           </form>
         ) : (
           <div className="mt-8">
-            <p className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 px-4 py-3 text-xs leading-5 text-emerald-300">Key registered. Add this key ID and the private-key path to the scanner configuration.</p>
-            <div className="mt-5 rounded-xl border border-stone-800 bg-stone-950 p-4"><p className="detail-label">Ansible variables</p><div className="mt-3 flex items-start gap-3"><code className="min-w-0 flex-1 whitespace-pre-wrap font-mono text-xs leading-6 text-stone-300">{configuration}</code><button className="icon-button shrink-0" onClick={() => void copyConfiguration()} aria-label="Copy signing key configuration">{copied ? <Check size={16} /> : <Copy size={16} />}</button></div></div>
+            <p className="rounded-xl border border-[#b8c5ba] bg-[#edf1eb] px-4 py-3 text-xs leading-5 text-[#4f6f5c]">Key registered. Add this key ID and the private-key path to the scanner configuration.</p>
+            <div className="mt-5 rounded-xl border border-stone-800 bg-[#eee8dd] p-4"><p className="detail-label">Ansible variables</p><div className="mt-3 flex items-start gap-3"><code className="min-w-0 flex-1 whitespace-pre-wrap font-mono text-xs leading-6 text-stone-300">{configuration}</code><button className="icon-button shrink-0" onClick={() => void copyConfiguration()} aria-label="Copy signing key configuration">{copied ? <Check size={16} /> : <Copy size={16} />}</button></div></div>
             <p className="mt-4 text-xs leading-5 text-stone-600">Keep the PEM file mode 0600 and outside source control. Revoking this key immediately blocks future bundles signed by it.</p>
             <div className="mt-7 flex justify-end"><button className="button-primary" onClick={close}>Done</button></div>
           </div>

@@ -58,7 +58,7 @@ export function LoginPage() {
         <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(113,124,115,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(113,124,115,.08)_1px,transparent_1px)] [background-size:56px_56px]" />
         <div className="relative"><BrandMark /></div>
         <div className="relative mt-auto max-w-[660px] pb-10">
-          <p className="mb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-400">Estate-wide assurance</p>
+          <p className="mb-5 font-mono text-[10px] capitalize tracking-[0.2em] text-amber-400">Estate-wide assurance</p>
           <h1 className="max-w-[12ch] text-5xl font-medium leading-[0.98] tracking-[-0.065em] text-stone-50 xl:text-6xl">Every Linux host. One security picture.</h1>
           <p className="mt-7 max-w-[55ch] text-[15px] leading-7 text-stone-400">Collect signed audit evidence without granting the platform access to your servers. Track exposure, compliance, and change across the entire estate.</p>
           <div className="mt-10 grid grid-cols-2 gap-x-12 gap-y-5 border-t border-stone-800 pt-7 text-xs text-stone-400">
@@ -79,7 +79,7 @@ export function LoginPage() {
           {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="mt-8 space-y-2">
             {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Building2 size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
           </div>}
-          {providers.some((provider) => provider.provider_type === 'radius') && <div className="mt-7 flex gap-4 border-b border-stone-800 pb-3 text-[10px] uppercase tracking-wider text-stone-600">
+          {providers.some((provider) => provider.provider_type === 'radius') && <div className="mt-7 flex gap-4 border-b border-stone-800 pb-3 text-[10px] capitalize tracking-wider text-stone-600">
             <button className={method === 'local' ? 'text-amber-700' : ''} onClick={() => setMethod('local')}>Local</button>
             <button className={method === 'radius' ? 'text-amber-700' : ''} onClick={() => setMethod('radius')}>RADIUS</button>
           </div>}

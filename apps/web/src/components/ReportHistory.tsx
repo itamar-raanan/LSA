@@ -56,18 +56,18 @@ export function ReportHistory({ hostId }: { hostId: string }) {
       <div className="divide-y divide-stone-800 border-t border-stone-800">
         {data.slice(0, 8).map((report, index) => (
           <div key={report.id} className="grid items-center gap-4 px-6 py-4 sm:grid-cols-[1fr_auto_auto] md:px-8">
-            <div><div className="flex flex-wrap items-center gap-3"><p className="text-sm text-stone-300">{new Date(report.generated_at).toLocaleString()}</p>{report.signature_verified && <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400"><SealCheck size={13} weight="fill" /> Signed evidence</span>}{report.artifact_available && <span className="font-mono text-[9px] uppercase tracking-wider text-sky-300">Vaulted · {formatBytes(report.artifact_size_bytes)}</span>}</div><p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-stone-600">{report.profile} · scanner {report.scanner_version}{report.artifact_retention_until ? ` · retained until ${new Date(report.artifact_retention_until).toLocaleDateString()}` : ''}</p></div>
-            <div className="flex gap-6"><div><span className="font-mono text-sm text-stone-200">{report.security_score.toFixed(1)}</span><p className="text-[9px] uppercase tracking-wider text-stone-700">Security</p></div><div><span className="font-mono text-sm text-stone-200">{report.compliance_score.toFixed(1)}</span><p className="text-[9px] uppercase tracking-wider text-stone-700">Compliance</p></div></div>
+            <div><div className="flex flex-wrap items-center gap-3"><p className="text-sm text-stone-300">{new Date(report.generated_at).toLocaleString()}</p>{report.signature_verified && <span className="inline-flex items-center gap-1.5 font-mono text-[9px] capitalize tracking-wider text-[#4f6f5c]"><SealCheck size={13} weight="fill" /> Signed evidence</span>}{report.artifact_available && <span className="font-mono text-[9px] capitalize tracking-wider text-sky-300">Vaulted · {formatBytes(report.artifact_size_bytes)}</span>}</div><p className="mt-1 font-mono text-[9px] capitalize tracking-wider text-stone-600">{report.profile} · scanner {report.scanner_version}{report.artifact_retention_until ? ` · retained until ${new Date(report.artifact_retention_until).toLocaleDateString()}` : ''}</p></div>
+            <div className="flex gap-6"><div><span className="font-mono text-sm text-stone-200">{report.security_score.toFixed(1)}</span><p className="text-[9px] capitalize tracking-wider text-stone-700">Security</p></div><div><span className="font-mono text-sm text-stone-200">{report.compliance_score.toFixed(1)}</span><p className="text-[9px] capitalize tracking-wider text-stone-700">Compliance</p></div></div>
             <div className="flex justify-end gap-2">{report.artifact_available && <button className="button-secondary min-h-9 px-3" disabled={downloading === report.id} onClick={() => void download(report.id)}><DownloadSimple size={14} />{downloading === report.id ? 'Verifying' : 'Evidence'}</button>}<button className="button-secondary min-h-9 px-3" disabled={comparing === report.id} onClick={() => void compare(report.id)}><ArrowsCounterClockwise size={14} />{index === data.length - 1 ? 'Baseline' : 'Compare'}</button></div>
           </div>
         ))}
       </div>
       {comparisonError && <p className="border-t border-rose-900/40 bg-rose-950/20 px-6 py-4 text-xs text-rose-300">{comparisonError}</p>}
       {comparison && (
-        <div className="grid gap-6 border-t border-stone-800 bg-[#0e120f] px-6 py-6 md:grid-cols-3 md:px-8">
+        <div className="grid gap-6 border-t border-stone-800 bg-[#f7f3eb] px-6 py-6 md:grid-cols-3 md:px-8">
           <DeltaColumn label="New" items={comparison.new} icon={<ArrowUp size={15} />} color="text-rose-300" />
           <DeltaColumn label="Persistent" items={comparison.persistent} icon={<ArrowsCounterClockwise size={15} />} color="text-amber-200" />
-          <DeltaColumn label="Resolved" items={comparison.resolved} icon={<ArrowDown size={15} />} color="text-emerald-300" />
+          <DeltaColumn label="Resolved" items={comparison.resolved} icon={<ArrowDown size={15} />} color="text-[#4f6f5c]" />
         </div>
       )}
     </section>

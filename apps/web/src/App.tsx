@@ -34,7 +34,7 @@ export default function App() {
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="agents" element={<AgentsSettingsPage />} />
-        <Route path="policies" element={<AgentsSettingsPage />} />
+        <Route path="policies" element={<Navigate to="/agents" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<SettingsOverviewPage />} />
           <Route path="users" element={<UsersSettingsPage />} />

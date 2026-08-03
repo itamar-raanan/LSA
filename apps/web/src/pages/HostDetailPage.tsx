@@ -18,7 +18,7 @@ export function HostDetailPage() {
   return (
     <div className="page-reveal">
       <Link to="/hosts" className="mb-7 inline-flex items-center gap-2 text-xs text-stone-500 hover:text-stone-200"><ArrowLeft size={15} /> Back to hosts</Link>
-      <PageHeader eyebrow={`${host.os_family} ${host.os_version}`} title={host.hostname} detail={host.fqdn ?? 'No fully qualified domain name reported'} action={<span className="rounded-full border border-emerald-800/50 bg-emerald-950/30 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-emerald-300">Reporting</span>} />
+      <PageHeader eyebrow={`${host.os_family} ${host.os_version}`} title={host.hostname} detail={host.fqdn ?? 'No fully qualified domain name reported'} action={<span className="rounded-full border border-[#b8c5ba] bg-[#edf1eb] px-3 py-1.5 font-mono text-[10px] capitalize tracking-wider text-[#4f6f5c]">Reporting</span>} />
       <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <div className="panel p-6 md:p-8">
           <p className="section-label">Identity and ownership</p>
@@ -32,7 +32,7 @@ export function HostDetailPage() {
               ['Owner', host.tags.owner ?? 'Unassigned'],
               ['Application', host.tags.application ?? 'Unassigned'],
               ['Criticality', host.tags.criticality ?? 'Unassigned'],
-            ].map(([label, value]) => <div key={label}><dt className="text-[10px] uppercase tracking-wider text-stone-600">{label}</dt><dd className="mt-2 text-sm capitalize text-stone-300">{value}</dd></div>)}
+            ].map(([label, value]) => <div key={label}><dt className="text-[10px] capitalize tracking-wider text-stone-600">{label}</dt><dd className="mt-2 text-sm capitalize text-stone-300">{value}</dd></div>)}
           </dl>
         </div>
         <div className="panel p-6 md:p-8">

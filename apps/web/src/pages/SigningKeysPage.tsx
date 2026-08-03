@@ -58,10 +58,10 @@ export function SigningKeysPage() {
       <PageHeader eyebrow="Trust governance" title="Signing keys" detail="Register scanner public keys, constrain their host scope, and verify that report evidence came from a trusted controller." action={<button className="button-primary" onClick={() => setCreating(true)}><Plus size={16} /> Register key</button>} />
       {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : (
         <>
-          <section className="mb-4 grid overflow-hidden rounded-[22px] border border-stone-800 bg-[#151916] sm:grid-cols-[1.2fr_1fr_1fr]">
+          <section className="mb-4 grid overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb] sm:grid-cols-[1.2fr_1fr_1fr]">
             <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Evidence trust</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Ed25519 signatures bind each report manifest to a registered controller key.</p></div>
-            <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-100">{activeCount}</p><p className="mt-2 text-[10px] uppercase tracking-wider text-stone-600">Active keys</p></div>
-            <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-100">{scopedCount}</p><p className="mt-2 text-[10px] uppercase tracking-wider text-stone-600">Host-scoped keys</p></div>
+            <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-100">{activeCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Active keys</p></div>
+            <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-100">{scopedCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Host-scoped keys</p></div>
           </section>
           {actionError && <p className="mb-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{actionError}</p>}
           {!keys.length ? <EmptyState title="No trusted signing keys" detail="Generate a key on the scanner controller, then register its public half to verify future report bundles." /> : (
@@ -74,15 +74,15 @@ export function SigningKeysPage() {
                     return <tr key={item.id}>
                       <td><span className="font-medium text-stone-200">{item.name}</span><span className="table-subtitle">ID {item.id} · created {formatDate(item.created_at)}</span></td>
                       <td>{item.host_id ? hostnames.get(item.host_id) ?? 'Unknown host' : 'All tenant hosts'}<span className="table-subtitle">{item.host_id ? 'Host-scoped' : 'Tenant-wide'}</span></td>
-                      <td><span className="inline-flex items-center gap-2 font-mono text-[10px] text-stone-400"><Fingerprint size={15} className="text-emerald-500" />{fingerprint(item.fingerprint)}</span></td>
-                      <td><span className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider ${state === 'active' ? 'text-emerald-300' : state === 'expired' ? 'text-amber-300' : 'text-stone-600'}`}><span className={`size-1.5 rounded-full ${state === 'active' ? 'bg-emerald-400' : state === 'expired' ? 'bg-amber-400' : 'bg-stone-700'}`} />{state}</span></td>
+                      <td><span className="inline-flex items-center gap-2 font-mono text-[10px] text-stone-400"><Fingerprint size={15} className="text-[#4f6f5c]" />{fingerprint(item.fingerprint)}</span></td>
+                      <td><span className={`inline-flex items-center gap-2 font-mono text-[10px] capitalize tracking-wider ${state === 'active' ? 'text-[#4f6f5c]' : state === 'expired' ? 'text-amber-300' : 'text-stone-600'}`}><span className={`size-1.5 rounded-full ${state === 'active' ? 'bg-[#edf1eb]' : state === 'expired' ? 'bg-amber-400' : 'bg-stone-700'}`} />{state}</span></td>
                       <td>{formatDate(item.expires_at)}</td>
                       <td className="text-right">{state === 'active' && (confirming === item.id ? <div className="flex justify-end gap-2"><button className="button-secondary min-h-9 px-3" onClick={() => setConfirming(null)}>Cancel</button><button className="button-secondary min-h-9 border-rose-900/60 px-3 text-rose-300" disabled={revoking === item.id} onClick={() => void revoke(item.id)}>{revoking === item.id ? 'Revoking' : 'Confirm'}</button></div> : <button className="icon-button ml-auto" onClick={() => setConfirming(item.id)} aria-label={`Revoke ${item.name}`}><Trash size={15} /></button>)}</td>
                     </tr>
                   })}</tbody>
                 </table>
               </div>
-              <div className="flex items-start gap-3 border-t border-stone-800 bg-[#121613] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-500" />The platform verifies the exact manifest bytes before accepting signed evidence. Revocation blocks new submissions without invalidating historical provenance.</div>
+              <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />The platform verifies the exact manifest bytes before accepting signed evidence. Revocation blocks new submissions without invalidating historical provenance.</div>
             </section>
           )}
         </>

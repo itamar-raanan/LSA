@@ -57,12 +57,12 @@ export function HostQuickView({ host, close, deleted }: { host: Host; close: () 
     </div>
     <div className="host-quick-view-body px-5 py-5">
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-stone-800 bg-stone-800">
-        <div className="bg-[#151916] p-4"><p className="detail-label">Security</p><p className="mt-2 font-mono text-xl text-stone-100">{host.security_score?.toFixed(1) ?? '—'}</p></div>
-        <div className="bg-[#151916] p-4"><p className="detail-label">Compliance</p><p className="mt-2 font-mono text-xl text-stone-100">{host.compliance_score?.toFixed(1) ?? '—'}</p></div>
+        <div className="bg-[#f7f3eb] p-4"><p className="detail-label">Security</p><p className="mt-2 font-mono text-xl text-stone-100">{host.security_score?.toFixed(1) ?? '—'}</p></div>
+        <div className="bg-[#f7f3eb] p-4"><p className="detail-label">Compliance</p><p className="mt-2 font-mono text-xl text-stone-100">{host.compliance_score?.toFixed(1) ?? '—'}</p></div>
       </div>
       <div className="mt-5 space-y-4 text-xs text-stone-400">
         <div className="flex gap-3"><Server className="mt-0.5 shrink-0 text-sky-500" size={16} /><div><p className="text-stone-200">{host.operating_system} {host.os_version}</p><p className="mt-1 font-mono text-[10px] text-stone-600">Kernel {host.kernel} · {host.architecture}</p></div></div>
-        <div className="flex gap-3"><Cpu className="mt-0.5 shrink-0 text-emerald-500" size={16} /><div><p className="text-stone-200">{String(info.cpu_model ?? 'CPU not reported')}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.cpu_cores ?? '—')} vCPU · {info.memory_mb ? `${Math.round(Number(info.memory_mb) / 1024)} GB memory` : 'memory not reported'}</p></div></div>
+        <div className="flex gap-3"><Cpu className="mt-0.5 shrink-0 text-[#4f6f5c]" size={16} /><div><p className="text-stone-200">{String(info.cpu_model ?? 'CPU not reported')}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.cpu_cores ?? '—')} vCPU · {info.memory_mb ? `${Math.round(Number(info.memory_mb) / 1024)} GB memory` : 'memory not reported'}</p></div></div>
         <div className="flex gap-3"><Clock3 className="mt-0.5 shrink-0 text-sky-500" size={16} /><div><p className="text-stone-200">Uptime {formatUptime(info.uptime_seconds)}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.timezone ?? 'Timezone not reported')} · {host.last_scan_at ? `scanned ${new Date(host.last_scan_at).toLocaleString()}` : 'never scanned'}</p></div></div>
       </div>
       <div className="mt-5 border-t border-stone-800 pt-5"><p className="detail-label">Platform</p><p className="mt-2 text-xs text-stone-300">{String(info.system_vendor ?? 'Unknown vendor')} · {String(info.product_name ?? 'Unknown model')}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.virtualization_type ?? 'unknown')} / {String(info.virtualization_role ?? 'unknown')}</p></div>

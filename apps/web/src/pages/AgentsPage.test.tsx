@@ -49,13 +49,13 @@ describe('Agents', () => {
   it('opens with all hosts and scopes categorized policy controls by group', async () => {
     render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
 
-    expect(await screen.findByRole('heading', { name: 'Agents & groups' })).toBeInTheDocument()
-    expect(screen.getByText(/Audit-only safety lock is active/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Agents & Groups' })).toBeInTheDocument()
+    expect(screen.getByText(/Audit-Only Safety Lock Is Active/)).toBeInTheDocument()
     const groupNavigation = screen.getByRole('navigation', { name: 'Fleet groups' })
-    expect(within(groupNavigation).getByRole('button', { name: /All hosts/ })).toBeInTheDocument()
+    expect(within(groupNavigation).getByRole('button', { name: /All Agents/ })).toBeInTheDocument()
     const groupButton = within(groupNavigation).getByRole('button', { name: /Default Linux Fleet/ })
-    expect(screen.getByRole('heading', { name: 'All hosts' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Hosts' })).toBeEnabled()
+    expect(screen.getByRole('heading', { name: 'All Agents' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Agents' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Policy' })).not.toBeInTheDocument()
 
     fireEvent.click(groupButton)
@@ -71,10 +71,10 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Policy' }))
     expect(screen.getByRole('heading', { name: 'Production Baseline' })).toBeInTheDocument()
 
-    expect(screen.getByRole('button', { name: /Enrollment token/ })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /Install agent/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Enroll Agent/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Download Package/ })).toBeEnabled()
 
-    fireEvent.click(screen.getByRole('button', { name: /Install agent/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Download Package/ }))
     expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Download package' })).toHaveLength(3)
     expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.0_all.deb/)).toBeInTheDocument()

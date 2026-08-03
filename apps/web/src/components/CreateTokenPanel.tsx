@@ -58,8 +58,8 @@ export function CreateTokenPanel({ hosts, close, created }: { hosts: Host[]; clo
           </form>
         ) : (
           <div className="mt-8">
-            <p className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 px-4 py-3 text-xs leading-5 text-emerald-300">Copy this secret now. LSA stores only its hash and cannot reveal it again.</p>
-            <div className="mt-5 rounded-xl border border-stone-800 bg-stone-950 p-4"><p className="detail-label">Ingestion token</p><div className="mt-3 flex items-center gap-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs leading-6 text-stone-300">{result.token}</code><button className="icon-button shrink-0" onClick={() => void copyToken()} aria-label="Copy ingestion token">{copied ? <Check size={16} /> : <Copy size={16} />}</button></div></div>
+            <p className="rounded-xl border border-[#b8c5ba] bg-[#edf1eb] px-4 py-3 text-xs leading-5 text-[#4f6f5c]">Copy this secret now. LSA stores only its hash and cannot reveal it again.</p>
+            <div className="mt-5 rounded-xl border border-stone-800 bg-[#eee8dd] p-4"><p className="detail-label">Ingestion token</p><div className="mt-3 flex items-center gap-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs leading-6 text-stone-300">{result.token}</code><button className="icon-button shrink-0" onClick={() => void copyToken()} aria-label="Copy ingestion token">{copied ? <Check size={16} /> : <Copy size={16} />}</button></div></div>
             <p className="mt-4 text-xs leading-5 text-stone-600">Store the secret in a mode-0600 file on the Ansible controller. Never place it directly in inventory or source control.</p>
             <div className="mt-7 flex justify-end"><button className="button-primary" onClick={close}>Done</button></div>
           </div>

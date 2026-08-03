@@ -73,12 +73,12 @@ export function UsersSettingsPage() {
         <td><button className="button-secondary min-h-9 px-3" disabled={managed.id === user?.id} onClick={() => void changeStatus(managed.id, !managed.is_active)}>{managed.is_active ? 'Active' : 'Disabled'}</button></td>
         <td>{managed.last_login_at ? new Date(managed.last_login_at).toLocaleString() : 'Never'}</td>
       </tr>)}</tbody></table></div>
-      <div className="flex items-start gap-3 border-t border-stone-800 bg-[#121613] px-6 py-4 text-xs leading-5 text-stone-600"><UsersThree size={17} className="mt-0.5 shrink-0" />Disabling a user immediately revokes every active browser session. User identities remain linked to their provider subject.</div>
+      <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><UsersThree size={17} className="mt-0.5 shrink-0" />Disabling a user immediately revokes every active browser session. User identities remain linked to their provider subject.</div>
     </section>}
-    <section className="mt-8 overflow-hidden rounded-[22px] border border-stone-800 bg-[#151916]">
+    <section className="mt-8 overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb]">
       <div className="border-b border-stone-800 px-6 py-5"><p className="section-label">Enforced permission model</p><p className="mt-2 text-xs leading-5 text-stone-600">Administrative APIs enforce these role boundaries independently of the console.</p></div>
-      <div className="overflow-x-auto"><table className="data-table min-w-[680px]"><thead><tr><th>Capability</th><th>Administrator</th><th>Analyst</th><th>Auditor</th></tr></thead><tbody>{permissions.map((permission) => <tr key={permission.capability}><td>{permission.capability}</td>{(['admin', 'analyst', 'auditor'] as const).map((role) => <td key={role}>{permission[role] ? <Check size={16} className="text-emerald-400" aria-label="Allowed" /> : <Minus size={16} className="text-stone-700" aria-label="Not allowed" />}</td>)}</tr>)}</tbody></table></div>
-      <div className="flex items-start gap-3 border-t border-stone-800 bg-[#121613] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-500" />Role mapping originates in OIDC groups or the configured RADIUS reply attribute and can be corrected here.</div>
+      <div className="overflow-x-auto"><table className="data-table min-w-[680px]"><thead><tr><th>Capability</th><th>Administrator</th><th>Analyst</th><th>Auditor</th></tr></thead><tbody>{permissions.map((permission) => <tr key={permission.capability}><td>{permission.capability}</td>{(['admin', 'analyst', 'auditor'] as const).map((role) => <td key={role}>{permission[role] ? <Check size={16} className="text-[#4f6f5c]" aria-label="Allowed" /> : <Minus size={16} className="text-stone-700" aria-label="Not allowed" />}</td>)}</tr>)}</tbody></table></div>
+      <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />Role mapping originates in OIDC groups or the configured RADIUS reply attribute and can be corrected here.</div>
     </section>
   </div>
 }

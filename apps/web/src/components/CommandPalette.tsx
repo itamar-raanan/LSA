@@ -7,7 +7,6 @@ const commands = [
   { label: 'Security overview', detail: 'Review fleet posture and critical exposure', path: '/', icon: LayoutDashboard, keywords: 'overview home metrics' },
   { label: 'Asset inventory', detail: 'Search reporting Linux systems', path: '/hosts', icon: Server, keywords: 'hosts servers assets' },
   { label: 'Agents & groups', detail: 'Manage agents, enrollment, and fleet groups', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints enrollment' },
-  { label: 'Policy workspace', detail: 'Configure audit and remediation controls', path: '/policies', icon: ShieldCheck, keywords: 'policy controls audit remediation' },
   { label: 'Security findings', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'findings risk vulnerabilities' },
   { label: 'Import report', detail: 'Upload an offline evidence bundle', path: '/reports', icon: FileUp, keywords: 'offline upload report' },
   { label: 'Certificate management', detail: 'Review console TLS certificate', path: '/settings/certificates', icon: ShieldCheck, keywords: 'tls https certificate' },
