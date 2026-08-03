@@ -67,6 +67,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .button-secondary { border: 1px solid #383f39; color: #c7cac5; background: #181d19; }
 .button-secondary:hover { border-color: #59615a; background: #1e241f; }
 .button-primary:active, .button-secondary:active { transform: translateY(1px); }
+.filter-chip { display: inline-flex; min-height: 32px; align-items: center; border: 1px solid #343b35; border-radius: 999px; padding: 0 11px; font-family: "Geist Mono", monospace; font-size: 9px; letter-spacing: .05em; color: #777c77; background: #171b18; transition: color .2s ease, border-color .2s ease, background .2s ease, transform .15s ease; }
+.filter-chip:hover { border-color: #505a52; color: #d6d3d1; }
+.filter-chip:active { transform: translateY(1px); }
+.filter-chip-active { border-color: #527861; color: #b9e3c9; background: #1c2921; }
 .form-field { display: flex; flex-direction: column; gap: 8px; color: #aaaDA8; font-size: 12px; }
 .form-field input, .search-input, .select-input { width: 100%; min-height: 44px; border: 1px solid #353b36; border-radius: 11px; color: #e7e5e4; background: #171b18; padding: 0 13px; outline: none; transition: border-color .2s ease, box-shadow .2s ease; }
 .form-field input:focus, .search-input:focus, .select-input:focus { border-color: #5f9877; box-shadow: 0 0 0 3px rgba(76,139,105,.12); }

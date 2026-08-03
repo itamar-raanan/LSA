@@ -22,13 +22,24 @@
     lsa_machine_id_hash: "sha256:{{ ansible_facts.machine_id | hash('sha256') }}"
     lsa_effective_profile: "{{ lsa_profile }}"
     lsa_effective_modules: >-
-      {{ ['cis_debian13', 'security_health']
-         if ansible_facts.distribution == 'Debian' and ansible_facts.distribution_major_version == '13'
-         else ['security_health'] }}
+      {{ (['cis_debian13', 'security_health']
+          if ansible_facts.distribution == 'Debian' and ansible_facts.distribution_major_version == '13'
+          else ['security_health'])
+         + (['application_inventory'] if lsa_collect_application_inventory | bool else []) }}
 
 - name: Initialize normalized findings
   ansible.builtin.set_fact:
     lsa_findings: []
+
+- name: Collect installed packages and system services
+  lsa_application_inventory:
+  register: lsa_application_inventory_result
+  changed_when: false
+  when: lsa_collect_application_inventory | bool
+
+- name: Store normalized application inventory
+  ansible.builtin.set_fact:
+    lsa_applications: "{{ lsa_application_inventory_result.applications | default([]) }}"
 
 - name: Run complete Debian 13 benchmark audit
   ansible.builtin.include_role:
@@ -98,6 +109,13 @@
       - lsa_findings | map(attribute='control_id') | list | unique | length == lsa_findings | length
       - lsa_findings | map(attribute='category') | list | difference(lsa_canonical_categories) | length == 0
     fail_msg: Normalized findings must have unique control IDs and use canonical finding categories.
+
+- name: Validate normalized application inventory identity
+  ansible.builtin.assert:
+    that:
+      - lsa_applications | map(attribute='kind') | list | difference(['package', 'service']) | length == 0
+      - lsa_applications | map(attribute='source') | list | difference(['dpkg', 'rpm', 'systemd']) | length == 0
+    fail_msg: Application inventory must contain supported package or service records.
 
 - name: Calculate report summary
   ansible.builtin.set_fact:

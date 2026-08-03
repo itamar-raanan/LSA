@@ -60,6 +60,11 @@
         "modules": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 80 }, "minItems": 1, "uniqueItems": true }
       }
     },
+    "applications": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/application" },
+      "maxItems": 20000
+    },
     "summary": {
       "type": "object",
       "additionalProperties": false,
@@ -81,6 +86,23 @@
     }
   },
   "$defs": {
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "source", "status", "enabled", "running"],
+      "properties": {
+        "kind": { "enum": ["package", "service"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "version": { "type": ["string", "null"], "maxLength": 300 },
+        "architecture": { "type": ["string", "null"], "maxLength": 80 },
+        "source": { "enum": ["dpkg", "rpm", "systemd"] },
+        "publisher": { "type": ["string", "null"], "maxLength": 300 },
+        "description": { "type": ["string", "null"], "maxLength": 1000 },
+        "status": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "enabled": { "type": ["boolean", "null"] },
+        "running": { "type": ["boolean", "null"] }
+      }
+    },
     "finding": {
       "type": "object",
       "additionalProperties": false,

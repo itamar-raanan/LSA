@@ -14,7 +14,7 @@ def test_bundle_contains_portable_artifacts(tmp_path: Path):
     bundle_path = build(fixture, tmp_path)
     with zipfile.ZipFile(bundle_path) as bundle:
         names = set(bundle.namelist())
-        assert {"manifest.json", "report.json", "report.html", "report.csv", "checksums.sha256"} <= names
+        assert {"manifest.json", "report.json", "report.html", "report.csv", "applications.csv", "checksums.sha256"} <= names
         manifest = json.loads(bundle.read("manifest.json"))
         assert manifest["report_id"] == "0191d6ab-3e3e-7a55-9b70-54a32d536abd"
 

@@ -29,11 +29,18 @@ def render_html(report: dict) -> bytes:
         f"<td>{html.escape(f['severity'])}</td><td>{html.escape(f['status'])}</td></tr>"
         for f in report["findings"]
     )
+    application_rows = "".join(
+        f"<tr><td>{html.escape(item['name'])}</td><td>{html.escape(item['kind'])}</td>"
+        f"<td>{html.escape(item.get('version') or '')}</td><td>{html.escape(item['status'])}</td>"
+        f"<td>{html.escape(item['source'])}</td></tr>"
+        for item in report.get("applications", [])
+    )
     document = f"""<!doctype html><html><head><meta charset=\"utf-8\"><title>LSA report — {html.escape(host['hostname'])}</title>
 <style>body{{font:15px system-ui;max-width:1100px;margin:48px auto;padding:0 24px;color:#202622}}table{{width:100%;border-collapse:collapse}}th,td{{padding:12px;border-bottom:1px solid #d9dedb;text-align:left}}code{{font-family:monospace}}</style></head>
 <body><p>Linux Security Auditor</p><h1>{html.escape(host['hostname'])}</h1><p>{html.escape(host['operating_system'])} {html.escape(host['os_version'])}</p>
 <h2>Summary</h2><p>Pass <strong>{summary['pass']}</strong> · Fail <strong>{summary['fail']}</strong> · Manual <strong>{summary['manual']}</strong></p>
-<h2>Findings</h2><table><thead><tr><th>Control</th><th>Title</th><th>Severity</th><th>Status</th></tr></thead><tbody>{rows}</tbody></table></body></html>"""
+<h2>Findings</h2><table><thead><tr><th>Control</th><th>Title</th><th>Severity</th><th>Status</th></tr></thead><tbody>{rows}</tbody></table>
+<h2>Application inventory</h2><table><thead><tr><th>Name</th><th>Type</th><th>Version</th><th>Status</th><th>Source</th></tr></thead><tbody>{application_rows}</tbody></table></body></html>"""
     return document.encode()
 
 
@@ -43,6 +50,29 @@ def render_csv(report: dict) -> bytes:
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows({key: finding.get(key, "") for key in fieldnames} for finding in report["findings"])
+    return output.getvalue().encode()
+
+
+def render_applications_csv(report: dict) -> bytes:
+    output = io.StringIO()
+    fieldnames = [
+        "kind",
+        "name",
+        "version",
+        "architecture",
+        "source",
+        "publisher",
+        "description",
+        "status",
+        "enabled",
+        "running",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(
+        {key: application.get(key, "") for key in fieldnames}
+        for application in report.get("applications", [])
+    )
     return output.getvalue().encode()
 
 
@@ -60,6 +90,7 @@ def build(
         "report.json": report_bytes,
         "report.html": render_html(report),
         "report.csv": render_csv(report),
+        "applications.csv": render_applications_csv(report),
         "metadata/host.json": json.dumps(report["host"], indent=2).encode(),
         "metadata/scanner.json": json.dumps(report["scanner"], indent=2).encode(),
     }

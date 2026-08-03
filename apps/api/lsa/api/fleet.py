@@ -2,13 +2,14 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from lsa.database import get_db
 from lsa.dependencies import current_user
-from lsa.models import Finding, FindingStatus, Host, Report, User
+from lsa.models import Finding, FindingStatus, Host, HostApplication, Report, User
 from lsa.schemas import (
+    ApplicationResponse,
     DashboardResponse,
     FindingDelta,
     FindingResponse,
@@ -55,6 +56,11 @@ def serialize_host(db: Session, host: Host) -> HostResponse:
             ).group_by(Finding.severity)
         ).all()
         counts.update({severity.value: count for severity, count in rows})
+    application_count = db.scalar(
+        select(func.count(HostApplication.id)).where(
+            HostApplication.host_id == host.id, HostApplication.removed_at.is_(None)
+        )
+    ) or 0
     return HostResponse(
         id=host.id,
         hostname=host.hostname,
@@ -70,6 +76,7 @@ def serialize_host(db: Session, host: Host) -> HostResponse:
         compliance_score=host.compliance_score,
         security_score=host.security_score,
         last_scan_at=host.last_scan_at,
+        application_count=application_count,
         finding_counts=counts,
     )
 
@@ -100,6 +107,54 @@ def get_host(
     if host is None or host.tenant_id != user.tenant_id or host.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Host not found")
     return serialize_host(db, host)
+
+
+@router.get("/hosts/{host_id}/applications", response_model=list[ApplicationResponse])
+def list_host_applications(
+    host_id: str,
+    search: str | None = None,
+    kind: str | None = Query(default=None, pattern="^(package|service)$"),
+    include_removed: bool = False,
+    limit: int = Query(default=5000, ge=1, le=20000),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[ApplicationResponse]:
+    host = db.get(Host, host_id)
+    if host is None or host.tenant_id != user.tenant_id or host.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Host not found")
+    query = select(HostApplication).where(HostApplication.host_id == host_id)
+    if not include_removed:
+        query = query.where(HostApplication.removed_at.is_(None))
+    if kind:
+        query = query.where(HostApplication.kind == kind)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(HostApplication.name.ilike(pattern), HostApplication.version.ilike(pattern))
+        )
+    applications = db.scalars(
+        query.order_by(HostApplication.kind, HostApplication.name, HostApplication.version).limit(limit)
+    ).all()
+    return [
+        ApplicationResponse(
+            id=item.id,
+            host_id=item.host_id,
+            kind=item.kind,
+            name=item.name,
+            version=item.version,
+            architecture=item.architecture,
+            source=item.source,
+            publisher=item.publisher,
+            description=item.description,
+            status=item.status,
+            enabled=item.enabled,
+            running=item.running,
+            first_seen_at=item.first_seen_at,
+            last_seen_at=item.last_seen_at,
+            removed_at=item.removed_at,
+        )
+        for item in applications
+    ]
 
 
 def serialize_report(db: Session, report: Report) -> ReportResponse:

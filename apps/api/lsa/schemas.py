@@ -46,6 +46,19 @@ class ScanInfo(BaseModel):
     modules: list[str] = Field(min_length=1)
 
 
+class ApplicationInput(BaseModel):
+    kind: Literal["package", "service"]
+    name: str = Field(min_length=1, max_length=300)
+    version: str | None = Field(default=None, max_length=300)
+    architecture: str | None = Field(default=None, max_length=80)
+    source: Literal["dpkg", "rpm", "systemd"]
+    publisher: str | None = Field(default=None, max_length=300)
+    description: str | None = Field(default=None, max_length=1000)
+    status: str = Field(min_length=1, max_length=80)
+    enabled: bool | None = None
+    running: bool | None = None
+
+
 class SummaryInfo(BaseModel):
     pass_count: int = Field(alias="pass", ge=0)
     fail: int = Field(ge=0)
@@ -81,6 +94,7 @@ class ReportInput(BaseModel):
     generated_at: datetime
     scanner: ScannerInfo
     host: HostInfo
+    applications: list[ApplicationInput] = Field(default_factory=list, max_length=20000)
     scan: ScanInfo
     summary: SummaryInfo
     findings: list[FindingInput] = Field(max_length=50000)
@@ -203,7 +217,26 @@ class HostResponse(BaseModel):
     compliance_score: float | None
     security_score: float | None
     last_scan_at: datetime | None
+    application_count: int
     finding_counts: dict[str, int]
+
+
+class ApplicationResponse(BaseModel):
+    id: str
+    host_id: str
+    kind: str
+    name: str
+    version: str | None
+    architecture: str | None
+    source: str
+    publisher: str | None
+    description: str | None
+    status: str
+    enabled: bool | None
+    running: bool | None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    removed_at: datetime | None
 
 
 class HostCreate(BaseModel):

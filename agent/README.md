@@ -1,6 +1,6 @@
 # LSA unified Linux agent
 
-The agent is an outbound-only client for managed Linux hosts. It enrolls once with a short-lived token, generates an Ed25519 identity locally, polls its group policy and audit-task queue, runs only the locally installed LSA audit controls, signs the resulting bundle, and uploads it over HTTPS.
+The agent is an outbound-only client for managed Linux hosts. It enrolls once with a short-lived token, generates an Ed25519 identity locally, polls its group policy and audit-task queue, runs only the locally installed LSA audit controls, inventories installed packages and systemd services, signs the resulting bundle, and uploads it over HTTPS.
 
 This release is audit-only. Policy values `manual` and `remediate` are retained for future workflows, but the platform returns `enforcement_enabled: false` and the agent refuses to run if that lock is absent. Policy responses never contain commands.
 
@@ -39,3 +39,5 @@ For a platform certificate issued by a private CA, copy the CA certificate to th
 The private key, host ingestion token, and local state are stored with mode `0600` under `/var/lib/lsa-agent`. The server only receives the public key. Set `ca_bundle` to the CA that issued the platform certificate on TCP 8443.
 
 The daemon polls every 60 seconds by default while scheduled audits continue to follow the group policy interval and jitter. **Run audit now** queues only the built-in `audit` task. The signed protocol cannot carry a command, script, or remediation payload, and the agent reports completion or a bounded failure message back to the console.
+
+Application inventory uses the same read-only scanner module as offline mode. Debian and Ubuntu packages are read through `dpkg-query`, RHEL-family packages through `rpm`, and service state through systemd. The inventory does not include process arguments, environment variables, open files, or application configuration.

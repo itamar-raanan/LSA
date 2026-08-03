@@ -1,6 +1,7 @@
 ---
 lsa_schema_version: "1.0"
-lsa_scanner_version: "0.5.0"
+lsa_scanner_version: "0.6.0"
+lsa_collect_application_inventory: true
 lsa_controller_python: "{{ ansible_playbook_python }}"
 lsa_delivery_mode: upload_and_keep
 lsa_output_root: "{{ playbook_dir }}/../reports"
@@ -57,7 +58,9 @@ lsa_supported_systems:
 lsa_modules:
   - cis
   - security_health
+  - application_inventory
 lsa_findings: []
+lsa_applications: []
 lsa_summary:
   pass: 0
   fail: 0

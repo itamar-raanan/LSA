@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from hashlib import sha256
 
 from fastapi import HTTPException, status
@@ -6,11 +6,67 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from lsa.dependencies import IngestionPrincipal
-from lsa.models import AuditEvent, Finding, FindingStatus, Host, Report, Severity
-from lsa.schemas import IngestResponse, ReportInput
+from lsa.models import AuditEvent, Finding, FindingStatus, Host, HostApplication, Report, Severity
+from lsa.schemas import ApplicationInput, IngestResponse, ReportInput
 
 
 SEVERITY_PENALTY = {"critical": 18, "high": 8, "medium": 3, "low": 1, "info": 0}
+
+
+def application_key(item: ApplicationInput) -> str:
+    identity = "\0".join(
+        str(value or "")
+        for value in (
+            item.kind,
+            item.source,
+            item.name,
+            item.version,
+            item.architecture,
+        )
+    )
+    return sha256(identity.encode()).hexdigest()
+
+
+def synchronize_applications(db: Session, report_data: ReportInput, host: Host) -> None:
+    if "applications" not in report_data.model_fields_set:
+        return
+    if host.last_scan_at is not None:
+        last_scan_at = host.last_scan_at
+        if last_scan_at.tzinfo is None:
+            last_scan_at = last_scan_at.replace(tzinfo=UTC)
+        if report_data.generated_at < last_scan_at:
+            return
+    observed = {application_key(item): item for item in report_data.applications}
+    existing = {
+        item.inventory_key: item
+        for item in db.scalars(select(HostApplication).where(HostApplication.host_id == host.id))
+    }
+    for inventory_key, item in observed.items():
+        application = existing.get(inventory_key)
+        if application is None:
+            application = HostApplication(
+                tenant_id=host.tenant_id,
+                host_id=host.id,
+                inventory_key=inventory_key,
+                kind=item.kind,
+                name=item.name,
+                version=item.version,
+                architecture=item.architecture,
+                source=item.source,
+                first_seen_at=report_data.generated_at,
+                last_seen_at=report_data.generated_at,
+            )
+            db.add(application)
+        application.publisher = item.publisher
+        application.description = item.description
+        application.status = item.status
+        application.enabled = item.enabled
+        application.running = item.running
+        application.last_seen_at = report_data.generated_at
+        application.removed_at = None
+    for inventory_key, application in existing.items():
+        if inventory_key not in observed and application.removed_at is None:
+            application.removed_at = report_data.generated_at
 
 
 def calculate_scores(report: ReportInput) -> tuple[float, float]:
@@ -162,6 +218,7 @@ def ingest_report(
     host.ip_addresses = report_data.host.ip_addresses
     host.tags = report_data.host.tags
     host.system_info = report_data.host.system_info.model_dump(exclude_none=True)
+    synchronize_applications(db, report_data, host)
     host.compliance_score = compliance
     host.security_score = security_score
     host.last_scan_at = report_data.generated_at
@@ -176,6 +233,11 @@ def ingest_report(
             details={
                 "host_id": host.id,
                 "finding_count": len(report_data.findings),
+                "application_count": (
+                    len(report_data.applications)
+                    if "applications" in report_data.model_fields_set
+                    else None
+                ),
                 "signature_verified": signature_verified,
                 "signing_key_id": signing_key_id,
             },
