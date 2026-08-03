@@ -1,20 +1,22 @@
+import { lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './components/AppShell'
 import { DashboardPage } from './pages/DashboardPage'
-import { FindingsPage } from './pages/FindingsPage'
-import { HostDetailPage } from './pages/HostDetailPage'
-import { HostsPage } from './pages/HostsPage'
 import { LoginPage } from './pages/LoginPage'
-import { ReportsPage } from './pages/ReportsPage'
-import { AuthenticationSettingsPage } from './pages/settings/AuthenticationSettingsPage'
-import { CertificatesSettingsPage } from './pages/settings/CertificatesSettingsPage'
-import { SettingsLayout } from './pages/settings/SettingsLayout'
-import { SettingsOverviewPage } from './pages/settings/SettingsOverviewPage'
-import { UsersSettingsPage } from './pages/settings/UsersSettingsPage'
-import { AgentsSettingsPage } from './pages/settings/AgentsSettingsPage'
-import { SigningKeysPage } from './pages/SigningKeysPage'
-import { TokensPage } from './pages/TokensPage'
+
+const FindingsPage = lazy(() => import('./pages/FindingsPage').then((module) => ({ default: module.FindingsPage })))
+const HostDetailPage = lazy(() => import('./pages/HostDetailPage').then((module) => ({ default: module.HostDetailPage })))
+const HostsPage = lazy(() => import('./pages/HostsPage').then((module) => ({ default: module.HostsPage })))
+const ReportsPage = lazy(() => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
+const AuthenticationSettingsPage = lazy(() => import('./pages/settings/AuthenticationSettingsPage').then((module) => ({ default: module.AuthenticationSettingsPage })))
+const CertificatesSettingsPage = lazy(() => import('./pages/settings/CertificatesSettingsPage').then((module) => ({ default: module.CertificatesSettingsPage })))
+const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout').then((module) => ({ default: module.SettingsLayout })))
+const SettingsOverviewPage = lazy(() => import('./pages/settings/SettingsOverviewPage').then((module) => ({ default: module.SettingsOverviewPage })))
+const UsersSettingsPage = lazy(() => import('./pages/settings/UsersSettingsPage').then((module) => ({ default: module.UsersSettingsPage })))
+const AgentsSettingsPage = lazy(() => import('./pages/settings/AgentsSettingsPage').then((module) => ({ default: module.AgentsSettingsPage })))
+const SigningKeysPage = lazy(() => import('./pages/SigningKeysPage').then((module) => ({ default: module.SigningKeysPage })))
+const TokensPage = lazy(() => import('./pages/TokensPage').then((module) => ({ default: module.TokensPage })))
 
 function ProtectedShell() {
   const { user } = useAuth()
@@ -32,6 +34,7 @@ export default function App() {
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="agents" element={<AgentsSettingsPage />} />
+        <Route path="policies" element={<AgentsSettingsPage />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<SettingsOverviewPage />} />
           <Route path="users" element={<UsersSettingsPage />} />

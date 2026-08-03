@@ -38,12 +38,12 @@ vi.mock('../api/client', () => ({
 }))
 
 describe('Agents', () => {
-  it('places Agents in primary navigation outside Settings', () => {
+  it('places endpoint operations in primary navigation outside Administration', () => {
     render(<MemoryRouter initialEntries={['/agents']}><Routes><Route element={<AppShell />}><Route path="agents" element={<div>Agent route</div>} /></Route></Routes></MemoryRouter>)
 
     const navigation = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
-    expect(navigation.getByRole('link', { name: 'Agents' })).toHaveAttribute('href', '/agents')
-    expect(navigation.getByRole('link', { name: 'Agents' })).toHaveAttribute('aria-current', 'page')
+    expect(navigation.getByRole('link', { name: 'Endpoints' })).toHaveAttribute('href', '/agents')
+    expect(navigation.getByRole('link', { name: 'Endpoints' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('opens with all hosts and scopes categorized policy controls by group', async () => {
