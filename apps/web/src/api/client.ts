@@ -27,6 +27,14 @@ import type {
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
+export const SESSION_INVALID_EVENT = 'lsa:session-invalid'
+
+function clearInvalidSession() {
+  localStorage.removeItem('lsa_session')
+  localStorage.removeItem('lsa_user')
+  localStorage.setItem('lsa_auth_notice', 'Your session ended. Sign in again to continue.')
+  window.dispatchEvent(new Event(SESSION_INVALID_EVENT))
+}
 
 export class ApiError extends Error {
   constructor(
@@ -50,6 +58,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: 'Request failed' }))
+    if (response.status === 401 && token) clearInvalidSession()
     throw new ApiError(body.detail ?? 'Request failed', response.status)
   }
   if (response.status === 204) return undefined as T

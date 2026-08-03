@@ -14,6 +14,11 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [providers, setProviders] = useState<PublicIdentityProvider[]>([])
   const [method, setMethod] = useState<'organization' | 'radius' | 'emergency'>('organization')
+  const [sessionNotice] = useState(() => {
+    const notice = localStorage.getItem('lsa_auth_notice')
+    localStorage.removeItem('lsa_auth_notice')
+    return notice
+  })
 
   useEffect(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1))
@@ -70,6 +75,7 @@ export function LoginPage() {
           <div className="mb-8 grid size-11 place-items-center rounded-2xl border border-stone-700 bg-stone-900 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]"><ShieldCheck size={22} weight="duotone" /></div>
           <h2 className="text-3xl font-medium tracking-[-0.045em]">Access the console</h2>
           <p className="mt-2 text-sm leading-6 text-stone-500">Use your organization account to review the Linux estate.</p>
+          {sessionNotice && <p className="mt-6 rounded-xl border border-amber-900/40 bg-amber-950/10 px-4 py-3 text-xs leading-5 text-amber-200">{sessionNotice}</p>}
           {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="mt-8 space-y-2">
             {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Buildings size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
           </div>}

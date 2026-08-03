@@ -1,9 +1,13 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { api } from '../api/client'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { api, SESSION_INVALID_EVENT } from '../api/client'
 import type { User } from '../types'
 import { AuthContext, type AuthValue } from './context'
 
 function loadUser(): User | null {
+  if (!localStorage.getItem('lsa_session')) {
+    localStorage.removeItem('lsa_user')
+    return null
+  }
   const raw = localStorage.getItem('lsa_user')
   if (!raw) return null
   try {
@@ -16,6 +20,11 @@ function loadUser(): User | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(loadUser)
+  useEffect(() => {
+    const invalidate = () => setUser(null)
+    window.addEventListener(SESSION_INVALID_EVENT, invalidate)
+    return () => window.removeEventListener(SESSION_INVALID_EVENT, invalidate)
+  }, [])
   const value = useMemo<AuthValue>(
     () => ({
       user,
