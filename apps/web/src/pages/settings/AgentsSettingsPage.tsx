@@ -91,13 +91,13 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
   saving: boolean
 }) {
   const activeAgents = agents.filter(agent => !agent.revoked_at)
-  return <aside className="border-b border-stone-800 bg-[#f7f3eb] lg:min-h-[690px] lg:border-b-0 lg:border-r" aria-label="Agent groups">
+  return <aside className="min-w-0 overflow-hidden border-b border-stone-800 bg-[#f7f3eb] lg:min-h-[690px] lg:border-b-0 lg:border-r" aria-label="Agent groups">
     <div className="flex items-center justify-between border-b border-stone-800 px-4 py-4">
       <div><p className="section-label">Fleet scope</p><p className="mt-1 text-xs text-stone-500">{groups.length} groups</p></div>
       <button className="icon-button" onClick={() => setShowCreate(!showCreate)} aria-label="Create group"><Plus size={15} /></button>
     </div>
 
-    {showCreate && <form className="grid gap-3 border-b border-stone-800 bg-[#f7f3eb] p-4" onSubmit={createGroup}>
+    {showCreate && <form className="grid min-w-0 gap-3 border-b border-stone-800 bg-[#f7f3eb] p-4" onSubmit={createGroup}>
       <label className="form-field">Group name<input name="name" required placeholder="Database servers" /></label>
       <label className="form-field">Description<input name="description" placeholder="Production database fleet" /></label>
       <label className="form-field">Initial policy<select name="policy_id" className="select-input w-full" required>{policies.map(policy => <option key={policy.id} value={policy.id}>{policy.name}</option>)}</select></label>
@@ -327,7 +327,7 @@ export function AgentsSettingsPage() {
     </section>}
 
     <section className="panel overflow-hidden">
-      <div className="grid lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid min-w-0 lg:grid-cols-[260px_minmax(0,1fr)]">
         <GroupRail
           groups={data.groups}
           agents={data.agents}
@@ -373,8 +373,8 @@ export function AgentsSettingsPage() {
             <AgentTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} toggle={id => setSelectedAgents(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} toggleAll={() => setSelectedAgents(current => { const selectable = visibleAgents.filter(agent => !agent.revoked_at); const allSelected = selectable.length > 0 && selectable.every(agent => current.has(agent.id)); const next = new Set(current); selectable.forEach(agent => allSelected ? next.delete(agent.id) : next.add(agent.id)); return next })} />
           </div>}
 
-          {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] md:grid-cols-[210px_minmax(0,1fr)]">
-            <nav className="border-b border-stone-800 bg-[#f7f3eb] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
+          {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] min-w-0 md:grid-cols-[210px_minmax(0,1fr)]">
+            <nav className="min-w-0 overflow-hidden border-b border-stone-800 bg-[#f7f3eb] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
               <button className={`policy-category-item ${selectedCategory === 'overview' ? 'policy-category-item-active' : ''}`} onClick={() => setSelectedCategory('overview')}><SlidersHorizontal size={15} /><span>Overview</span></button>
               <div className="px-3 pb-2 pt-5"><span className="section-label">Control categories</span></div>
               <div className="flex gap-1 overflow-x-auto md:block md:space-y-1">{categories.map(([category, controls]) => <button key={category} className={`policy-category-item min-w-44 md:min-w-0 ${selectedCategory === category ? 'policy-category-item-active' : ''}`} onClick={() => setSelectedCategory(category)}><span className="min-w-0 flex-1 truncate text-left capitalize">{category.replaceAll('_', ' ')}</span><span className="font-mono text-[9px] text-stone-600">{controls.length}</span></button>)}</div>
@@ -398,13 +398,13 @@ export function AgentsSettingsPage() {
                   <button className="button-secondary shrink-0" disabled={saving} onClick={clonePolicyForGroup}><Copy size={14} /> Make group-specific copy</button>
                 </div>}
 
-                <div className="grid gap-5 border-b border-stone-800 px-5 py-6 sm:px-7 xl:grid-cols-[minmax(0,1fr)_260px]">
+                <div className="grid min-w-0 gap-5 border-b border-stone-800 px-5 py-6 sm:px-7 2xl:grid-cols-[minmax(0,1fr)_260px]">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="form-field">Default mode<select className="select-input w-full" value={draftDefaultMode} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftDefaultMode(event.target.value as PolicyMode)}>{modes.map(mode => <option key={mode}>{mode}</option>)}</select></label>
                     <label className="form-field">Schedule minutes<input type="number" min="5" max="10080" value={draftSchedule} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftSchedule(Number(event.target.value))} /></label>
                     <label className="form-field sm:col-span-2">Description<input value={draftDescription} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftDescription(event.target.value)} /></label>
                   </div>
-                  <div className="border-t border-stone-800 pt-5 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+                  <div className="min-w-0 border-t border-stone-800 pt-5 2xl:border-l 2xl:border-t-0 2xl:pl-5 2xl:pt-0">
                     <p className="section-label">Apply another policy</p>
                     <form key={assignedPolicy.id} className="mt-3 grid gap-3" onSubmit={applyExistingPolicy}>
                       <select name="policy_id" className="select-input w-full" defaultValue={assignedPolicy.id}>{data.policies.map(policy => <option key={policy.id} value={policy.id}>{policy.name} · v{policy.version}</option>)}</select>
@@ -439,7 +439,7 @@ export function AgentsSettingsPage() {
                   <p className="section-label">Policy category</p>
                   <div className="mt-2 flex items-end justify-between gap-4"><div><h3 className="text-base font-semibold capitalize text-stone-100">{selectedCategory.replaceAll('_', ' ')}</h3><p className="mt-1 text-xs text-stone-500">Override individual controls for {selectedGroup.name}, or inherit the policy default.</p></div><span className="font-mono text-[10px] text-stone-600">{categoryControls.length} controls</span></div>
                 </div>
-                <div>{categoryControls.map(control => <div key={control.control_id} className="grid gap-3 border-b border-stone-800/70 px-5 py-4 sm:px-7 lg:grid-cols-[155px_minmax(0,1fr)_170px] lg:items-center">
+                <div>{categoryControls.map(control => <div key={control.control_id} className="grid min-w-0 gap-3 border-b border-stone-800/70 px-5 py-4 sm:px-7 2xl:grid-cols-[155px_minmax(0,1fr)_170px] 2xl:items-center">
                   <code className="text-[10px] text-stone-500">{control.control_id}</code>
                   <span className="text-xs text-stone-300">{control.title}<small className="table-subtitle">{control.module}</small></span>
                   <select
