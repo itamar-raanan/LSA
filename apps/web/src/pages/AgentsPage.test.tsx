@@ -42,14 +42,14 @@ describe('Agents', () => {
     render(<MemoryRouter initialEntries={['/agents']}><Routes><Route element={<AppShell />}><Route path="agents" element={<div>Agent route</div>} /></Route></Routes></MemoryRouter>)
 
     const navigation = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
-    expect(navigation.getByRole('link', { name: 'Endpoints' })).toHaveAttribute('href', '/agents')
-    expect(navigation.getByRole('link', { name: 'Endpoints' })).toHaveAttribute('aria-current', 'page')
+    expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('href', '/agents')
+    expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('opens with all hosts and scopes categorized policy controls by group', async () => {
     render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
 
-    expect(await screen.findByRole('heading', { name: 'Agents' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Agents & groups' })).toBeInTheDocument()
     expect(screen.getByText(/Audit-only safety lock is active/)).toBeInTheDocument()
     const groupNavigation = screen.getByRole('navigation', { name: 'Fleet groups' })
     expect(within(groupNavigation).getByRole('button', { name: /All hosts/ })).toBeInTheDocument()

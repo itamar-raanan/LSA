@@ -10,7 +10,7 @@ export function SecurityMetricCard({ title, value, detail, trend, tone = 'neutra
     <article className={cn('security-metric-card', `metric-tone-${tone}`)}>
       <div className="flex items-start justify-between gap-4">
         <div className="metric-icon"><Icon size={17} /></div>
-        <span className="metric-trend"><TrendIcon size={13} />{trend == null ? 'Live' : trend === 0 ? 'No change' : `${Math.abs(trend)}%`}</span>
+        {trend != null && <span className="metric-trend"><TrendIcon size={13} />{trend === 0 ? 'No change' : `${Math.abs(trend)}%`}</span>}
       </div>
       <p className="metric-value">{value}</p>
       <p className="metric-title">{title}</p>

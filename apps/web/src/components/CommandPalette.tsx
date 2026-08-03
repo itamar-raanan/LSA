@@ -4,11 +4,11 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const commands = [
-  { label: 'Security dashboard', detail: 'Review fleet posture and critical exposure', path: '/', icon: LayoutDashboard, keywords: 'overview home metrics' },
+  { label: 'Security overview', detail: 'Review fleet posture and critical exposure', path: '/', icon: LayoutDashboard, keywords: 'overview home metrics' },
   { label: 'Asset inventory', detail: 'Search reporting Linux systems', path: '/hosts', icon: Server, keywords: 'hosts servers assets' },
-  { label: 'Endpoint operations', detail: 'Manage agents, groups, and policy', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints policies' },
+  { label: 'Agents & groups', detail: 'Manage agents, enrollment, and fleet groups', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints enrollment' },
   { label: 'Policy workspace', detail: 'Configure audit and remediation controls', path: '/policies', icon: ShieldCheck, keywords: 'policy controls audit remediation' },
-  { label: 'Vulnerability queue', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'findings risk vulnerabilities' },
+  { label: 'Security findings', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'findings risk vulnerabilities' },
   { label: 'Import report', detail: 'Upload an offline evidence bundle', path: '/reports', icon: FileUp, keywords: 'offline upload report' },
   { label: 'Certificate management', detail: 'Review console TLS certificate', path: '/settings/certificates', icon: ShieldCheck, keywords: 'tls https certificate' },
   { label: 'Administration', detail: 'Identity, trust, users, and access', path: '/settings', icon: Settings, keywords: 'settings admin users tokens' },
