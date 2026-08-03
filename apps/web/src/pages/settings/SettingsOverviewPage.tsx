@@ -35,7 +35,7 @@ export function SettingsOverviewPage() {
     <div className="page-reveal">
       <PageHeader eyebrow="Platform administration" title="Settings" detail="Control who can access LSA, how scanners establish trust, and which security boundaries protect the platform." />
 
-      <section className="overflow-hidden rounded-[22px] border border-stone-800 bg-[#151916]">
+      <section className="panel overflow-hidden">
         <div className="grid border-b border-stone-800 px-6 py-5 md:grid-cols-[1fr_auto] md:items-center md:px-7">
           <div><p className="section-label">Configuration posture</p><p className="mt-2 text-sm text-stone-400">Identity, credentials, signing trust, and TLS lifecycle controls are operational.</p></div>
           <span className="mt-4 inline-flex w-fit items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-emerald-300 md:mt-0"><span className="status-pulse" /> Evidence trust active</span>
@@ -57,7 +57,7 @@ export function SettingsOverviewPage() {
           {recommended.map(({ title, detail, icon: Icon }, index) => (
             <div key={title} className={`flex gap-4 px-6 py-5 ${index % 2 === 0 ? 'md:border-r md:border-stone-800' : ''} ${index > 1 ? 'border-t border-stone-800' : index === 1 ? 'border-t border-stone-800 md:border-t-0' : ''}`}>
               <Icon size={18} weight="duotone" className="mt-0.5 shrink-0 text-stone-500" />
-              <div><p className="text-sm text-stone-300">{title}</p><p className="mt-1 text-xs leading-5 text-stone-600">{detail}</p></div>
+              <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="text-sm text-stone-300">{title}</p><span className="font-mono text-[8px] uppercase tracking-[.1em] text-stone-700">Planned</span></div><p className="mt-1 text-xs leading-5 text-stone-600">{detail}</p></div>
             </div>
           ))}
         </div>
