@@ -70,7 +70,7 @@ export function UsersSettingsPage() {
         <td><span className="font-medium text-stone-200">{managed.name}</span><span className="table-subtitle">{managed.email}{managed.id === user?.id ? ' · current user' : ''}</span></td>
         <td>{managed.provider_name ?? (managed.auth_source === 'local' ? 'Emergency local' : managed.auth_source)}<span className="table-subtitle">{managed.auth_source}</span></td>
         <td><select className="select-input min-h-9" value={managed.role} disabled={managed.id === user?.id} onChange={(event) => void changeRole(managed.id, event.target.value)}><option value="admin">Administrator</option><option value="analyst">Analyst</option><option value="auditor">Auditor</option></select></td>
-        <td><button className="button-secondary min-h-9 px-3" disabled={managed.id === user?.id} onClick={() => void changeStatus(managed.id, !managed.is_active)}>{managed.is_active ? 'Active' : 'Disabled'}</button></td>
+        <td><button className="button-secondary min-h-9 px-3" disabled={managed.id === user?.id} onClick={() => void changeStatus(managed.id, !managed.is_active)}>{managed.is_active ? 'Disable' : 'Enable'}</button></td>
         <td>{managed.last_login_at ? new Date(managed.last_login_at).toLocaleString() : 'Never'}</td>
       </tr>)}</tbody></table></div>
       <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><UsersThree size={17} className="mt-0.5 shrink-0" />Disabling a user immediately revokes every active browser session. User identities remain linked to their provider subject.</div>

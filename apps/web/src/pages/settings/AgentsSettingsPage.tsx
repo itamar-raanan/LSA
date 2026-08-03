@@ -8,6 +8,7 @@ import {
   MagnifyingGlass,
   Play,
   Plus,
+  Prohibit,
   ShieldCheck,
   SlidersHorizontal,
   UsersThree,
@@ -72,7 +73,7 @@ function AgentTable({ agents, groups, packageVersion, submit, selected, toggle, 
         <td>{confirming === agent.id ? <div className="flex justify-end gap-2">
           <button className="button-secondary min-h-9 px-3" onClick={() => setConfirming(null)}>Cancel</button>
           <button className="button-secondary min-h-9 border-rose-900/60 px-3 text-rose-300" onClick={() => void submit(() => api.revokeAgent(agent.id)).finally(() => setConfirming(null))}>Confirm</button>
-        </div> : <button className="button-secondary min-h-9" disabled={!!agent.revoked_at} onClick={() => setConfirming(agent.id)}>Revoke</button>}</td>
+        </div> : <button className="icon-button ml-auto" aria-label={`Revoke ${agent.hostname}`} title="Revoke agent" disabled={!!agent.revoked_at} onClick={() => setConfirming(agent.id)}><Prohibit size={15} /></button>}</td>
       </tr>)}</tbody>
     </table>
   </div>
@@ -304,20 +305,8 @@ export function AgentsSettingsPage() {
       eyebrow="Managed Linux fleet"
       title="Agents & Groups"
       detail="Select a fleet group, review its agents, then open Policy to configure audit and remediation behavior."
-      action={<button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Enroll Agent</button>}
+      action={<button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Deploy Agent</button>}
     />
-
-    <section className="fleet-overview mb-5">
-      <div><span>Total Agents</span><strong>{data.agents.length}</strong></div>
-      <div><span>Fleet Groups</span><strong>{data.groups.length}</strong></div>
-      <div><span>Active Agents</span><strong>{data.agents.filter(agent => !agent.revoked_at).length}</strong></div>
-      <button className="button-secondary" onClick={() => setShowDownloads(true)}><DownloadSimple size={16} /> Download Package</button>
-    </section>
-
-    <div className="fleet-safety-note mb-5 flex items-start gap-3 px-4 py-3 text-xs leading-5">
-      <ShieldCheck size={17} className="mt-0.5 shrink-0" />
-      <span><strong>Audit-Only Safety Lock Is Active.</strong> Remediation modes can be staged in Policy, but this agent release cannot change host configuration.</span>
-    </div>
     {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
     {showDownloads && <AgentDownloadPanel packages={data.packages} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
 
@@ -328,7 +317,7 @@ export function AgentsSettingsPage() {
       </div>
       {token ? <div className="px-6 py-6">
         <p className="text-xs text-stone-500">Copy this token now. It is displayed once and becomes invalid after enrollment.</p>
-        <div className="mt-4 flex gap-2"><code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-stone-800 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code><button className="button-secondary" onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy</button></div>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row"><code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-stone-800 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code><button className="button-secondary" onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy Token</button><button className="button-primary" onClick={() => { setShowEnrollment(false); setShowDownloads(true) }}><DownloadSimple size={15} /> Download Package</button></div>
       </div> : <form className="grid gap-4 px-6 py-6 md:grid-cols-3" onSubmit={createEnrollment}>
         <label className="form-field">Name<input name="name" required placeholder="Production enrollment" /></label>
         <label className="form-field">Group<select name="group_id" required className="select-input w-full" defaultValue={selectedGroup?.id ?? data.groups[0]?.id}>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
@@ -393,10 +382,14 @@ export function AgentsSettingsPage() {
 
             <div className="min-w-0">
               {selectedCategory === 'overview' ? <div>
+                <div className="policy-safety-note flex items-start gap-3 border-b px-5 py-4 text-xs leading-5 sm:px-7">
+                  <ShieldCheck size={17} className="mt-0.5 shrink-0" />
+                  <span><strong>Audit-Only Safety Lock Is Active.</strong> Remediation modes can be staged here, but this agent release cannot change host configuration.</span>
+                </div>
                 <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div><p className="section-label">Effective policy</p><h3 className="mt-2 text-base font-semibold text-stone-100">{assignedPolicy.name}</h3><p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">{assignedPolicy.description || 'No policy description.'}</p></div>
-                    <span className="settings-state">Version {assignedPolicy.version}</span>
+                    <span className="settings-state">Version {assignedPolicy.version} · {Object.keys(controlModes).length} Overrides</span>
                   </div>
                 </div>
 
@@ -406,11 +399,10 @@ export function AgentsSettingsPage() {
                 </div>}
 
                 <div className="grid gap-5 border-b border-stone-800 px-5 py-6 sm:px-7 xl:grid-cols-[minmax(0,1fr)_260px]">
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <label className="form-field">Default mode<select className="select-input w-full" value={draftDefaultMode} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftDefaultMode(event.target.value as PolicyMode)}>{modes.map(mode => <option key={mode}>{mode}</option>)}</select></label>
                     <label className="form-field">Schedule minutes<input type="number" min="5" max="10080" value={draftSchedule} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftSchedule(Number(event.target.value))} /></label>
-                    <label className="form-field">Explicit overrides<input value={Object.keys(controlModes).length} readOnly /></label>
-                    <label className="form-field sm:col-span-3">Description<input value={draftDescription} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftDescription(event.target.value)} /></label>
+                    <label className="form-field sm:col-span-2">Description<input value={draftDescription} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftDescription(event.target.value)} /></label>
                   </div>
                   <div className="border-t border-stone-800 pt-5 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
                     <p className="section-label">Apply another policy</p>

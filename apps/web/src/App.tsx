@@ -12,7 +12,6 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage').then((module) => ({
 const AuthenticationSettingsPage = lazy(() => import('./pages/settings/AuthenticationSettingsPage').then((module) => ({ default: module.AuthenticationSettingsPage })))
 const CertificatesSettingsPage = lazy(() => import('./pages/settings/CertificatesSettingsPage').then((module) => ({ default: module.CertificatesSettingsPage })))
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout').then((module) => ({ default: module.SettingsLayout })))
-const SettingsOverviewPage = lazy(() => import('./pages/settings/SettingsOverviewPage').then((module) => ({ default: module.SettingsOverviewPage })))
 const UsersSettingsPage = lazy(() => import('./pages/settings/UsersSettingsPage').then((module) => ({ default: module.UsersSettingsPage })))
 const AgentsSettingsPage = lazy(() => import('./pages/settings/AgentsSettingsPage').then((module) => ({ default: module.AgentsSettingsPage })))
 const SigningKeysPage = lazy(() => import('./pages/SigningKeysPage').then((module) => ({ default: module.SigningKeysPage })))
@@ -36,7 +35,7 @@ export default function App() {
         <Route path="agents" element={<AgentsSettingsPage />} />
         <Route path="policies" element={<Navigate to="/agents" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<SettingsOverviewPage />} />
+          <Route index element={<Navigate to="users" replace />} />
           <Route path="users" element={<UsersSettingsPage />} />
           <Route path="agents" element={<Navigate to="/agents" replace />} />
           <Route path="authentication" element={<AuthenticationSettingsPage />} />
