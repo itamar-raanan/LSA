@@ -71,7 +71,7 @@ def test_complete_debian_13_catalog_is_unique_and_profiled():
     health_ids = [control["id"] for control in health_controls]
 
     assert len(cis_controls) == 334
-    assert len(health_controls) == 62
+    assert len(health_controls) == 98
     assert len(cis_ids) == len(set(cis_ids))
     assert len(health_ids) == len(set(health_ids))
     assert Counter(control["id"].split(".")[0] for control in cis_controls) == {
@@ -92,8 +92,8 @@ def test_exported_policy_catalog_matches_scanner_sources():
     exported = json.loads(Path("apps/api/lsa/data/control_catalog.json").read_text())
 
     assert exported == build_catalog()
-    assert len(exported) == 396
-    assert len({item["control_id"] for item in exported}) == 396
+    assert len(exported) == 432
+    assert len({item["control_id"] for item in exported}) == 432
     assert {item["category"] for item in exported} <= CANONICAL_CATEGORIES
 
 
@@ -118,8 +118,8 @@ def test_debian_13_active_catalog_suppresses_benchmark_duplicates():
         control for control in health_controls if "cis_debian13" not in control.get("superseded_by", [])
     ]
 
-    assert len(active_health) == 24
-    assert len(all_controls(CIS_ROLE)) + len(active_health) == 358
+    assert len(active_health) == 56
+    assert len(all_controls(CIS_ROLE)) + len(active_health) == 390
 
 
 def test_scanner_and_console_share_the_canonical_finding_categories():

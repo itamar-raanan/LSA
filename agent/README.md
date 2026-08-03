@@ -11,14 +11,14 @@ From **Agents** in the console, choose **Install agent** and download the Debian
 For Debian 13 or Ubuntu 24.04+:
 
 ```bash
-sudo apt install ./lsa-agent_0.3.0_all.deb
+sudo apt install ./lsa-agent_0.4.0_all.deb
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
 ```
 
 For RHEL, Rocky Linux, or AlmaLinux 9+:
 
 ```bash
-sudo dnf install ./lsa-agent-0.3.0-1.noarch.rpm
+sudo dnf install ./lsa-agent-0.4.0-1.noarch.rpm
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
 ```
 
@@ -29,8 +29,8 @@ For the universal archive:
 Create a one-time enrollment token for the target group, then run:
 
 ```bash
-tar -xzf lsa-agent-0.3.0-linux-universal.tar.gz
-cd lsa-agent-0.3.0
+tar -xzf lsa-agent-0.4.0-linux-universal.tar.gz
+cd lsa-agent-0.4.0
 sudo ./install.sh --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
 ```
 
@@ -39,5 +39,7 @@ For a platform certificate issued by a private CA, copy the CA certificate to th
 The private key, host ingestion token, and local state are stored with mode `0600` under `/var/lib/lsa-agent`. The server only receives the public key. Set `ca_bundle` to the CA that issued the platform certificate on TCP 8443.
 
 The daemon polls every 60 seconds by default while scheduled audits continue to follow the group policy interval and jitter. **Run audit now** queues only the built-in `audit` task. The signed protocol cannot carry a command, script, or remediation payload, and the agent reports completion or a bounded failure message back to the console.
+
+Release 0.4 validates `integrity-manifest.json` before every server exchange and scan. The manifest covers the installed agent runtime, scanner, control catalog, and dependency declaration. Any missing, symlinked, or modified managed file stops the cycle. The agent also persists the highest accepted policy version and rejects a lower version; a legitimate server-side restore is published as a new higher version.
 
 Application inventory uses the same read-only scanner module as offline mode. Debian and Ubuntu packages are read through `dpkg-query`, RHEL-family packages through `rpm`, and service state through systemd. The inventory does not include process arguments, environment variables, open files, or application configuration.

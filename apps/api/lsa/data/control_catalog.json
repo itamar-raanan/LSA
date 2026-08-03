@@ -372,6 +372,36 @@
     "module": "security_health"
   },
   {
+    "control_id": "LSA-HEALTH-ACC-008",
+    "title": "Sudo policy files are root-controlled",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-009",
+    "title": "PAM configuration is root-controlled",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-010",
+    "title": "Noninteractive service accounts have locked passwords",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-ACC-011",
+    "title": "Privileged local group membership is inventoried",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-AGT-002",
+    "title": "LSA agent secrets are root-only",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
     "control_id": "LSA-HEALTH-FS-007",
     "title": "Writable directories in root PATH",
     "category": "accounts",
@@ -386,6 +416,18 @@
   {
     "control_id": "LSA-HEALTH-PRV-002",
     "title": "Broad sudo command wildcards",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PST-005",
+    "title": "Global shell startup files are not writable by non-root users",
+    "category": "accounts",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PST-006",
+    "title": "SSH authorized-key files have safe ownership and permissions",
     "category": "accounts",
     "module": "security_health"
   },
@@ -728,6 +770,18 @@
   {
     "control_id": "LSA-HEALTH-AUD-004",
     "title": "Audit configuration is immutable",
+    "category": "audit",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-AUD-005",
+    "title": "Kernel audit queue reports no lost events",
+    "category": "audit",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-AUD-006",
+    "title": "Audit rule files are root-controlled",
     "category": "audit",
     "module": "security_health"
   },
@@ -1098,6 +1152,12 @@
     "module": "cis_debian13"
   },
   {
+    "control_id": "LSA-HEALTH-AGT-001",
+    "title": "LSA agent installation is protected from non-root modification",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
     "control_id": "LSA-HEALTH-BOOT-002",
     "title": "Bootloader configuration permissions",
     "category": "filesystem",
@@ -1154,6 +1214,24 @@
   {
     "control_id": "LSA-HEALTH-FS-010",
     "title": "System executable and configuration directories are protected",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-011",
+    "title": "System private keys are not accessible to other users",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-FS-012",
+    "title": "System service certificates are not near expiry",
+    "category": "filesystem",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PST-001",
+    "title": "Dynamic linker preload does not introduce unapproved persistence",
     "category": "filesystem",
     "module": "security_health"
   },
@@ -1256,6 +1334,36 @@
   {
     "control_id": "LSA-HEALTH-BOOT-003",
     "title": "Kernel lockdown mode",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-004",
+    "title": "Kernel module signature enforcement is active",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-005",
+    "title": "Out-of-tree loaded kernel modules are reviewed",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-006",
+    "title": "Unrestricted kexec loading is disabled",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-009",
+    "title": "Kernel command line contains no explicit security bypass",
+    "category": "kernel",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-010",
+    "title": "Unprivileged BPF is restricted",
     "category": "kernel",
     "module": "security_health"
   },
@@ -1416,6 +1524,12 @@
     "module": "security_health"
   },
   {
+    "control_id": "LSA-HEALTH-LOG-005",
+    "title": "Journal contains no recent rate-limit or message-loss indicators",
+    "category": "logging",
+    "module": "security_health"
+  },
+  {
     "control_id": "CIS-DEBIAN13-1.3.1.1",
     "title": "Ensure apparmor packages are installed",
     "category": "mandatory_access",
@@ -1438,6 +1552,18 @@
     "title": "Ensure apparmor_restrict_unprivileged_unconfined is enabled",
     "category": "mandatory_access",
     "module": "cis_debian13"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-007",
+    "title": "Linux integrity measurement is active",
+    "category": "mandatory_access",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-BOOT-008",
+    "title": "A recognized mandatory access control LSM is active",
+    "category": "mandatory_access",
+    "module": "security_health"
   },
   {
     "control_id": "CIS-DEBIAN13-3.1.1",
@@ -1734,6 +1860,30 @@
     "module": "security_health"
   },
   {
+    "control_id": "LSA-HEALTH-NET-010",
+    "title": "Network interfaces are not unexpectedly promiscuous",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-011",
+    "title": "Tunnel and overlay interfaces are inventoried",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-012",
+    "title": "Listening sockets are attributed to processes",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-NET-013",
+    "title": "Container daemon API is not exposed on an unencrypted TCP socket",
+    "category": "network",
+    "module": "security_health"
+  },
+  {
     "control_id": "CIS-DEBIAN13-1.2.1.1",
     "title": "Ensure the source.list and .source files use the Signed-By option",
     "category": "packages",
@@ -1796,6 +1946,30 @@
   {
     "control_id": "LSA-HEALTH-PKG-005",
     "title": "Installed package file integrity",
+    "category": "packages",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-006",
+    "title": "Package repositories require signature verification",
+    "category": "packages",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-007",
+    "title": "Package repository configuration is root-controlled",
+    "category": "packages",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-008",
+    "title": "Package database passes its local consistency check",
+    "category": "packages",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PKG-009",
+    "title": "Executables outside package ownership are inventoried",
     "category": "packages",
     "module": "security_health"
   },
@@ -2100,6 +2274,36 @@
     "module": "cis_debian13"
   },
   {
+    "control_id": "LSA-HEALTH-AGT-003",
+    "title": "LSA agent service is enabled and active",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-AGT-004",
+    "title": "LSA agent systemd sandbox is enforced",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PST-002",
+    "title": "Systemd unit files are not writable by non-root users",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PST-003",
+    "title": "System cron configuration is not writable by non-root users",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-PST-004",
+    "title": "Legacy rc.local startup persistence is absent or reviewed",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
     "control_id": "LSA-HEALTH-SVC-001",
     "title": "Legacy clear-text or high-risk services",
     "category": "services",
@@ -2120,6 +2324,18 @@
   {
     "control_id": "LSA-HEALTH-SVC-004",
     "title": "Emergency debug shell is not enabled",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SVC-005",
+    "title": "Container engine sockets are not broadly accessible",
+    "category": "services",
+    "module": "security_health"
+  },
+  {
+    "control_id": "LSA-HEALTH-SVC-006",
+    "title": "Privileged and host-integrated containers are inventoried",
     "category": "services",
     "module": "security_health"
   },

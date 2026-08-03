@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from agent.lsa_agent import VERSION, _scan_due, platform_url, signed_headers
+from agent.integrity import build_manifest, verify_manifest, write_manifest
+from agent.lsa_agent import (
+    VERSION,
+    _scan_due,
+    accept_policy_version,
+    platform_url,
+    signed_headers,
+)
 
 
 def test_runtime_version_matches_packaging_release():
@@ -33,3 +40,27 @@ def test_scan_schedule_treats_missing_and_expired_deadlines_as_due():
     assert _scan_due({}) is True
     assert _scan_due({"next_scan_at": (datetime.now(UTC) - timedelta(seconds=1)).isoformat()}) is True
     assert _scan_due({"next_scan_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat()}) is False
+
+
+def test_policy_version_cannot_roll_back():
+    state = {"policy_version": 3, "highest_policy_version": 3}
+    assert accept_policy_version(state, {"policy_version": 4}) == 4
+    assert state["highest_policy_version"] == 4
+    with pytest.raises(RuntimeError, match="policy rollback rejected"):
+        accept_policy_version(state, {"policy_version": 3})
+
+
+def test_runtime_manifest_detects_modified_managed_file(tmp_path):
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "scanner").mkdir()
+    runtime = tmp_path / "agent" / "runtime.py"
+    runtime.write_text("safe = True\n", encoding="utf-8")
+    (tmp_path / "scanner" / "control.yml").write_text("id: example\n", encoding="utf-8")
+    manifest = tmp_path / "integrity-manifest.json"
+    write_manifest(tmp_path, manifest)
+
+    assert build_manifest(tmp_path)["files"]
+    assert len(verify_manifest(tmp_path, manifest)) == 64
+    runtime.write_text("safe = False\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="digest mismatch: agent/runtime.py"):
+        verify_manifest(tmp_path, manifest)

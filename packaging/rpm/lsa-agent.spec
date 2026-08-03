@@ -23,6 +23,7 @@ tar -C %{lsa_source_root} \
   --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyo' --exclude='*/tests' \
   -cf - agent scanner | tar -C %{buildroot}/opt/lsa-agent -xf -
 install -m 0644 %{lsa_source_root}/agent/requirements.txt %{buildroot}/opt/lsa-agent/requirements.txt
+python3 %{lsa_source_root}/agent/integrity.py build --root %{buildroot}/opt/lsa-agent --manifest %{buildroot}/opt/lsa-agent/integrity-manifest.json >/dev/null
 install -D -m 0755 %{lsa_source_root}/agent/lsa-agent-enroll %{buildroot}/usr/sbin/lsa-agent-enroll
 install -D -m 0644 %{lsa_source_root}/agent/lsa-agent.service %{buildroot}/usr/lib/systemd/system/lsa-agent.service
 
@@ -46,9 +47,10 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /opt/lsa-agent/agent
 /opt/lsa-agent/scanner
 /opt/lsa-agent/requirements.txt
+/opt/lsa-agent/integrity-manifest.json
 /usr/sbin/lsa-agent-enroll
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
-* Mon Aug 03 2026 Linux Security Auditor - 0.3.0-1
-- Add native audit-only unified agent package.
+* Mon Aug 03 2026 Linux Security Auditor - 0.4.0-1
+- Add runtime integrity verification and policy rollback protection.

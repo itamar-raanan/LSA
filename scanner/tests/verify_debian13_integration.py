@@ -18,7 +18,7 @@ def verify(
     hostname: str = "debian13-ci",
     expected_family: str = "debian",
     expected_version: str = "13",
-    expected_findings: int = 358,
+    expected_findings: int = 390,
 ) -> None:
     from fastapi.testclient import TestClient
 

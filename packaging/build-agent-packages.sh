@@ -22,6 +22,7 @@ tar -C "$SOURCE_ROOT" \
   --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyo' --exclude='*/tests' \
   -cf - agent scanner | tar -C "$DEB_ROOT/opt/lsa-agent" -xf -
 install -m 0644 "$SOURCE_ROOT/agent/requirements.txt" "$DEB_ROOT/opt/lsa-agent/requirements.txt"
+python3 "$SOURCE_ROOT/agent/integrity.py" build --root "$DEB_ROOT/opt/lsa-agent" --manifest "$DEB_ROOT/opt/lsa-agent/integrity-manifest.json" >/dev/null
 install -m 0755 "$SOURCE_ROOT/agent/lsa-agent-enroll" "$DEB_ROOT/usr/sbin/lsa-agent-enroll"
 install -m 0644 "$SOURCE_ROOT/agent/lsa-agent.service" "$DEB_ROOT/usr/lib/systemd/system/lsa-agent.service"
 sed "s/@VERSION@/$VERSION/g" "$SCRIPT_DIR/debian/control" > "$DEB_ROOT/DEBIAN/control"

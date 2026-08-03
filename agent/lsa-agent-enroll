@@ -47,8 +47,12 @@ CONFIG_DIR=/etc/lsa-agent
 STATE_DIR=/var/lib/lsa-agent
 [ -f "$INSTALL_DIR/agent/lsa_agent.py" ] || { echo "LSA agent runtime is not installed." >&2; exit 1; }
 [ -f "$INSTALL_DIR/requirements.txt" ] || { echo "LSA agent requirements are not installed." >&2; exit 1; }
+[ -f "$INSTALL_DIR/integrity-manifest.json" ] || { echo "LSA agent integrity manifest is not installed." >&2; exit 1; }
+"$PYTHON" "$INSTALL_DIR/agent/integrity.py" verify \
+  --root "$INSTALL_DIR" --manifest "$INSTALL_DIR/integrity-manifest.json"
 
-install -d -m 0755 "$INSTALL_DIR" "$CONFIG_DIR"
+install -d -m 0755 "$INSTALL_DIR"
+install -d -m 0700 "$CONFIG_DIR"
 install -d -m 0700 "$STATE_DIR"
 if [ ! -x "$INSTALL_DIR/venv/bin/python" ]; then
   "$PYTHON" -m venv "$INSTALL_DIR/venv"

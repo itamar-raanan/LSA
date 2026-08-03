@@ -1,0 +1,578 @@
+---
+# Read-only controls shared by offline scans and the unified agent. Controls that
+# require an installed LSA agent return NOT_APPLICABLE when its paths are absent.
+security_health_agent_controls:
+  - id: AGT-001
+    semantic_key: agent.installation_permissions
+    title: LSA agent installation is protected from non-root modification
+    category: filesystem
+    severity: CRITICAL
+    summary: Verify the installed agent, scanner, and service unit are root-owned and not group- or world-writable.
+    risk: A local user who can alter the agent runtime can forge evidence or execute code as the root agent service.
+    remediation: Restore root ownership and remove group and other write permissions from the reported paths.
+    verification: Inspect the reported paths with stat after reinstalling or correcting the package.
+    audit: !unsafe |
+      [[ -e /opt/lsa-agent ]] || { echo "LSA agent is not installed."; exit 3; }
+      bad=0
+      for path in /opt/lsa-agent /opt/lsa-agent/agent/lsa_agent.py /opt/lsa-agent/scanner /opt/lsa-agent/integrity-manifest.json /usr/lib/systemd/system/lsa-agent.service; do
+        [[ -e "$path" ]] || { echo "missing $path"; bad=1; continue; }
+        owner="$(stat -Lc '%U:%G' "$path")"; mode="$(stat -Lc '%a' "$path")"; echo "$mode $owner $path"
+        [[ "${owner%%:*}" == root ]] || bad=1
+        (( 8#$mode & 0022 )) && bad=1
+      done
+      exit "$bad"
+
+  - id: AGT-002
+    semantic_key: agent.secret_permissions
+    title: LSA agent secrets are root-only
+    category: accounts
+    severity: CRITICAL
+    summary: Verify agent configuration, state, private key, and ingestion token are protected from other users.
+    risk: Exposed agent credentials permit impersonation, report submission, or disclosure of enrollment state.
+    remediation: Set directories to 0700 and secret files to 0600 with root ownership.
+    verification: Inspect /etc/lsa-agent and /var/lib/lsa-agent with stat.
+    audit: !unsafe |
+      [[ -d /var/lib/lsa-agent || -d /etc/lsa-agent ]] || { echo "LSA agent state is not present."; exit 3; }
+      bad=0
+      for path in /etc/lsa-agent /var/lib/lsa-agent /etc/lsa-agent/config.json /var/lib/lsa-agent/state.json /var/lib/lsa-agent/agent-key.pem /var/lib/lsa-agent/ingestion-token; do
+        [[ -e "$path" ]] || continue
+        owner="$(stat -Lc '%U' "$path")"; mode="$(stat -Lc '%a' "$path")"; echo "$mode $owner $path"
+        [[ "$owner" == root ]] || bad=1
+        (( 8#$mode & 0077 )) && bad=1
+      done
+      exit "$bad"
+
+  - id: AGT-003
+    semantic_key: agent.service_health
+    title: LSA agent service is enabled and active
+    category: services
+    severity: HIGH
+    summary: Verify an installed LSA agent starts at boot and is currently reporting under systemd supervision.
+    risk: A stopped or disabled agent creates a monitoring blind spot and stale security posture.
+    remediation: Investigate the service failure, correct the cause, and enable the unit under change control.
+    verification: Run systemctl is-enabled and systemctl is-active for lsa-agent.service.
+    audit: !unsafe |
+      systemctl cat lsa-agent.service >/dev/null 2>&1 || { echo "LSA agent service is not installed."; exit 3; }
+      enabled="$(systemctl is-enabled lsa-agent.service 2>/dev/null || true)"; active="$(systemctl is-active lsa-agent.service 2>/dev/null || true)"
+      echo "enabled=$enabled active=$active"; [[ "$enabled" == enabled && "$active" == active ]]
+
+  - id: AGT-004
+    semantic_key: agent.systemd_sandbox
+    title: LSA agent systemd sandbox is enforced
+    category: services
+    severity: HIGH
+    summary: Verify the root agent is constrained by the required systemd security directives.
+    risk: Missing service sandboxing increases the impact of a vulnerability in the agent or its dependencies.
+    remediation: Reinstall the current unit and remove unsafe local overrides.
+    verification: Review systemctl show for each reported security property.
+    audit: !unsafe |
+      systemctl cat lsa-agent.service >/dev/null 2>&1 || { echo "LSA agent service is not installed."; exit 3; }
+      output="$(systemctl show lsa-agent.service -p NoNewPrivileges -p ProtectSystem -p ProtectHome -p PrivateTmp -p ProtectKernelTunables -p ProtectKernelModules -p ProtectControlGroups -p RestrictSUIDSGID 2>/dev/null)"
+      printf '%s\n' "$output"
+      grep -qx 'NoNewPrivileges=yes' <<< "$output" && grep -qx 'ProtectSystem=strict' <<< "$output" && grep -Eq '^ProtectHome=(yes|read-only|tmpfs)$' <<< "$output" && grep -qx 'PrivateTmp=yes' <<< "$output" && grep -qx 'ProtectKernelTunables=yes' <<< "$output" && grep -qx 'ProtectKernelModules=yes' <<< "$output" && grep -qx 'ProtectControlGroups=yes' <<< "$output" && grep -qx 'RestrictSUIDSGID=yes' <<< "$output"
+
+  - id: PST-001
+    semantic_key: persistence.dynamic_linker_preload
+    title: Dynamic linker preload does not introduce unapproved persistence
+    category: filesystem
+    severity: CRITICAL
+    summary: Detect configured libraries in /etc/ld.so.preload for security review.
+    risk: Preloaded libraries execute inside dynamically linked processes and are a powerful persistence mechanism.
+    remediation: Validate every entry, identify its owning package, and remove unauthorized preload configuration.
+    verification: Review /etc/ld.so.preload and the ownership and hashes of referenced libraries.
+    audit: !unsafe |
+      [[ -e /etc/ld.so.preload ]] || { echo "/etc/ld.so.preload is absent."; exit 0; }
+      entries="$(grep -Ev '^[[:space:]]*(#|$)' /etc/ld.so.preload 2>/dev/null || true)"
+      [[ -z "$entries" ]] && { echo "/etc/ld.so.preload contains no active entries."; exit 0; }
+      printf '%s\n' "$entries"; exit 4
+
+  - id: PST-002
+    semantic_key: persistence.systemd_unit_writability
+    title: Systemd unit files are not writable by non-root users
+    category: services
+    severity: CRITICAL
+    summary: Find system service and timer unit files with group or other write permission.
+    risk: Writable units can be changed to execute attacker-controlled commands as root or another service account.
+    remediation: Restore package ownership and permissions after investigating unauthorized changes.
+    verification: Inspect every reported unit and its package provenance.
+    audit: !unsafe |
+      findings="$(find /etc/systemd/system /usr/lib/systemd/system /lib/systemd/system -xdev -type f -perm /0022 -print 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "No writable systemd unit files found."
+
+  - id: PST-003
+    semantic_key: persistence.scheduler_writability
+    title: System cron configuration is not writable by non-root users
+    category: services
+    severity: CRITICAL
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['2.4.1.2', '2.4.1.3', '2.4.1.4', '2.4.1.5', '2.4.1.6', '2.4.1.8']
+    summary: Find cron files and directories that non-root users can modify.
+    risk: Writable scheduled-task configuration can provide recurring privileged execution.
+    remediation: Restore root ownership and restrictive permissions to cron configuration.
+    verification: Inspect every reported path and its package provenance.
+    audit: !unsafe |
+      findings="$(find /etc/crontab /etc/cron.d /etc/cron.hourly /etc/cron.daily /etc/cron.weekly /etc/cron.monthly -xdev \( ! -user root -o -perm /0022 \) -print 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "System cron configuration is root-controlled."
+
+  - id: PST-004
+    semantic_key: persistence.legacy_rc_local
+    title: Legacy rc.local startup persistence is absent or reviewed
+    category: services
+    severity: MEDIUM
+    summary: Report executable rc.local files because they run arbitrary commands during boot outside normal unit management.
+    risk: Legacy startup scripts are often overlooked during service inventory and persistence investigation.
+    remediation: Migrate approved behavior to a managed unit and remove obsolete startup scripts.
+    verification: Review the complete script and its ownership before documenting an exception.
+    audit: !unsafe |
+      found=0
+      for path in /etc/rc.local /etc/rc.d/rc.local; do [[ -x "$path" ]] && { stat -Lc '%a %U:%G %n' "$path"; found=1; }; done
+      [[ $found -eq 0 ]] && { echo "No executable rc.local file found."; exit 0; }
+      exit 4
+
+  - id: PST-005
+    semantic_key: persistence.global_shell_profile_writability
+    title: Global shell startup files are not writable by non-root users
+    category: accounts
+    severity: HIGH
+    summary: Check global login and shell initialization scripts for unsafe ownership or permissions.
+    risk: Modified startup files can execute code whenever administrators or users open a shell.
+    remediation: Restore root ownership and remove group and other write access.
+    verification: Inspect the reported profile scripts and their package ownership.
+    audit: !unsafe |
+      findings="$(find /etc/profile /etc/bash.bashrc /etc/bashrc /etc/profile.d -xdev \( -type f -o -type d \) \( ! -user root -o -perm /0022 \) -print 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "Global shell startup paths are root-controlled."
+
+  - id: PST-006
+    semantic_key: persistence.authorized_keys_integrity
+    title: SSH authorized-key files have safe ownership and permissions
+    category: accounts
+    severity: CRITICAL
+    summary: Inspect user authorized_keys files without collecting key material.
+    risk: A writable authorized_keys file permits persistent remote access as its account.
+    remediation: Restore account ownership and restrict .ssh directories and authorized-key files.
+    verification: Review the reported modes, owners, paths, and SHA-256 file digests.
+    audit: !unsafe |
+      bad=0; found=0
+      while IFS=: read -r user _ uid _ _ home _; do
+        [[ "$uid" =~ ^[0-9]+$ && -d "$home/.ssh" ]] || continue
+        for file in "$home/.ssh/authorized_keys" "$home/.ssh/authorized_keys2"; do
+          [[ -f "$file" ]] || continue; found=1
+          mode="$(stat -Lc '%a' "$file")"; owner="$(stat -Lc '%U' "$file")"; digest="$(sha256sum "$file" | awk '{print $1}')"
+          echo "$mode $owner $file sha256:$digest"
+          [[ "$owner" == "$user" || "$owner" == root ]] || bad=1
+          (( 8#$mode & 0077 )) && bad=1
+        done
+      done < /etc/passwd
+      [[ $found -eq 1 ]] || { echo "No authorized-key files found."; exit 3; }
+      exit "$bad"
+
+  - id: PKG-006
+    semantic_key: packages.repository_signature_verification
+    title: Package repositories require signature verification
+    category: packages
+    severity: CRITICAL
+    summary: Detect repository configuration that explicitly disables package signature verification.
+    risk: Unsigned packages can introduce untrusted code through the normal update channel.
+    remediation: Enable repository and package signature verification and install only approved signing keys.
+    verification: Review effective APT, DNF, and YUM repository configuration.
+    audit: !unsafe |
+      findings="$(grep -RHEi '^[[:space:]]*(gpgcheck|repo_gpgcheck)[[:space:]]*=[[:space:]]*(0|false|no)|trusted[[:space:]]*=[[:space:]]*yes|\[trusted=yes\]' /etc/yum.conf /etc/dnf /etc/yum.repos.d /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "No explicit repository signature bypass found."
+
+  - id: PKG-007
+    semantic_key: packages.repository_configuration_permissions
+    title: Package repository configuration is root-controlled
+    category: packages
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['1.2.1.3', '1.2.1.4', '1.2.1.5', '1.2.1.6', '1.2.1.7', '1.2.1.8', '1.2.1.9']
+    summary: Verify package-manager repository files and trusted-key configuration are not modifiable by non-root users.
+    risk: Writable repository configuration can redirect updates to attacker-controlled packages.
+    remediation: Restore root ownership and remove group and other write permission.
+    verification: Inspect every reported path and validate configured repositories and keys.
+    audit: !unsafe |
+      findings="$(find /etc/apt /etc/yum.repos.d /etc/dnf -xdev \( -type f -o -type d \) \( ! -user root -o -perm /0022 \) -print 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "Package repository configuration is root-controlled."
+
+  - id: PKG-008
+    semantic_key: packages.database_health
+    title: Package database passes its local consistency check
+    category: packages
+    severity: HIGH
+    summary: Run the package manager's read-only database consistency check.
+    risk: A corrupt or inconsistent package database weakens inventory, patching, and integrity verification.
+    remediation: Investigate the reported dependency or database errors before repairing the package state.
+    verification: Repeat dpkg --audit or rpm --verifydb after approved repair.
+    audit: !unsafe |
+      if command -v dpkg >/dev/null 2>&1; then output="$(dpkg --audit 2>&1)"; rc=$?; printf '%s\n' "${output:-dpkg database is consistent}"; [[ $rc -eq 0 && -z "$output" ]]; exit; fi
+      if command -v rpm >/dev/null 2>&1; then rpm --verifydb >/dev/null 2>&1; rc=$?; echo "rpm verifydb rc=$rc"; [[ $rc -eq 0 ]]; exit; fi
+      echo "No supported package database found."; exit 3
+
+  - id: PKG-009
+    semantic_key: packages.unowned_system_executables
+    title: Executables outside package ownership are inventoried
+    category: packages
+    severity: MEDIUM
+    summary: Inventory unpackaged executables in common system-local binary paths for security review.
+    risk: Unmanaged executables can evade package inventory, integrity checks, and vulnerability workflows.
+    remediation: Validate each file, remove unauthorized tools, or bring approved software under managed deployment.
+    verification: Review hashes and provenance for each reported executable.
+    audit: !unsafe |
+      found=0
+      while IFS= read -r file; do
+        owned=1
+        if command -v dpkg-query >/dev/null 2>&1; then dpkg-query -S "$file" >/dev/null 2>&1 && owned=0
+        elif command -v rpm >/dev/null 2>&1; then rpm -qf "$file" >/dev/null 2>&1 && owned=0
+        else echo "No supported package ownership provider."; exit 3; fi
+        [[ $owned -eq 0 ]] || { echo "sha256:$(sha256sum "$file" | awk '{print $1}') $file"; found=1; }
+      done < <(find /usr/local/bin /usr/local/sbin /opt/bin -xdev -type f -perm /0111 -print 2>/dev/null | head -n 250)
+      [[ $found -eq 0 ]] && { echo "No unpackaged executable found in targeted paths."; exit 0; }
+      exit 4
+
+  - id: BOOT-004
+    semantic_key: kernel.module_signature_enforcement
+    title: Kernel module signature enforcement is active
+    category: kernel
+    severity: HIGH
+    summary: Check whether the running kernel rejects unsigned modules.
+    risk: Permitting unsigned kernel modules enables persistent code execution at the highest privilege level.
+    remediation: Enable module signature enforcement through the supported kernel and boot configuration.
+    verification: Inspect /proc/sys/kernel/module_sig_enforce or the module_sig_enforce kernel argument after reboot.
+    audit: !unsafe |
+      if [[ -r /proc/sys/kernel/module_sig_enforce ]]; then value="$(cat /proc/sys/kernel/module_sig_enforce)"; echo "module_sig_enforce=$value"; [[ "$value" == 1 ]]; exit; fi
+      cmdline="$(cat /proc/cmdline)"; echo "$cmdline"; grep -Eq '(^|[[:space:]])module_sig_enforce=1([[:space:]]|$)' <<< "$cmdline"
+
+  - id: BOOT-005
+    semantic_key: kernel.out_of_tree_modules
+    title: Out-of-tree loaded kernel modules are reviewed
+    category: kernel
+    severity: HIGH
+    summary: Inventory loaded modules marked out-of-tree or unsigned by module metadata.
+    risk: Unreviewed third-party modules expand kernel attack surface and may bypass trusted update paths.
+    remediation: Validate vendor, signature, necessity, and update support for each module.
+    verification: Review modinfo signer, sig_id, taint, filename, and package ownership.
+    audit: !unsafe |
+      command -v lsmod >/dev/null 2>&1 && command -v modinfo >/dev/null 2>&1 || { echo "Module tools are unavailable."; exit 3; }
+      found=0
+      while read -r module _; do
+        [[ "$module" == Module ]] && continue
+        info="$(modinfo -F taint "$module" 2>/dev/null || true)"; signer="$(modinfo -F signer "$module" 2>/dev/null || true)"
+        if [[ "$info" == *O* || -z "$signer" ]]; then echo "$module taint=${info:-none} signer=${signer:-none}"; found=1; fi
+      done < <(lsmod)
+      [[ $found -eq 0 ]] && { echo "No unsigned or out-of-tree loaded modules detected."; exit 0; }
+      exit 4
+
+  - id: BOOT-006
+    semantic_key: kernel.kexec_restriction
+    title: Unrestricted kexec loading is disabled
+    category: kernel
+    severity: HIGH
+    summary: Verify unprivileged or unsigned replacement kernels cannot be loaded through kexec.
+    risk: Kexec can bypass parts of the normal trusted boot chain and kernel signature policy.
+    remediation: Enable kexec_load_disabled or signed-image enforcement according to platform support.
+    verification: Inspect relevant kernel sysctls and secure-boot policy.
+    audit: !unsafe |
+      [[ -r /proc/sys/kernel/kexec_load_disabled ]] || { echo "kexec_load_disabled is unavailable."; exit 3; }
+      value="$(cat /proc/sys/kernel/kexec_load_disabled)"; echo "kexec_load_disabled=$value"; [[ "$value" == 1 ]]
+
+  - id: BOOT-007
+    semantic_key: mandatory_access.integrity_measurement_architecture
+    title: Linux integrity measurement is active
+    category: mandatory_access
+    severity: MEDIUM
+    summary: Detect active IMA measurements and report the current measurement count.
+    risk: Without measured-file telemetry, post-boot executable and policy changes are harder to attest.
+    remediation: Evaluate an IMA appraisal or measurement policy compatible with the workload and boot chain.
+    verification: Review the IMA policy and measurement list under securityfs.
+    audit: !unsafe |
+      path=/sys/kernel/security/ima/ascii_runtime_measurements
+      [[ -r "$path" ]] || { echo "IMA runtime measurements are not active."; exit 1; }
+      count="$(wc -l < "$path")"; echo "IMA measurements=$count"; [[ "$count" -gt 0 ]]
+
+  - id: BOOT-008
+    semantic_key: mandatory_access.active_lsm_baseline
+    title: A recognized mandatory access control LSM is active
+    category: mandatory_access
+    severity: HIGH
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['1.3.1.2']
+    summary: Verify SELinux or AppArmor is present in the active Linux Security Module list.
+    risk: Hosts without mandatory access control rely primarily on discretionary permissions after compromise.
+    remediation: Enable and enforce the distribution-supported SELinux or AppArmor policy.
+    verification: Inspect /sys/kernel/security/lsm and the framework enforcement status.
+    audit: !unsafe |
+      [[ -r /sys/kernel/security/lsm ]] || { echo "Active LSM list is unavailable."; exit 3; }
+      value="$(cat /sys/kernel/security/lsm)"; echo "$value"; grep -Eq '(^|,)(selinux|apparmor)(,|$)' <<< "$value"
+
+  - id: BOOT-009
+    semantic_key: kernel.dangerous_boot_arguments
+    title: Kernel command line contains no explicit security bypass
+    category: kernel
+    severity: CRITICAL
+    summary: Detect boot arguments that disable auditing, mandatory access control, IOMMU, signature enforcement, or normal init.
+    risk: Security-bypass boot arguments can silently disable controls before user space starts.
+    remediation: Remove unauthorized arguments from the bootloader configuration and reboot through change control.
+    verification: Inspect /proc/cmdline after reboot and validate the bootloader source configuration.
+    audit: !unsafe |
+      value="$(cat /proc/cmdline)"; echo "$value"
+      findings="$(grep -Eo '(^|[[:space:]])(audit=0|selinux=0|enforcing=0|apparmor=0|module_sig_enforce=0|iommu=off|init=/[^[:space:]]+)' <<< "$value" || true)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+
+  - id: BOOT-010
+    semantic_key: kernel.unprivileged_bpf_restricted
+    title: Unprivileged BPF is restricted
+    category: kernel
+    severity: HIGH
+    summary: Verify non-root users cannot load unrestricted BPF programs.
+    risk: Unprivileged BPF has historically exposed high-impact kernel attack surface.
+    remediation: Set the persistent distribution-supported unprivileged_bpf_disabled policy after compatibility testing.
+    verification: Read kernel.unprivileged_bpf_disabled and confirm the effective value is 1 or 2.
+    audit: !unsafe |
+      [[ -r /proc/sys/kernel/unprivileged_bpf_disabled ]] || { echo "unprivileged_bpf_disabled is unavailable."; exit 3; }
+      value="$(cat /proc/sys/kernel/unprivileged_bpf_disabled)"; echo "unprivileged_bpf_disabled=$value"; [[ "$value" == 1 || "$value" == 2 ]]
+
+  - id: NET-010
+    semantic_key: network.promiscuous_interfaces
+    title: Network interfaces are not unexpectedly promiscuous
+    category: network
+    severity: HIGH
+    summary: Detect interfaces whose active flags include promiscuous mode.
+    risk: Promiscuous interfaces may indicate packet capture, bridging, monitoring, or malicious traffic collection.
+    remediation: Validate monitoring and virtualization use, then disable unauthorized promiscuous mode.
+    verification: Review interface purpose, owner, namespace, and active capture processes.
+    audit: !unsafe |
+      command -v ip >/dev/null 2>&1 || { echo "iproute2 is unavailable."; exit 3; }
+      findings="$(ip -details link show 2>/dev/null | awk '/^[0-9]+:/ {line=$0} /PROMISC/ {print line}')"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 4; }
+      echo "No promiscuous interface detected."
+
+  - id: NET-011
+    semantic_key: network.tunnel_interface_inventory
+    title: Tunnel and overlay interfaces are inventoried
+    category: network
+    severity: MEDIUM
+    summary: Inventory common VPN, tunnel, bridge, and overlay interfaces for review.
+    risk: Unauthorized tunnels can bypass expected routing, inspection, and segmentation controls.
+    remediation: Validate each interface against the host role and approved network architecture.
+    verification: Correlate reported interfaces with services, namespaces, and configuration management.
+    audit: !unsafe |
+      command -v ip >/dev/null 2>&1 || { echo "iproute2 is unavailable."; exit 3; }
+      findings="$(ip -o link show 2>/dev/null | awk -F': ' '$2 ~ /^(tun|tap|wg|tailscale|zt|gre|gretap|sit|ip6tnl|vxlan|cni|flannel|docker|br-)/ {print}')"
+      [[ -z "$findings" ]] && { echo "No targeted tunnel or overlay interface found."; exit 0; }
+      printf '%s\n' "$findings"; exit 4
+
+  - id: NET-012
+    semantic_key: network.listener_process_attribution
+    title: Listening sockets are attributed to processes
+    category: network
+    severity: MEDIUM
+    summary: Record non-loopback listeners with protocol, process, and user context.
+    risk: Unattributed listeners make it harder to distinguish approved services from unexpected exposure.
+    remediation: Validate every listener and disable or bind unauthorized services to a restricted interface.
+    verification: Correlate socket output with service units, executables, and package ownership.
+    audit: !unsafe |
+      command -v ss >/dev/null 2>&1 || { echo "ss is unavailable."; exit 3; }
+      findings="$(ss -H -lntup 2>/dev/null | awk '$5 !~ /^(127\.0\.0\.1|\[::1\]):/ {print}' | head -n 250)"
+      [[ -n "$findings" ]] || { echo "No non-loopback listener found."; exit 0; }
+      printf '%s\n' "$findings"; exit 4
+
+  - id: NET-013
+    semantic_key: network.container_daemon_tcp_exposure
+    title: Container daemon API is not exposed on an unencrypted TCP socket
+    category: network
+    severity: CRITICAL
+    summary: Detect Docker or Podman API listeners on common unauthenticated TCP ports.
+    risk: Exposed container management APIs can provide immediate host-level code execution.
+    remediation: Remove TCP exposure or require mutually authenticated TLS on a tightly restricted management network.
+    verification: Review listeners and daemon host configuration.
+    audit: !unsafe |
+      command -v ss >/dev/null 2>&1 || { echo "ss is unavailable."; exit 3; }
+      findings="$(ss -H -lntp 2>/dev/null | awk '$4 ~ /:(2375|8080)$/ {print}')"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "No common unencrypted container API listener detected."
+
+  - id: ACC-008
+    semantic_key: accounts.sudoers_permissions
+    title: Sudo policy files are root-controlled
+    category: accounts
+    severity: CRITICAL
+    summary: Verify sudoers files are owned by root and cannot be modified by group or other users.
+    risk: Writable sudo policy enables direct privilege escalation.
+    remediation: Restore root ownership and mode 0440 or a stricter approved mode.
+    verification: Inspect every reported path and run visudo syntax validation.
+    audit: !unsafe |
+      [[ -e /etc/sudoers || -d /etc/sudoers.d ]] || { echo "Sudo policy is not installed."; exit 3; }
+      findings="$(find /etc/sudoers /etc/sudoers.d -xdev -type f \( ! -user root -o -perm /0022 -o -perm /0007 \) -print 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "Sudo policy files are root-controlled."
+
+  - id: ACC-009
+    semantic_key: accounts.pam_configuration_permissions
+    title: PAM configuration is root-controlled
+    category: accounts
+    severity: CRITICAL
+    summary: Verify PAM configuration files are owned by root and not writable by group or other users.
+    risk: Modified authentication policy can capture credentials or bypass login restrictions.
+    remediation: Restore package content, root ownership, and restrictive permissions after investigation.
+    verification: Inspect reported files and validate them against package or configuration-management sources.
+    audit: !unsafe |
+      [[ -d /etc/pam.d ]] || { echo "PAM configuration is not present."; exit 3; }
+      findings="$(find /etc/pam.d -xdev \( -type f -o -type d \) \( ! -user root -o -perm /0022 \) -print 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "PAM configuration is root-controlled."
+
+  - id: ACC-010
+    semantic_key: accounts.service_account_password_lock
+    title: Noninteractive service accounts have locked passwords
+    category: accounts
+    severity: HIGH
+    summary: Detect low-UID accounts with a noninteractive shell but an unlocked local password field.
+    risk: An unlocked service account password expands credential-based attack paths.
+    remediation: Lock local passwords for service identities after validating application authentication requirements.
+    verification: Review passwd and shadow state for every reported account.
+    audit: !unsafe |
+      [[ -r /etc/shadow ]] || { echo "/etc/shadow is unreadable."; exit 2; }
+      uid_min="$(awk '/^[[:space:]]*UID_MIN[[:space:]]+/ {print $2}' /etc/login.defs 2>/dev/null | tail -1)"; uid_min="${uid_min:-1000}"
+      findings="$(join -t: -1 1 -2 1 <(sort -t: -k1,1 /etc/passwd) <(sort -t: -k1,1 /etc/shadow) | awk -F: -v min="$uid_min" '$3<min && $1!="root" && $7~/nologin|false/ && $8!~/^(!|\*)/ {print $1 " uid=" $3 " shell=" $7}')"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "Noninteractive service-account passwords are locked."
+
+  - id: ACC-011
+    semantic_key: accounts.privileged_group_membership
+    title: Privileged local group membership is inventoried
+    category: accounts
+    severity: HIGH
+    summary: Inventory members of groups that commonly grant root-equivalent host or container control.
+    risk: Membership in sudo, wheel, docker, lxd, libvirt, or disk can bypass ordinary user restrictions.
+    remediation: Remove stale membership and document the least-privilege need for every remaining principal.
+    verification: Review direct and primary group membership against identity governance records.
+    audit: !unsafe |
+      findings="$(getent group sudo wheel admin docker lxd libvirt disk 2>/dev/null | awk -F: '$4!="" {print $1 ":" $4}')"
+      [[ -z "$findings" ]] && { echo "No explicit members in targeted privileged groups."; exit 0; }
+      printf '%s\n' "$findings"; exit 4
+
+  - id: FS-011
+    semantic_key: filesystem.private_key_permissions
+    title: System private keys are not accessible to other users
+    category: filesystem
+    severity: CRITICAL
+    summary: Check private-key files in standard system locations for group or other access.
+    risk: Exposed TLS, SSH, VPN, or application private keys permit impersonation and decryption.
+    remediation: Rotate exposed keys and restrict ownership and permissions to the required service identity.
+    verification: Inspect each reported path without copying key material.
+    audit: !unsafe |
+      findings="$(find /etc/ssl/private /etc/ssh /etc/pki/tls/private /etc/ipsec.d/private -xdev -type f \( -name '*.key' -o -name '*_key' -o -name 'ssh_host_*_key' \) -perm /0077 -printf '%m %u:%g %p\n' 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "No broadly accessible private key found in targeted locations."
+
+  - id: FS-012
+    semantic_key: filesystem.certificate_expiry
+    title: System service certificates are not near expiry
+    category: filesystem
+    severity: HIGH
+    summary: Detect PEM certificates in common service locations that expire within 30 days.
+    risk: Expired certificates cause outages and encourage unsafe TLS bypasses during emergency recovery.
+    remediation: Renew and deploy the certificate through the approved certificate lifecycle.
+    verification: Confirm subject, issuer, usage, deployment location, and replacement validity.
+    audit: !unsafe |
+      command -v openssl >/dev/null 2>&1 || { echo "openssl is unavailable."; exit 3; }
+      found=0; bad=0
+      while IFS= read -r file; do
+        openssl x509 -in "$file" -noout >/dev/null 2>&1 || continue; found=1
+        expiry="$(openssl x509 -in "$file" -noout -enddate 2>/dev/null)"
+        if ! openssl x509 -in "$file" -noout -checkend 2592000 >/dev/null 2>&1; then echo "$file $expiry"; bad=1; fi
+      done < <(find /etc/ssl/private /etc/pki/tls/private /etc/nginx /etc/apache2 /etc/httpd /etc/haproxy -xdev -type f \( -name '*.pem' -o -name '*.crt' \) -print 2>/dev/null | head -n 500)
+      [[ $found -eq 1 ]] || { echo "No PEM service certificate found."; exit 3; }
+      [[ $bad -eq 0 ]] && echo "Targeted certificates remain valid for at least 30 days."
+      exit "$bad"
+
+  - id: AUD-005
+    semantic_key: audit.kernel_loss_health
+    title: Kernel audit queue reports no lost events
+    category: audit
+    severity: CRITICAL
+    summary: Inspect audit subsystem status for lost events and an overflowing backlog.
+    risk: Lost audit events create evidence gaps precisely when system activity is high or hostile.
+    remediation: Investigate audit load and errors, then tune backlog and rate settings with capacity testing.
+    verification: Run auditctl -s and monitor lost and backlog values over time.
+    audit: !unsafe |
+      command -v auditctl >/dev/null 2>&1 || { echo "auditctl is unavailable."; exit 3; }
+      output="$(auditctl -s 2>&1)"; rc=$?; printf '%s\n' "$output"; [[ $rc -eq 0 ]] || exit 2
+      lost="$(awk '$1=="lost" {print $2}' <<< "$output")"; backlog="$(awk '$1=="backlog" {print $2}' <<< "$output")"; limit="$(awk '$1=="backlog_limit" {print $2}' <<< "$output")"
+      [[ "${lost:-1}" == 0 && "${backlog:-1}" =~ ^[0-9]+$ && "${limit:-0}" =~ ^[0-9]+$ && "$backlog" -lt "$limit" ]]
+
+  - id: AUD-006
+    semantic_key: audit.rule_file_permissions
+    title: Audit rule files are root-controlled
+    category: audit
+    severity: CRITICAL
+    superseded_by: [cis_debian13]
+    overlap_control_ids: ['6.2.4.5', '6.2.4.6', '6.2.4.7']
+    summary: Verify persistent audit configuration cannot be changed by non-root users.
+    risk: Writable audit rules permit an attacker to suppress future security evidence.
+    remediation: Restore root ownership and remove group and other write permissions.
+    verification: Inspect every reported rules file and reload only after syntax validation.
+    audit: !unsafe |
+      [[ -d /etc/audit ]] || { echo "Audit configuration is not installed."; exit 3; }
+      findings="$(find /etc/audit -xdev \( -type f -o -type d \) \( ! -user root -o -perm /0022 \) -print 2>/dev/null | head -n 250)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "Audit configuration is root-controlled."
+
+  - id: LOG-005
+    semantic_key: logging.journal_loss_indicators
+    title: Journal contains no recent rate-limit or message-loss indicators
+    category: logging
+    severity: HIGH
+    summary: Search the current boot journal for explicit dropped-message and rate-limit suppression events.
+    risk: Log loss hides activity and can make incident timelines incomplete.
+    remediation: Investigate noisy sources and tune journald capacity, storage, and rate limits safely.
+    verification: Recheck the journal after tuning and under representative peak load.
+    audit: !unsafe |
+      command -v journalctl >/dev/null 2>&1 || { echo "journalctl is unavailable."; exit 3; }
+      findings="$(journalctl -b --no-pager 2>/dev/null | grep -Ei 'suppressed [0-9]+ messages|messages? dropped|journal.*(missed|corrupt)' | tail -n 100 || true)"
+      [[ -z "$findings" ]] || { printf '%s\n' "$findings"; exit 1; }
+      echo "No recent journal loss indicator found."
+
+  - id: SVC-005
+    semantic_key: services.container_socket_permissions
+    title: Container engine sockets are not broadly accessible
+    category: services
+    severity: CRITICAL
+    summary: Verify Docker, Podman, and containerd control sockets are not accessible to other users.
+    risk: Write access to a container engine socket is commonly equivalent to root access on the host.
+    remediation: Restrict socket ownership and mode and minimize membership in the owning group.
+    verification: Inspect each socket and review all members of its owning group.
+    audit: !unsafe |
+      found=0; bad=0
+      for path in /var/run/docker.sock /run/docker.sock /run/podman/podman.sock /run/containerd/containerd.sock; do
+        [[ -S "$path" ]] || continue; found=1; mode="$(stat -Lc '%a' "$path")"; echo "$mode $(stat -Lc '%U:%G' "$path") $path"
+        (( 8#$mode & 0007 )) && bad=1
+      done
+      [[ $found -eq 1 ]] || { echo "No targeted container engine socket found."; exit 3; }
+      exit "$bad"
+
+  - id: SVC-006
+    semantic_key: services.privileged_container_inventory
+    title: Privileged and host-integrated containers are inventoried
+    category: services
+    severity: CRITICAL
+    summary: Inventory running containers with privileged mode, host PID/network namespace, or broad host mounts.
+    risk: Highly privileged containers can provide a direct path to host compromise.
+    remediation: Remove unnecessary privileges and replace broad host integration with least-privilege capabilities and mounts.
+    verification: Review each container against its deployment specification and approved exception.
+    audit: !unsafe |
+      engine=""; command -v docker >/dev/null 2>&1 && engine=docker; [[ -n "$engine" ]] || { command -v podman >/dev/null 2>&1 && engine=podman; }
+      [[ -n "$engine" ]] || { echo "No supported container CLI found."; exit 3; }
+      ids="$($engine ps -q 2>/dev/null)"; [[ -n "$ids" ]] || { echo "No running containers found."; exit 0; }
+      found=0
+      while read -r id; do
+        output="$($engine inspect --format '{% raw %}{{.Name}} privileged={{.HostConfig.Privileged}} pid={{.HostConfig.PidMode}} network={{.HostConfig.NetworkMode}} binds={{json .HostConfig.Binds}}{% endraw %}' "$id" 2>/dev/null || true)"
+        if grep -Eq 'privileged=true|pid=host|network=host|binds=.*:/(|:)' <<< "$output"; then echo "$output"; found=1; fi
+      done <<< "$ids"
+      [[ $found -eq 0 ]] && { echo "No targeted high-risk running container configuration found."; exit 0; }
+      exit 4
