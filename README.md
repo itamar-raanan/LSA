@@ -1,30 +1,104 @@
 # Linux Security Auditor
 
-Linux Security Auditor (LSA) is an ingestion-first Linux security and compliance platform. Customer-controlled offline scans or outbound-only agents produce normalized evidence; LSA validates it, maintains a persistent profile for each host, and presents fleet-wide risk, compliance, findings, and history from one console.
+## 1. Platform overview
 
-LSA does **not** SSH to servers, store privileged server credentials, or execute scans remotely. Managed agents initiate every connection and execute only locally installed, versioned controls.
+Linux Security Auditor (LSA) is an ingestion-first Linux security and compliance platform. It turns read-only host observations into a persistent, fleet-wide view of security posture, compliance, findings, evidence, and change over time.
 
-## Current v0.1 foundation
+LSA supports two collection models:
 
-- FastAPI ingestion and fleet API
-- PostgreSQL-compatible tenant, host, report, finding, token, and audit models
-- Online JSON and offline ZIP report ingestion
-- Admin-managed host enrollment, revocable host-scoped tokens, and machine-identity binding
-- Outbound-only unified Linux agent with one-time enrollment and local Ed25519 identity
-- Single-group agent assignment, immutable policy versions and restore history, heartbeat, per-control audit scope, and signed on-demand audits
-- Monitor and staged Remediation policy templates with server and agent enforcement locked to audit-only
-- Complete manifest, checksum, and optional Ed25519 signature verification for offline bundles
-- New, persistent, and resolved finding comparison
-- React fleet dashboard, enrollment, token lifecycle management, host profiles, report history, comparisons, findings, and upload
-- Deduplicated 358-control Debian 13 audit surface: 334 benchmark controls plus 24 non-overlapping portable Linux checks, with no host remediation
-- A 62-control portable Linux audit for Debian 12, Ubuntu 22.04/24.04, and RHEL-family 8/9
-- Versioned report JSON Schema
-- Ansible report generation and submission role
-- Offline HTML, CSV, JSON, checksum, manifest, and ZIP generation
-- Admin-managed signing-key registration, host scoping, expiry, revocation, and provenance history
-- Immutable original-evidence vault with object lock, retention enforcement, verified downloads, and deletion audit events
-- Production-style Docker Compose stack with PostgreSQL, a MinIO evidence vault, automatic migrations, health checks, and a same-origin web gateway
-- Backend and frontend tests plus GitHub Actions CI
+- **Offline reports** are produced by a customer-controlled Ansible scanner. They can stay inside an isolated environment or be transferred to LSA as signed report bundles.
+- **Managed agents** run on Linux hosts, collect the same supported evidence, and communicate with LSA over outbound HTTPS.
+
+Both models feed the same validation, normalization, evidence, and finding pipeline. This gives administrators one console for hosts, groups, policies, control coverage, findings, report history, credentials, and cryptographic provenance regardless of how the data was collected.
+
+```mermaid
+flowchart LR
+    O["Offline Ansible scanner"] -->|"Signed ZIP or JSON report"| I["LSA ingestion pipeline"]
+    A["Managed Linux agent"] -->|"Outbound HTTPS on 8443"| I
+    I --> V["Validate, verify, and normalize"]
+    V --> D[("PostgreSQL inventory and findings")]
+    V --> E[("Immutable evidence vault")]
+    D --> C["Web console and API"]
+    E --> C
+```
+
+LSA does **not** SSH to managed servers, store their privileged credentials, or initiate connections to them. Scans execute inside the customer's environment, and managed agents initiate every platform connection. Remediation is represented in the policy model but is currently locked to audit-only operation on both the server and client.
+
+The current control surface includes:
+
+- A deduplicated 358-control Debian 13 audit: 334 benchmark controls plus 24 non-overlapping portable Linux checks.
+- A 62-control portable Linux audit for Debian 12, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9.
+- Deployment and benchmark profiles that determine which applicable controls are evaluated.
+- New, persistent, and resolved finding comparison across report history.
+
+## 2. Server side and architecture
+
+The server is delivered as a Docker Compose stack. Only the TLS gateway is published; the application and data services remain on the internal Docker network.
+
+| Component | Responsibility | Exposure |
+| --- | --- | --- |
+| **TLS gateway and web console** | Terminates HTTPS, serves the React console, and proxies API, documentation, and health requests | TCP 8443 only |
+| **FastAPI service** | Authentication, fleet management, groups, policies, enrollment, ingestion, validation, findings, and audit events | Internal network |
+| **PostgreSQL** | Tenants, users, sessions, hosts, groups, policies, reports, findings, credentials, tasks, and audit metadata | Internal network |
+| **MinIO evidence vault** | Retention-enforced storage of original report artifacts with integrity verification | Internal network |
+| **Alembic migrations** | Applies versioned database changes before the API starts | Startup job |
+
+### Server data flow
+
+1. The gateway accepts a request over HTTPS on port 8443 and routes it to the console or API.
+2. The API authenticates the user, offline-scanner token, or agent identity and applies tenant and resource authorization.
+3. Report ingestion validates identity binding, schema, size, safe archive paths, checksums, duplicate submissions, and optional Ed25519 signatures.
+4. The original artifact is preserved in the evidence vault while normalized hosts, reports, controls, and findings are stored in PostgreSQL.
+5. The console reads those normalized projections to present fleet status, findings, compliance, evidence history, groups, and policies.
+
+### Identity and security foundation
+
+- Local bootstrap authentication plus OIDC presets for Microsoft Entra ID, Okta, Google Workspace, AD FS, and generic providers.
+- RADIUS authentication and administrator-created local users for environments that require both external and break-glass access.
+- Administrator, analyst, and auditor roles with server-side authorization.
+- Database-backed sessions, security audit events, encrypted secrets, and encrypted TLS private keys.
+- Host-scoped, expiring, immediately revocable ingestion tokens.
+- One-time group enrollment tokens and host-generated Ed25519 identities for managed agents.
+- Administrator-managed signing keys with host scope, expiry, revocation, and provenance history.
+- Immutable policy versions and restore history; restoring an earlier policy publishes a new version.
+- Original-evidence retention, verified download, and deletion audit events.
+
+See [the architecture document](docs/architecture.md) for trust boundaries and design decisions, [the Docker deployment guide](docs/docker-deployment.md) for production operations, and [the evidence-vault guide](docs/evidence-vault.md) for integrity and retention behavior.
+
+## 3. Client side: offline reports and managed agents
+
+The offline scanner and managed agent share normalized contracts and control logic, but they serve different operating environments.
+
+| | Offline report | Managed agent |
+| --- | --- | --- |
+| **Runtime** | Ansible from a customer-controlled controller | Installed service on each Linux host |
+| **Connectivity** | None required for scanning; upload is optional | Outbound HTTPS to LSA on port 8443 |
+| **Platform connection** | Signed ZIP transfer or token-authenticated JSON/ZIP upload | Enrolled Ed25519 machine identity |
+| **Policy source** | Scanner inventory and variables | Group policy retrieved from LSA |
+| **Reporting** | HTML, CSV, JSON, checksum, manifest, and ZIP | Signed heartbeat, policy state, audit task, and report exchange |
+| **Best fit** | Isolated, air-gapped, approval-driven, or occasional audits | Continuous fleet visibility and centrally managed audit scope |
+
+### Offline reports
+
+The Ansible scanner collects security observations without changing host configuration. Each enrolled host has a persistent platform UUID and may use a host-scoped ingestion token. For stronger provenance, the controller can sign bundles with an Ed25519 private key while LSA stores only the registered public key.
+
+Delivery modes are:
+
+- `offline` — build and retain the report bundle without contacting LSA.
+- `upload` — submit the report to LSA.
+- `upload_and_keep` — submit the report and retain the local artifact; this is the production default.
+
+The offline workflow is appropriate when an agent cannot be installed, the target network has no route to the platform, or report transfer requires an explicit approval step.
+
+### Managed agents
+
+The unified Linux agent is available as Debian/Ubuntu (`.deb`), RHEL-family (`.rpm`), and universal (`.tar.gz`) packages downloadable from the console. Package installation stages the agent without starting it. A one-time enrollment command then creates a root-only configuration, generates the host signing key, assigns the agent to exactly one group, and enables its systemd service.
+
+Every group has an effective policy. Policies can select controls by category and set their intended mode, allowing different fleets to have different audit scopes. Publishing a change creates an immutable version. The current safety lock permits audit execution only; write/remediation behavior remains disabled.
+
+Agents poll the platform rather than accepting inbound connections. Their signed heartbeats drive online, stale, and offline status. On-demand audits are persisted, allow-listed tasks consumed on the next poll—not remote shell commands.
+
+See [the agent guide](agent/README.md) for package installation, enrollment, certificate trust, and service operation, and [the report-format guide](docs/report-format.md) for normalized and signed report contracts.
 
 ## Quick start
 
@@ -36,9 +110,9 @@ cp deploy/.env.example deploy/.env
 make up
 ```
 
-Open `https://localhost:8443` and sign in with the bootstrap email and password from `deploy/.env`. The first boot uses a self-signed localhost certificate. The API documentation is available at `https://localhost:8443/docs`.
+Open `https://localhost:8443` and sign in with the bootstrap email and password from `deploy/.env`. The first boot uses a self-signed localhost certificate. API documentation is available at `https://localhost:8443/docs`.
 
-The database and immutable evidence objects are stored in named Docker volumes. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, MinIO, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
+The database and evidence objects are stored in named Docker volumes. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, MinIO, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
 
 For direct local development and testing, install Python 3.12+ and Node.js 22+:
 
@@ -50,46 +124,17 @@ make test
 
 The seeded development ingestion token is `lsa_ingest_demo_secret`. It is intentionally local-only and must never be used in production.
 
-See [docs/docker-deployment.md](docs/docker-deployment.md) for production exposure, TLS, backup, restore, upgrades, and troubleshooting.
+## Offline scanner workflow
 
-See [docs/evidence-vault.md](docs/evidence-vault.md) for object storage, integrity verification, retention, and deletion behavior.
-
-## Enroll a host
+### Enroll a host
 
 Sign in as an administrator, open **Linux hosts**, and choose **Enroll host**. LSA creates a persistent host UUID and a scoped ingestion token. The raw token is shown once; store it in a mode-0600 file on the Ansible controller and assign the displayed host UUID to `lsa_host_id` in inventory.
 
-The first accepted report binds that platform identity to the host's hashed machine ID. Later reports with a different machine ID are rejected. Tokens can also be issued, listed, and revoked through the `/api/v1/ingestion-tokens` endpoints.
+The first accepted report binds that platform identity to the host's hashed machine ID. Later reports with a different machine ID are rejected. Administrators can issue, list, and revoke credentials from **Ingestion tokens** or through the `/api/v1/ingestion-tokens` endpoints. Prefer host-scoped tokens with an expiry.
 
-Administrators can manage scanner credentials from **Ingestion tokens**. Prefer host-scoped tokens with an expiry. Revocation is immediate, while accepted reports and host history remain immutable.
+For cryptographic provenance, generate an Ed25519 key with `scanner/scripts/generate_signing_key.py`, register only its public key under **Signing keys**, and add the returned key ID and private-key path to the scanner variables.
 
-For cryptographic report provenance, generate an Ed25519 key on the controller with `scanner/scripts/generate_signing_key.py`, register only its public key under **Signing keys**, and add the returned key ID plus private-key path to the scanner variables. See [docs/report-format.md](docs/report-format.md) for the complete signed-bundle workflow.
-
-## Enroll a managed agent
-
-Open **Agents** in the primary console navigation, choose **Install agent**, and download the versioned Debian/Ubuntu package, RHEL-family package, or universal archive. The console displays the SHA-256 and package-specific installation command for the current platform URL. Assign a policy to a group and create a short-lived one-time enrollment token, then transfer the package to the host. For example, on Debian or Ubuntu:
-
-```bash
-sudo apt install ./lsa-agent_0.3.0_all.deb
-sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
-```
-
-Package installation stages the runtime and audit controls under `/opt/lsa-agent` without starting the service. The enrollment command creates an isolated Python environment, writes the root-only configuration, enrolls the host, and enables the systemd service. The agent generates its signing key on the host, polls over outbound HTTPS on port 8443, and runs the same scanner roles used by offline mode. See [agent/README.md](agent/README.md) for all package formats and trust details.
-
-The **Agents** workspace opens on **All hosts**. Select a group from the left fleet rail to see only its hosts and its effective policy. Every group can apply a different policy, create a group-owned policy, or copy a shared policy before changing categorized control overrides. Publishing policy changes creates a new immutable version; an earlier snapshot can be restored only by publishing another new version.
-
-Fleet status is derived from signed outbound heartbeats: online within five minutes, stale within 24 hours, then offline. Select one or more active agents to request an audit, move them to another group, or revoke them. An on-demand audit is a persisted, allow-listed task—not a remote shell command—and is consumed by the agent on its next poll.
-
-## Submit a JSON report
-
-```bash
-curl --fail-with-body \
-  -H "Authorization: Bearer ${LSA_INGEST_TOKEN}" \
-  -H "Content-Type: application/json" \
-  --data-binary @report.json \
-  https://localhost:8443/api/v1/ingest/reports
-```
-
-## Run the scanner
+### Run the scanner
 
 Copy `scanner/inventory.example.ini`, assign each host its platform UUID, then run:
 
@@ -99,20 +144,37 @@ ansible-playbook -i inventory.ini playbooks/scan.yml \
   -e lsa_delivery_mode=upload_and_keep
 ```
 
-Delivery modes are `offline`, `upload`, and `upload_and_keep`. The last mode is the production default because it preserves a local artifact even after successful submission.
+Select an LSA deployment profile (`production_server`, `minimal_server`, `router`, or `container`) or a direct benchmark profile (`level1_server`, `level2_server`, `level1_workstation`, or `level2_workstation`) with `lsa_profile`.
 
-The scanner performs read-only checks on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux, or AlmaLinux 8/9. Debian 13 combines the complete 334-control benchmark with 24 portable controls that are not already covered by the benchmark. The other supported systems run the 62-control portable catalog. On Debian 13, 38 semantic overlaps are explicitly suppressed so the same posture is never checked or reported twice. Select an LSA deployment profile (`production_server`, `minimal_server`, `router`, or `container`) or a direct benchmark profile (`level1_server`, `level2_server`, `level1_workstation`, or `level2_workstation`) with `lsa_profile`.
+### Submit a JSON report directly
 
-GitHub Actions also executes the complete scanner inside an official Debian 13 container, validates the normalized report, verifies the portable bundle, and ingests it through the API.
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer ${LSA_INGEST_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data-binary @report.json \
+  https://localhost:8443/api/v1/ingest/reports
+```
+
+## Managed agent workflow
+
+Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
+
+```bash
+sudo apt install ./lsa-agent_0.3.0_all.deb
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
+```
+
+The **Agents** workspace opens on **All hosts**. Select a group in the left fleet rail to view its hosts and effective policy. From there, administrators can publish categorized control overrides, request an audit, move agents to another group, or revoke them.
 
 ## Repository map
 
-- `apps/api` — API, data model, ingestion, migrations, tests
+- `apps/api` — API, data model, ingestion, migrations, and tests
 - `apps/web` — React fleet console
-- `scanner` — Ansible scanner, report builder, submission flow
-- `agent` — outbound Linux agent runtime and systemd service
+- `scanner` — Ansible scanner, report builder, and submission flow
+- `agent` — outbound Linux agent runtime, packages, and systemd service
 - `packages/contracts` — versioned machine-readable contracts
-- `deploy` — local deployment composition
-- `docs` — architecture and report-format documentation
+- `deploy` — Docker Compose deployment
+- `docs` — architecture, deployment, evidence, and report-format documentation
 
-See [docs/architecture.md](docs/architecture.md) for trust boundaries and design decisions.
+GitHub Actions runs backend and frontend tests and executes the complete scanner inside an official Debian 13 container. It validates the normalized report, verifies the portable bundle, and ingests it through the API.
