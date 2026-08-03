@@ -47,14 +47,14 @@ export function FindingsPage() {
     {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : <>
       <section aria-label="Control categories">
         <div className="mb-4 flex items-end justify-between gap-4"><div><p className="section-label">Control categories</p><p className="mt-2 text-xs text-stone-600">Select a category to reveal its current findings.</p></div><p className="font-mono text-[10px] uppercase tracking-[.12em] text-stone-600">{data?.length ?? 0} open total</p></div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {categories.map((item) => {
             const findings = (data ?? []).filter((finding) => finding.category === item.id)
             const critical = findings.filter((finding) => finding.severity === 'critical').length
             const selected = category === item.id
             return <button key={item.id} className={`category-tile ${selected ? 'category-tile-active' : ''}`} aria-pressed={selected} onClick={() => { setCategory(selected ? null : item.id); setExpanded(null) }}>
-              <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium capitalize text-stone-200">{item.name}</p><p className="mt-2 text-left text-xs leading-5 text-stone-600">{item.detail}</p></div><span className="font-mono text-xl text-stone-300">{findings.length}</span></div>
-              <div className="mt-5 flex items-center justify-between border-t border-stone-800 pt-3 font-mono text-[9px] uppercase tracking-[.1em] text-stone-700"><span>Open findings</span><span className={critical ? 'text-rose-400' : ''}>{critical} critical</span></div>
+              <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium capitalize text-stone-200">{item.name}</p><p className="mt-1.5 line-clamp-2 text-left text-[11px] leading-[1.55] text-stone-600">{item.detail}</p></div><span className="font-mono text-2xl tracking-[-.06em] text-stone-300">{findings.length}</span></div>
+              <div className="mt-4 flex items-center justify-between border-t border-white/[.06] pt-3 font-mono text-[8px] uppercase tracking-[.1em] text-stone-700"><span>{selected ? 'Selected' : 'Open findings'}</span><span className={critical ? 'text-rose-400' : ''}>{critical} critical</span></div>
             </button>
           })}
         </div>

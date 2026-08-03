@@ -25,7 +25,7 @@ export function SettingsLayout() {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-10">
-      <aside className="lg:sticky lg:top-24 lg:self-start">
+      <aside className="settings-rail lg:sticky lg:top-24 lg:self-start">
         <div className="mb-4 px-2">
           <p className="section-label">Administration</p>
           <p className="mt-2 text-xs leading-5 text-stone-600">Identity, trust, and platform policy.</p>

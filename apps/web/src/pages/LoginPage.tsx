@@ -53,8 +53,8 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-[100dvh] bg-[#111512] text-stone-100 lg:grid-cols-[1.1fr_0.9fr]">
-      <section className="relative hidden overflow-hidden border-r border-stone-800 p-12 lg:flex lg:flex-col">
+    <main className="grid min-h-[100dvh] bg-[#0c100d] text-stone-100 lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="login-aside relative hidden overflow-hidden border-r border-white/[.06] p-12 lg:flex lg:flex-col">
         <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(113,124,115,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(113,124,115,.08)_1px,transparent_1px)] [background-size:56px_56px]" />
         <div className="relative"><BrandMark /></div>
         <div className="relative mt-auto max-w-[660px] pb-10">
@@ -70,7 +70,7 @@ export function LoginPage() {
       </section>
 
       <section className="flex items-center justify-center px-5 py-12 sm:px-10">
-        <div className="w-full max-w-[420px]">
+        <div className="login-form-shell w-full max-w-[470px]">
           <div className="mb-12 lg:hidden"><BrandMark /></div>
           <div className="mb-8 grid size-11 place-items-center rounded-2xl border border-stone-700 bg-stone-900 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]"><ShieldCheck size={22} weight="duotone" /></div>
           <h2 className="text-3xl font-medium tracking-[-0.045em]">Access the console</h2>

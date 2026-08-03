@@ -27,6 +27,8 @@ export function DashboardPage() {
   if (!data || data.total_hosts === 0) return <><PageHeader eyebrow="Fleet posture" title="Security overview" detail="Current security and compliance state." /><EmptyState title="No hosts have reported yet" detail="Run the scanner in upload mode or import an offline report bundle to establish the fleet baseline." /></>
 
   const maxFindings = Math.max(...severityRows.map(({ key }) => data.finding_counts[key] ?? 0), 1)
+  const postureLabel = data.overall_security_score >= 90 ? 'Strong posture' : data.overall_security_score >= 75 ? 'Attention required' : 'Elevated exposure'
+  const postureTone = data.overall_security_score >= 90 ? 'text-emerald-300' : data.overall_security_score >= 75 ? 'text-amber-300' : 'text-rose-300'
   return (
     <div className="page-reveal">
       <PageHeader
@@ -38,10 +40,10 @@ export function DashboardPage() {
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="panel relative overflow-hidden p-6 md:p-8">
-          <div className="absolute right-0 top-0 h-full w-1/2 opacity-20 [background-image:radial-gradient(circle_at_80%_20%,rgba(74,155,112,.5),transparent_55%)]" />
+          <div className="absolute -right-20 -top-24 size-80 rounded-full border border-emerald-800/10 opacity-50 [background:radial-gradient(circle,rgba(76,145,103,.16),transparent_68%)]" />
           <div className="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="section-label">Overall security score</p>
+              <div className="flex items-center gap-3"><p className="section-label">Overall security score</p><span className={`font-mono text-[9px] uppercase tracking-[.1em] ${postureTone}`}>{postureLabel}</span></div>
               <div className="mt-5 flex items-end gap-3">
                 <strong className="font-mono text-6xl font-medium tracking-[-0.09em] text-stone-50 md:text-7xl">{data.overall_security_score.toFixed(1)}</strong>
                 <span className="mb-2 text-sm text-stone-600">/ 100</span>
@@ -89,7 +91,7 @@ export function DashboardPage() {
               <Link to={`/hosts/${host.id}`} key={host.id} className="group grid grid-cols-[1fr_auto] items-center gap-5 px-6 py-4 transition hover:bg-stone-800/30 md:grid-cols-[1.2fr_0.7fr_0.45fr] md:px-8">
                 <div className="min-w-0"><p className="truncate text-sm font-medium text-stone-200 group-hover:text-white">{host.hostname}</p><p className="mt-1 truncate font-mono text-[10px] text-stone-600">{host.ip_addresses[0] ?? 'No address'} · {host.os_family.toUpperCase()} {host.os_version}</p></div>
                 <span className="hidden text-xs text-stone-500 md:block">{host.tags.environment ?? 'Unassigned'}</span>
-                <div className="text-right"><strong className="font-mono text-lg font-medium text-stone-100">{host.security_score?.toFixed(1) ?? '—'}</strong><p className="text-[9px] uppercase tracking-widest text-stone-700">score</p></div>
+                <div className="flex items-center justify-end gap-3"><div className="score-track"><span style={{ transform: `scaleX(${(host.security_score ?? 0) / 100})` }} /></div><div className="text-right"><strong className="font-mono text-lg font-medium text-stone-100">{host.security_score?.toFixed(1) ?? '—'}</strong><p className="text-[9px] uppercase tracking-widest text-stone-700">score</p></div></div>
               </Link>
             ))}
           </div>
@@ -99,12 +101,12 @@ export function DashboardPage() {
           <p className="section-label">Operating systems</p>
           <div className="mt-8 flex h-3 overflow-hidden rounded-full bg-stone-800">
             {Object.entries(data.os_distribution).map(([name, value], index) => (
-              <div key={name} className={['bg-emerald-500', 'bg-sky-400', 'bg-amber-300'][index % 3]} style={{ width: `${(value / data.total_hosts) * 100}%` }} />
+              <div key={name} className={['bg-emerald-500', 'bg-emerald-300', 'bg-teal-700'][index % 3]} style={{ width: `${(value / data.total_hosts) * 100}%` }} />
             ))}
           </div>
           <div className="mt-7 space-y-4">
             {Object.entries(data.os_distribution).map(([name, value], index) => (
-              <div key={name} className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 capitalize text-stone-400"><span className={`size-1.5 rounded-full ${['bg-emerald-500', 'bg-sky-400', 'bg-amber-300'][index % 3]}`} />{name}</span><span className="font-mono text-stone-300">{value}</span></div>
+              <div key={name} className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 capitalize text-stone-400"><span className={`size-1.5 rounded-full ${['bg-emerald-500', 'bg-emerald-300', 'bg-teal-700'][index % 3]}`} />{name}</span><span className="font-mono text-stone-300">{value}</span></div>
             ))}
           </div>
           <div className="mt-8 border-t border-stone-800 pt-5"><p className="text-xs leading-5 text-stone-600">Only Debian, Ubuntu, and the RHEL family are accepted by report contract v1.</p></div>

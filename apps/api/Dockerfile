@@ -1,7 +1,7 @@
 FROM debian:13-slim AS agent-package-builder
 
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dpkg-dev rpm \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dpkg-dev python3 rpm \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /source
 COPY agent ./agent
