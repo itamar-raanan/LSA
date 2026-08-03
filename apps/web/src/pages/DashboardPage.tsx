@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, CalendarClock, Server, ShieldAlert, ShieldX } from 'lucide-react'
+import { Activity, ArrowRight, CalendarClock, Server, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
