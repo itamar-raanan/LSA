@@ -38,14 +38,14 @@ export function SettingsOverviewPage() {
       <section className="panel overflow-hidden">
         <div className="grid border-b border-stone-800 px-6 py-5 md:grid-cols-[1fr_auto] md:items-center md:px-7">
           <div><p className="section-label">Configuration posture</p><p className="mt-2 text-sm text-stone-400">Identity, credentials, signing trust, and TLS lifecycle controls are operational.</p></div>
-          <span className="mt-4 inline-flex w-fit items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-emerald-300 md:mt-0"><span className="status-pulse" /> Evidence trust active</span>
+          <span className="mt-4 inline-flex w-fit items-center gap-2 font-mono text-[10px] capitalize tracking-wider text-[#4f6f5c] md:mt-0"><span className="status-pulse" /> Evidence trust active</span>
         </div>
         <div className="divide-y divide-stone-800">
           {primarySettings.map(({ to, title, detail, status, icon: Icon }) => (
-            <Link key={to} to={to} className="group grid gap-4 px-6 py-5 transition hover:bg-[#191e1a] sm:grid-cols-[40px_1fr_auto] sm:items-center md:px-7">
-              <span className="grid size-10 place-items-center rounded-xl border border-stone-800 bg-[#111512] text-emerald-400"><Icon size={19} weight="duotone" /></span>
+            <Link key={to} to={to} className="group grid gap-4 px-6 py-5 transition hover:bg-[#eee8dd] sm:grid-cols-[40px_1fr_auto] sm:items-center md:px-7">
+              <span className="grid size-10 place-items-center rounded-xl border border-stone-800 bg-[#f7f3eb] text-[#4f6f5c]"><Icon size={19} weight="duotone" /></span>
               <span><strong className="block text-sm font-medium text-stone-200">{title}</strong><small className="mt-1 block text-xs leading-5 text-stone-600">{detail}</small></span>
-              <span className="flex items-center gap-3 font-mono text-[9px] uppercase tracking-wider text-stone-600">{status}<ArrowRight size={14} className="transition-transform group-hover:translate-x-1" /></span>
+              <span className="flex items-center gap-3 font-mono text-[9px] capitalize tracking-wider text-stone-600">{status}<ArrowRight size={14} className="transition-transform group-hover:translate-x-1" /></span>
             </Link>
           ))}
         </div>
@@ -53,11 +53,11 @@ export function SettingsOverviewPage() {
 
       <section className="mt-10">
         <div className="mb-4"><p className="section-label">Recommended next controls</p><p className="mt-2 text-xs text-stone-600">High-value settings to add as the platform moves into production operations.</p></div>
-        <div className="grid overflow-hidden rounded-[22px] border border-stone-800 bg-[#151916] md:grid-cols-2">
+        <div className="grid overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb] md:grid-cols-2">
           {recommended.map(({ title, detail, icon: Icon }, index) => (
             <div key={title} className={`flex gap-4 px-6 py-5 ${index % 2 === 0 ? 'md:border-r md:border-stone-800' : ''} ${index > 1 ? 'border-t border-stone-800' : index === 1 ? 'border-t border-stone-800 md:border-t-0' : ''}`}>
               <Icon size={18} weight="duotone" className="mt-0.5 shrink-0 text-stone-500" />
-              <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="text-sm text-stone-300">{title}</p><span className="font-mono text-[8px] uppercase tracking-[.1em] text-stone-700">Planned</span></div><p className="mt-1 text-xs leading-5 text-stone-600">{detail}</p></div>
+              <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="text-sm text-stone-300">{title}</p><span className="font-mono text-[8px] capitalize tracking-[.1em] text-stone-700">Planned</span></div><p className="mt-1 text-xs leading-5 text-stone-600">{detail}</p></div>
             </div>
           ))}
         </div>

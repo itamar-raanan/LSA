@@ -46,7 +46,7 @@ export function FindingsPage() {
     <PageHeader eyebrow="Risk queue" title="Findings by control category" detail="Start with the complete control surface, then open a category to inspect relevant unresolved findings." />
     {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : <>
       <section aria-label="Control categories">
-        <div className="mb-4 flex items-end justify-between gap-4"><div><p className="section-label">Control categories</p><p className="mt-2 text-xs text-stone-600">Select a category to reveal its current findings.</p></div><p className="font-mono text-[10px] uppercase tracking-[.12em] text-stone-600">{data?.length ?? 0} open total</p></div>
+        <div className="mb-4 flex items-end justify-between gap-4"><div><p className="section-label">Control categories</p><p className="mt-2 text-xs text-stone-600">Select a category to reveal its current findings.</p></div><p className="font-mono text-[10px] capitalize tracking-[.12em] text-stone-600">{data?.length ?? 0} open total</p></div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {categories.map((item) => {
             const findings = (data ?? []).filter((finding) => finding.category === item.id)
@@ -54,7 +54,7 @@ export function FindingsPage() {
             const selected = category === item.id
             return <button key={item.id} className={`category-tile ${selected ? 'category-tile-active' : ''}`} aria-pressed={selected} onClick={() => { setCategory(selected ? null : item.id); setExpanded(null) }}>
               <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium capitalize text-stone-200">{item.name}</p><p className="mt-1.5 line-clamp-2 text-left text-[11px] leading-[1.55] text-stone-600">{item.detail}</p></div><span className="font-mono text-2xl tracking-[-.06em] text-stone-300">{findings.length}</span></div>
-              <div className="mt-4 flex items-center justify-between border-t border-white/[.06] pt-3 font-mono text-[8px] uppercase tracking-[.1em] text-stone-700"><span>{selected ? 'Selected' : 'Open findings'}</span><span className={critical ? 'text-rose-400' : ''}>{critical} critical</span></div>
+              <div className="mt-4 flex items-center justify-between border-t border-white/[.06] pt-3 font-mono text-[8px] capitalize tracking-[.1em] text-stone-700"><span>{selected ? 'Selected' : 'Open findings'}</span><span className={critical ? 'text-rose-400' : ''}>{critical} critical</span></div>
             </button>
           })}
         </div>
@@ -71,9 +71,9 @@ export function FindingsPage() {
                 <div className="hidden md:block"><p className="text-xs text-stone-400">{finding.hostname}</p><p className="mt-1 text-[10px] capitalize text-stone-700">{finding.lifecycle}</p></div>
                 <CaretDown size={16} className={`mt-1 text-stone-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
               </button>
-              {isExpanded && <div className="border-t border-stone-800 bg-[#0e120f] px-5 py-6 md:px-7">
+              {isExpanded && <div className="border-t border-stone-800 bg-[#f7f3eb] px-5 py-6 md:px-7">
                 <div className="grid gap-7 lg:grid-cols-2"><div><p className="detail-label">Observed</p><pre className="evidence-block">{finding.actual ?? 'No observed value supplied'}</pre></div><div><p className="detail-label">Expected</p><pre className="evidence-block">{finding.expected ?? 'No expected value supplied'}</pre></div></div>
-                <div className="mt-7 border-t border-stone-800 pt-6"><p className="detail-label">Remediation</p><p className="mt-3 text-sm leading-6 text-stone-400">{finding.remediation_summary ?? 'No remediation guidance supplied.'}</p>{finding.remediation_commands.map((command) => <div key={command} className="mt-4 flex items-center gap-3 rounded-xl border border-stone-800 bg-stone-950 px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-emerald-200">{command}</code><button className="icon-button shrink-0" aria-label="Copy command" onClick={() => void copyCommand(finding.id, command)}>{copied === finding.id ? <Check size={16} /> : <Copy size={16} />}</button></div>)}</div>
+                <div className="mt-7 border-t border-stone-800 pt-6"><p className="detail-label">Remediation</p><p className="mt-3 text-sm leading-6 text-stone-400">{finding.remediation_summary ?? 'No remediation guidance supplied.'}</p>{finding.remediation_commands.map((command) => <div key={command} className="mt-4 flex items-center gap-3 rounded-xl border border-stone-800 bg-[#eee8dd] px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-[#4f6f5c]">{command}</code><button className="icon-button shrink-0" aria-label="Copy command" onClick={() => void copyCommand(finding.id, command)}>{copied === finding.id ? <Check size={16} /> : <Copy size={16} />}</button></div>)}</div>
               </div>}
             </article>
           })}

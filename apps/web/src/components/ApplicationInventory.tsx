@@ -43,11 +43,11 @@ export function ApplicationInventory({ hostId }: { hostId: string }) {
       <table className="data-table min-w-[760px]">
         <thead><tr><th>Application</th><th>Type</th><th>Version</th><th>State</th><th>Source</th><th>Last observed</th></tr></thead>
         <tbody>{visibleApplications.map((item) => <tr key={item.id}>
-          <td><span className="flex items-center gap-2 font-medium text-stone-200">{item.kind === 'package' ? <Package size={15} className="text-emerald-500" /> : <Gear size={15} className="text-emerald-500" />}{item.name}</span>{item.description && <span className="table-subtitle max-w-md truncate">{item.description}</span>}</td>
+          <td><span className="flex items-center gap-2 font-medium text-stone-200">{item.kind === 'package' ? <Package size={15} className="text-[#4f6f5c]" /> : <Gear size={15} className="text-[#4f6f5c]" />}{item.name}</span>{item.description && <span className="table-subtitle max-w-md truncate">{item.description}</span>}</td>
           <td className="capitalize">{item.kind}</td>
           <td className="font-mono text-xs">{item.version ?? '—'}{item.architecture && <span className="table-subtitle">{item.architecture}</span>}</td>
-          <td><span className={item.running ? 'text-emerald-300' : 'text-stone-400'}>{state(item)}</span>{item.kind === 'service' && <span className="table-subtitle">{item.enabled ? 'enabled at boot' : 'not enabled at boot'}</span>}</td>
-          <td className="font-mono text-xs uppercase text-stone-500">{item.source}</td>
+          <td><span className={item.running ? 'text-[#4f6f5c]' : 'text-stone-400'}>{state(item)}</span>{item.kind === 'service' && <span className="table-subtitle">{item.enabled ? 'enabled at boot' : 'not enabled at boot'}</span>}</td>
+          <td className="font-mono text-xs capitalize text-stone-500">{item.source}</td>
           <td className="font-mono text-xs text-stone-500">{new Date(item.last_seen_at).toLocaleDateString()}</td>
         </tr>)}</tbody>
       </table>

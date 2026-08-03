@@ -14,7 +14,6 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
 import { api } from '../../api/client'
 import { AgentDownloadPanel } from '../../components/AgentDownloadPanel'
 import { PageHeader } from '../../components/PageHeader'
@@ -91,13 +90,13 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
   saving: boolean
 }) {
   const activeAgents = agents.filter(agent => !agent.revoked_at)
-  return <aside className="border-b border-stone-800 bg-[#121613] lg:min-h-[690px] lg:border-b-0 lg:border-r" aria-label="Agent groups">
+  return <aside className="border-b border-stone-800 bg-[#f7f3eb] lg:min-h-[690px] lg:border-b-0 lg:border-r" aria-label="Agent groups">
     <div className="flex items-center justify-between border-b border-stone-800 px-4 py-4">
       <div><p className="section-label">Fleet scope</p><p className="mt-1 text-xs text-stone-500">{groups.length} groups</p></div>
       <button className="icon-button" onClick={() => setShowCreate(!showCreate)} aria-label="Create group"><Plus size={15} /></button>
     </div>
 
-    {showCreate && <form className="grid gap-3 border-b border-stone-800 bg-[#151a16] p-4" onSubmit={createGroup}>
+    {showCreate && <form className="grid gap-3 border-b border-stone-800 bg-[#f7f3eb] p-4" onSubmit={createGroup}>
       <label className="form-field">Group name<input name="name" required placeholder="Database servers" /></label>
       <label className="form-field">Description<input name="description" placeholder="Production database fleet" /></label>
       <label className="form-field">Initial policy<select name="policy_id" className="select-input w-full" required>{policies.map(policy => <option key={policy.id} value={policy.id}>{policy.name}</option>)}</select></label>
@@ -107,7 +106,7 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
     <nav className="flex gap-2 overflow-x-auto p-3 lg:block lg:space-y-1" aria-label="Fleet groups">
       <button className={`group-scope-item min-w-48 lg:min-w-0 ${selectedGroupId === 'all' ? 'group-scope-item-active' : ''}`} onClick={() => selectGroup('all')}>
         <span className="group-scope-icon"><UsersThree size={17} /></span>
-        <span className="min-w-0 flex-1 text-left"><strong>All hosts</strong><small>Every managed Linux agent</small></span>
+        <span className="min-w-0 flex-1 text-left"><strong>All Agents</strong><small>Every Managed Linux Agent</small></span>
         <span className="font-mono text-[10px] text-stone-500">{activeAgents.length}</span>
       </button>
       <div className="hidden px-3 pb-2 pt-5 lg:block"><span className="section-label">Groups</span></div>
@@ -124,8 +123,6 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
 }
 
 export function AgentsSettingsPage() {
-  const location = useLocation()
-  const policyRoute = location.pathname === '/policies'
   const { data, error, loading, reload, refresh } = useApi(async () => {
     const [agents, groups, policies, controls, enrollmentTokens, packages] = await Promise.all([
       api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(),
@@ -133,7 +130,7 @@ export function AgentsSettingsPage() {
     return { agents, groups, policies, controls, enrollmentTokens, packages }
   }, [])
   const [selectedGroupId, setSelectedGroupId] = useState('all')
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>(policyRoute ? 'policy' : 'hosts')
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('hosts')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | AgentStatus>('all')
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set())
@@ -156,11 +153,6 @@ export function AgentsSettingsPage() {
 
   const selectedGroup = data?.groups.find(group => group.id === selectedGroupId) ?? null
 
-  useEffect(() => {
-    if (!policyRoute || !data?.groups.length || selectedGroupId !== 'all') return
-    setSelectedGroupId(data.groups[0].id)
-    setActiveTab('policy')
-  }, [data?.groups, policyRoute, selectedGroupId])
   const assignedPolicy = selectedGroup ? data?.policies.find(policy => policy.id === selectedGroup.policy_id) ?? null : null
   const categories = useMemo(() => {
     const grouped = new Map<string, ControlCatalogItem[]>()
@@ -310,17 +302,21 @@ export function AgentsSettingsPage() {
   return <div className="page-reveal">
     <PageHeader
       eyebrow="Managed Linux fleet"
-      title={policyRoute ? 'Policies' : 'Agents & groups'}
-      detail={policyRoute ? 'Choose a fleet group, review its effective policy, and control which checks are audited or remediated.' : 'Scope hosts by group, inspect agent health, and keep enrollment and deployment in one operational workspace.'}
-      action={<div className="flex flex-wrap gap-2">
-        <button className="button-secondary" onClick={() => setShowDownloads(true)}><DownloadSimple size={16} /> Install agent</button>
-        <button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Enrollment token</button>
-      </div>}
+      title="Agents & Groups"
+      detail="Select a fleet group, review its agents, then open Policy to configure audit and remediation behavior."
+      action={<button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Enroll Agent</button>}
     />
 
-    <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-900/40 bg-emerald-950/10 px-4 py-3 text-xs leading-5 text-emerald-200">
+    <section className="fleet-overview mb-5">
+      <div><span>Total Agents</span><strong>{data.agents.length}</strong></div>
+      <div><span>Fleet Groups</span><strong>{data.groups.length}</strong></div>
+      <div><span>Active Agents</span><strong>{data.agents.filter(agent => !agent.revoked_at).length}</strong></div>
+      <button className="button-secondary" onClick={() => setShowDownloads(true)}><DownloadSimple size={16} /> Download Package</button>
+    </section>
+
+    <div className="fleet-safety-note mb-5 flex items-start gap-3 px-4 py-3 text-xs leading-5">
       <ShieldCheck size={17} className="mt-0.5 shrink-0" />
-      <span><strong>Audit-only safety lock is active.</strong> Remediation modes can be staged in policy, but this agent release cannot change host configuration.</span>
+      <span><strong>Audit-Only Safety Lock Is Active.</strong> Remediation modes can be staged in Policy, but this agent release cannot change host configuration.</span>
     </div>
     {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
     {showDownloads && <AgentDownloadPanel packages={data.packages} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
@@ -332,7 +328,7 @@ export function AgentsSettingsPage() {
       </div>
       {token ? <div className="px-6 py-6">
         <p className="text-xs text-stone-500">Copy this token now. It is displayed once and becomes invalid after enrollment.</p>
-        <div className="mt-4 flex gap-2"><code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-stone-800 bg-[#101411] px-4 py-3 text-xs text-emerald-300">{token}</code><button className="button-secondary" onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy</button></div>
+        <div className="mt-4 flex gap-2"><code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-stone-800 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code><button className="button-secondary" onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy</button></div>
       </div> : <form className="grid gap-4 px-6 py-6 md:grid-cols-3" onSubmit={createEnrollment}>
         <label className="form-field">Name<input name="name" required placeholder="Production enrollment" /></label>
         <label className="form-field">Group<select name="group_id" required className="select-input w-full" defaultValue={selectedGroup?.id ?? data.groups[0]?.id}>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
@@ -360,7 +356,7 @@ export function AgentsSettingsPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-stone-500">{selectedGroup ? <FolderSimple size={16} /> : <UsersThree size={16} />}<span className="section-label">{selectedGroup ? 'Agent group' : 'Fleet inventory'}</span></div>
-                <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-stone-100">{selectedGroup?.name ?? 'All hosts'}</h2>
+                <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-stone-100">{selectedGroup?.name ?? 'All Agents'}</h2>
                 <p className="mt-1 text-xs leading-5 text-stone-500">{selectedGroup?.description || (selectedGroup ? `${selectedGroup.policy_name} is applied to this group.` : 'Every agent across all policy groups.')}</p>
               </div>
               <div className="flex items-center gap-6 border-l border-stone-800 pl-5">
@@ -369,7 +365,7 @@ export function AgentsSettingsPage() {
               </div>
             </div>
             <nav className="mt-6 flex gap-6" aria-label="Group workspace tabs">
-              <button className={`workspace-tab ${activeTab === 'hosts' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('hosts')}><DesktopTower size={15} /> Hosts</button>
+              <button className={`workspace-tab ${activeTab === 'hosts' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('hosts')}><DesktopTower size={15} /> Agents</button>
               {selectedGroup && <button className={`workspace-tab ${activeTab === 'policy' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('policy')}><SlidersHorizontal size={15} /> Policy</button>}
             </nav>
           </header>
@@ -379,8 +375,8 @@ export function AgentsSettingsPage() {
               <div className="relative w-full max-w-md"><MagnifyingGlass size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-600" /><input className="search-input" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search hostname" aria-label="Search agents" /></div>
               <div className="flex items-center gap-3"><select className="select-input min-h-9" aria-label="Filter agent status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | AgentStatus)}><option value="all">All statuses</option><option value="online">Online</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="never">Never connected</option><option value="revoked">Revoked</option></select><span className="font-mono text-[10px] text-stone-600">{visibleAgents.length} of {scopedAgents.length} hosts</span></div>
             </div>
-            {selectedAgents.size > 0 && <div className="flex flex-col gap-3 border-b border-emerald-900/30 bg-emerald-950/10 px-5 py-4 sm:px-7 xl:flex-row xl:items-center">
-              <strong className="mr-auto text-xs text-emerald-200">{selectedAgents.size} selected</strong>
+            {selectedAgents.size > 0 && <div className="flex flex-col gap-3 border-b border-[#b8c5ba] bg-[#edf1eb] px-5 py-4 sm:px-7 xl:flex-row xl:items-center">
+              <strong className="mr-auto text-xs text-[#4f6f5c]">{selectedAgents.size} selected</strong>
               <button className="button-secondary min-h-9" disabled={saving} onClick={() => void submit(() => api.runAgentAudits([...selectedAgents])).then(() => setSelectedAgents(new Set()))}><Play size={14} /> Run audit now</button>
               <div className="flex gap-2"><select className="select-input min-h-9" aria-label="Bulk destination group" value={bulkGroupId} onChange={event => setBulkGroupId(event.target.value)}><option value="">Move to group…</option>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button-secondary min-h-9" disabled={saving || !bulkGroupId} onClick={() => void submit(() => api.bulkAssignAgentGroup([...selectedAgents], bulkGroupId)).then(() => { setSelectedAgents(new Set()); setBulkGroupId('') })}>Apply</button></div>
               {confirmBulkRevoke ? <div className="flex gap-2"><button className="button-secondary min-h-9" onClick={() => setConfirmBulkRevoke(false)}>Cancel</button><button className="button-secondary min-h-9 border-rose-900/60 text-rose-300" disabled={saving} onClick={() => void submit(() => api.bulkRevokeAgents([...selectedAgents])).then(() => { setSelectedAgents(new Set()); setConfirmBulkRevoke(false) })}>Confirm revoke</button></div> : <button className="button-secondary min-h-9 text-rose-300" onClick={() => setConfirmBulkRevoke(true)}>Revoke selected</button>}
@@ -389,7 +385,7 @@ export function AgentsSettingsPage() {
           </div>}
 
           {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] md:grid-cols-[210px_minmax(0,1fr)]">
-            <nav className="border-b border-stone-800 bg-[#131714] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
+            <nav className="border-b border-stone-800 bg-[#f7f3eb] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
               <button className={`policy-category-item ${selectedCategory === 'overview' ? 'policy-category-item-active' : ''}`} onClick={() => setSelectedCategory('overview')}><SlidersHorizontal size={15} /><span>Overview</span></button>
               <div className="px-3 pb-2 pt-5"><span className="section-label">Control categories</span></div>
               <div className="flex gap-1 overflow-x-auto md:block md:space-y-1">{categories.map(([category, controls]) => <button key={category} className={`policy-category-item min-w-44 md:min-w-0 ${selectedCategory === category ? 'policy-category-item-active' : ''}`} onClick={() => setSelectedCategory(category)}><span className="min-w-0 flex-1 truncate text-left capitalize">{category.replaceAll('_', ' ')}</span><span className="font-mono text-[9px] text-stone-600">{controls.length}</span></button>)}</div>
@@ -422,11 +418,11 @@ export function AgentsSettingsPage() {
                       <select name="policy_id" className="select-input w-full" defaultValue={assignedPolicy.id}>{data.policies.map(policy => <option key={policy.id} value={policy.id}>{policy.name} · v{policy.version}</option>)}</select>
                       <button className="button-secondary min-h-9" disabled={saving}>Apply to {selectedGroup.name}</button>
                     </form>
-                    <button className="mt-3 text-xs text-emerald-400 transition hover:text-emerald-300" onClick={() => setShowPolicy(!showPolicy)}>Create a new policy for this group</button>
+                    <button className="mt-3 text-xs text-[#4f6f5c] transition hover:text-[#4f6f5c]" onClick={() => setShowPolicy(!showPolicy)}>Create a new policy for this group</button>
                   </div>
                 </div>
 
-                {showPolicy && <form className="grid gap-4 border-b border-stone-800 bg-[#131714] px-5 py-5 sm:grid-cols-2 sm:px-7" onSubmit={createGroupPolicy}>
+                {showPolicy && <form className="grid gap-4 border-b border-stone-800 bg-[#f7f3eb] px-5 py-5 sm:grid-cols-2 sm:px-7" onSubmit={createGroupPolicy}>
                   <label className="form-field sm:col-span-2">Policy name<input name="name" required placeholder={`${selectedGroup.name} policy`} /></label>
                   <label className="form-field sm:col-span-2">Description<input name="description" placeholder="Policy owned by this group" /></label>
                   <label className="form-field">Default mode<select name="default_mode" className="select-input w-full" defaultValue="audit">{modes.map(mode => <option key={mode}>{mode}</option>)}</select></label>
@@ -470,7 +466,7 @@ export function AgentsSettingsPage() {
                     }}
                   ><option value="">Inherit {draftDefaultMode}</option>{modes.map(mode => <option key={mode}>{mode}</option>)}</select>
                 </div>)}</div>
-                <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-stone-800 bg-[#151916]/95 px-5 py-4 backdrop-blur sm:px-7">
+                <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-stone-800 bg-[#f7f3eb]/95 px-5 py-4 backdrop-blur sm:px-7">
                   <span className="text-xs text-stone-600">{Object.keys(controlModes).length} explicit overrides across all categories</span>
                   <button className="button-primary" disabled={saving || assignedPolicy.assigned_groups > 1} onClick={publishPolicy}>{saving ? 'Publishing…' : `Publish version ${assignedPolicy.version + 1}`}</button>
                 </div>

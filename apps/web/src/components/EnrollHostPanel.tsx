@@ -61,7 +61,7 @@ export function EnrollHostPanel({ close, created }: { close: () => void; created
           </form>
         ) : (
           <div className="mt-8">
-            <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 px-4 py-3 text-xs leading-5 text-emerald-300">Enrollment created. Copy the token now; the platform stores only its hash and cannot reveal it again.</div>
+            <div className="rounded-xl border border-[#b8c5ba] bg-[#edf1eb] px-4 py-3 text-xs leading-5 text-[#4f6f5c]">Enrollment created. Copy the token now; the platform stores only its hash and cannot reveal it again.</div>
             <CredentialRow label="Host UUID" value={result.host.id} copied={copied} copy={copy} />
             <CredentialRow label="Ingestion token" value={result.token.token} copied={copied} copy={copy} />
             <div className="mt-6"><p className="detail-label">Ansible inventory variables</p><pre className="evidence-block">{`lsa_host_id=${result.host.id}\nlsa_ingest_token_file=~/.lsa/token`}</pre></div>
@@ -74,5 +74,5 @@ export function EnrollHostPanel({ close, created }: { close: () => void; created
 }
 
 function CredentialRow({ label, value, copied, copy }: { label: string; value: string; copied: string; copy: (label: string, value: string) => Promise<void> }) {
-  return <div className="mt-5"><p className="detail-label">{label}</p><div className="mt-2 flex items-center gap-3 rounded-xl border border-stone-800 bg-stone-950 px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-stone-300">{value}</code><button className="icon-button shrink-0" aria-label={`Copy ${label}`} onClick={() => void copy(label, value)}>{copied === label ? <Check size={16} /> : <Copy size={16} />}</button></div></div>
+  return <div className="mt-5"><p className="detail-label">{label}</p><div className="mt-2 flex items-center gap-3 rounded-xl border border-stone-800 bg-[#eee8dd] px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-stone-300">{value}</code><button className="icon-button shrink-0" aria-label={`Copy ${label}`} onClick={() => void copy(label, value)}>{copied === label ? <Check size={16} /> : <Copy size={16} />}</button></div></div>
 }
