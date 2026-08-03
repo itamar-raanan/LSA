@@ -8,12 +8,12 @@ import type { PublicIdentityProvider, User } from '../types'
 
 export function LoginPage() {
   const { user, login, radiusLogin, acceptSession } = useAuth()
-  const [email, setEmail] = useState('admin@lsa.local')
-  const [password, setPassword] = useState('lsa-dev-password')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [providers, setProviders] = useState<PublicIdentityProvider[]>([])
-  const [method, setMethod] = useState<'organization' | 'radius' | 'emergency'>('organization')
+  const [method, setMethod] = useState<'local' | 'radius'>('local')
   const [sessionNotice] = useState(() => {
     const notice = localStorage.getItem('lsa_auth_notice')
     localStorage.removeItem('lsa_auth_notice')
@@ -43,8 +43,8 @@ export function LoginPage() {
     setSubmitting(true)
     setError('')
     try {
-      if (method === 'radius') await radiusLogin(email, password)
-      else await login(email, password)
+      if (method === 'radius') await radiusLogin(username, password)
+      else await login(username, password)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Sign in failed')
     } finally {
@@ -79,14 +79,14 @@ export function LoginPage() {
           {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="mt-8 space-y-2">
             {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Buildings size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
           </div>}
-          <div className="mt-7 flex gap-2 border-b border-stone-800 pb-3 text-[10px] uppercase tracking-wider text-stone-600">
-            {providers.some((provider) => provider.provider_type === 'radius') && <button className={method === 'radius' ? 'text-emerald-300' : ''} onClick={() => setMethod('radius')}>RADIUS</button>}
-            <button className={method === 'emergency' ? 'text-emerald-300' : ''} onClick={() => setMethod('emergency')}>Emergency admin</button>
-          </div>
-          {method !== 'organization' && <form className="mt-6 space-y-5" onSubmit={submit}>
+          {providers.some((provider) => provider.provider_type === 'radius') && <div className="mt-7 flex gap-4 border-b border-stone-800 pb-3 text-[10px] uppercase tracking-wider text-stone-600">
+            <button className={method === 'local' ? 'text-emerald-300' : ''} onClick={() => setMethod('local')}>Local</button>
+            <button className={method === 'radius' ? 'text-emerald-300' : ''} onClick={() => setMethod('radius')}>RADIUS</button>
+          </div>}
+          <form className="mt-7 space-y-5" onSubmit={submit}>
             <label className="form-field">
-              <span>{method === 'radius' ? 'RADIUS username' : 'Email address'}</span>
-              <input type={method === 'radius' ? 'text' : 'email'} value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
+              <span>Username</span>
+              <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required />
             </label>
             <label className="form-field">
               <span>Password</span>
@@ -96,9 +96,7 @@ export function LoginPage() {
             <button className="button-primary w-full justify-between" disabled={submitting}>
               <span>{submitting ? 'Authenticating' : 'Continue'}</span><ArrowRight size={17} />
             </button>
-          </form>}
-          {!providers.length && method === 'organization' && <p className="mt-7 rounded-xl border border-stone-800 bg-[#151916] px-4 py-3 text-xs leading-5 text-stone-500">No organization identity provider is enabled. Use the emergency administrator to configure OpenID Connect or RADIUS.</p>}
-          <p className="mt-7 text-xs leading-5 text-stone-600">The local password is reserved for emergency administration. Regular users are provisioned from OpenID Connect or RADIUS.</p>
+          </form>
         </div>
       </section>
     </main>
