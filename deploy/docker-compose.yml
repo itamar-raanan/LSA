@@ -126,7 +126,11 @@ services:
         condition: service_healthy
     read_only: true
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-m", "lsa.jobs.vulnerability_sync", "--healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
     tmpfs:
       - /tmp:size=32m,mode=1777
     networks:
