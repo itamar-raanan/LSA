@@ -45,6 +45,7 @@ describe('Agents', () => {
     const navigation = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
     expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('href', '/agents')
     expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('aria-current', 'page')
+    expect(navigation.getByRole('link', { name: 'Applications' })).toHaveAttribute('href', '/applications')
     expect(navigation.queryByRole('link', { name: 'Certificates' })).not.toBeInTheDocument()
     expect(navigation.getByRole('link', { name: 'Administration' })).toHaveAttribute('href', '/settings')
   })

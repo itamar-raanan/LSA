@@ -472,6 +472,47 @@ def test_application_inventory_tracks_versions_and_removals(client):
     assert len([item for item in history if item["removed_at"] is not None]) == 2
 
 
+def test_application_estate_summary_and_host_correlation(client):
+    first = report_payload()
+    second = report_payload()
+    second["host"]["hostname"] = "test-db-02"
+    second["host"]["fqdn"] = "test-db-02.example.test"
+    second["host"]["machine_id_hash"] = f"sha256:{hashlib.sha256(b'test-db-02').hexdigest()}"
+    second["host"]["tags"] = {"environment": "production"}
+    second["applications"][0]["version"] = "3.0.15-1"
+    ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=first).status_code == 202
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
+
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    response = client.get("/api/v1/applications", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["metrics"] == {
+        "unique_applications": 2,
+        "package_count": 1,
+        "service_count": 1,
+        "installation_count": 4,
+        "reporting_hosts": 2,
+        "version_drift_count": 1,
+    }
+    openssl = next(item for item in body["applications"] if item["name"] == "openssl")
+    assert openssl["host_count"] == 2
+    assert openssl["version_count"] == 2
+
+    correlation = client.get(
+        "/api/v1/applications/correlation",
+        params={"name": "openssl", "kind": "package", "source": "dpkg"},
+        headers=headers,
+    )
+    assert correlation.status_code == 200, correlation.text
+    assert [(item["hostname"], item["version"]) for item in correlation.json()] == [
+        ("test-web-01", "3.0.14-1"),
+        ("test-db-02", "3.0.15-1"),
+    ]
+    assert correlation.json()[1]["environment"] == "production"
+
+
 def test_legacy_report_without_inventory_does_not_remove_existing_applications(client):
     first = report_payload()
     ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}

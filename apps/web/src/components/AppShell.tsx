@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
-  ChevronLeft, ChevronRight, FileBarChart,
+  Boxes, ChevronLeft, ChevronRight, FileBarChart,
   Gauge, LogOut, Menu, MonitorCog, Search, Server, Settings, ShieldAlert,
 } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
@@ -19,6 +19,7 @@ const navigation: NavigationGroup[] = [
   { label: 'Workspace', items: [
     { to: '/', label: 'Overview', icon: Gauge },
     { to: '/hosts', label: 'Assets', icon: Server },
+    { to: '/applications', label: 'Applications', icon: Boxes },
     { to: '/agents', label: 'Agents & groups', icon: MonitorCog, adminOnly: true },
     { to: '/findings', label: 'Security findings', icon: ShieldAlert },
     { to: '/reports', label: 'Reports', icon: FileBarChart },

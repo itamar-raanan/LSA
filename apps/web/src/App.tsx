@@ -9,6 +9,7 @@ const FindingsPage = lazy(() => import('./pages/FindingsPage').then((module) => 
 const HostDetailPage = lazy(() => import('./pages/HostDetailPage').then((module) => ({ default: module.HostDetailPage })))
 const HostsPage = lazy(() => import('./pages/HostsPage').then((module) => ({ default: module.HostsPage })))
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
+const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((module) => ({ default: module.ApplicationsPage })))
 const AuthenticationSettingsPage = lazy(() => import('./pages/settings/AuthenticationSettingsPage').then((module) => ({ default: module.AuthenticationSettingsPage })))
 const CertificatesSettingsPage = lazy(() => import('./pages/settings/CertificatesSettingsPage').then((module) => ({ default: module.CertificatesSettingsPage })))
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout').then((module) => ({ default: module.SettingsLayout })))
@@ -30,6 +31,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="hosts" element={<HostsPage />} />
         <Route path="hosts/:hostId" element={<HostDetailPage />} />
+        <Route path="applications" element={<ApplicationsPage />} />
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="agents" element={<AgentsSettingsPage />} />
