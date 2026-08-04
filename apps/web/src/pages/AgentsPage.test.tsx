@@ -45,6 +45,8 @@ describe('Agents', () => {
     const navigation = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
     expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('href', '/agents')
     expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('aria-current', 'page')
+    expect(navigation.queryByRole('link', { name: 'Certificates' })).not.toBeInTheDocument()
+    expect(navigation.getByRole('link', { name: 'Administration' })).toHaveAttribute('href', '/settings')
   })
 
   it('opens with all hosts and scopes categorized policy controls by group', async () => {
