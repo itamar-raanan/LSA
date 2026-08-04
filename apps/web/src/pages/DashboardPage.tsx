@@ -14,7 +14,7 @@ import { useApi } from '../hooks/useApi'
 import type { Severity } from '../types'
 
 const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
-const severityColors: Record<Severity, string> = { critical: '#ef476f', high: '#f59e55', medium: '#e3bd56', low: '#4aa3df', info: '#64748b' }
+const severityColors: Record<Severity, string> = { critical: '#b74f52', high: '#c66c38', medium: '#b78a32', low: '#5d8196', info: '#8b8175' }
 const DashboardChart = lazy(() => import('../components/security/DashboardChart'))
 
 export function DashboardPage() {
@@ -35,10 +35,10 @@ export function DashboardPage() {
   const certificateDays = certificate ? Math.ceil((new Date(certificate.not_valid_after).getTime() - Date.now()) / 86_400_000) : null
   const certificateTone = certificateDays == null ? 'neutral' : certificateDays <= 14 ? 'critical' : certificateDays <= 45 ? 'medium' : 'success'
   const healthData = [
-    { name: 'Healthy', value: dashboard.healthy_hosts, color: '#36b37e' },
-    { name: 'At risk', value: Math.max(0, dashboard.at_risk_hosts - dashboard.critical_hosts), color: '#e3bd56' },
-    { name: 'Critical', value: dashboard.critical_hosts, color: '#ef476f' },
-    { name: 'Unclassified', value: Math.max(0, dashboard.total_hosts - dashboard.healthy_hosts - dashboard.at_risk_hosts), color: '#45536a' },
+    { name: 'Healthy', value: dashboard.healthy_hosts, color: '#4f8063' },
+    { name: 'At risk', value: Math.max(0, dashboard.at_risk_hosts - dashboard.critical_hosts), color: '#b78a32' },
+    { name: 'Critical', value: dashboard.critical_hosts, color: '#b74f52' },
+    { name: 'Unclassified', value: Math.max(0, dashboard.total_hosts - dashboard.healthy_hosts - dashboard.at_risk_hosts), color: '#958d80' },
   ].filter((item) => item.value > 0)
   const severityData = severityOrder.map((severity) => ({ severity, name: severity[0].toUpperCase() + severity.slice(1), count: dashboard.finding_counts[severity] ?? 0, fill: severityColors[severity] }))
   const recentEvents = [...hosts].sort((a, b) => String(b.last_scan_at ?? '').localeCompare(String(a.last_scan_at ?? ''))).slice(0, 6).map((host) => ({
