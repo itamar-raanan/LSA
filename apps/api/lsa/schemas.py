@@ -52,6 +52,9 @@ class ApplicationInput(BaseModel):
     version: str | None = Field(default=None, max_length=300)
     architecture: str | None = Field(default=None, max_length=80)
     source: Literal["dpkg", "rpm", "systemd"]
+    source_package: str | None = Field(default=None, max_length=300)
+    source_version: str | None = Field(default=None, max_length=300)
+    purl: str | None = Field(default=None, max_length=1000)
     publisher: str | None = Field(default=None, max_length=300)
     description: str | None = Field(default=None, max_length=1000)
     status: str = Field(min_length=1, max_length=80)
@@ -229,6 +232,9 @@ class ApplicationResponse(BaseModel):
     version: str | None
     architecture: str | None
     source: str
+    source_package: str | None
+    source_version: str | None
+    purl: str | None
     publisher: str | None
     description: str | None
     status: str

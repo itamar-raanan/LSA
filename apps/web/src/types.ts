@@ -34,6 +34,9 @@ export interface ApplicationInventoryItem {
   version: string | null
   architecture: string | null
   source: 'dpkg' | 'rpm' | 'systemd'
+  source_package: string | null
+  source_version: string | null
+  purl: string | null
   publisher: string | null
   description: string | null
   status: string
