@@ -6,7 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from lsa.api import agent_packages, admin, agents, artifacts, auth, fleet, ingest, settings as settings_api
+from lsa.api import (
+    agent_packages,
+    admin,
+    agents,
+    artifacts,
+    auth,
+    fleet,
+    ingest,
+    settings as settings_api,
+    vulnerabilities,
+)
 from lsa.config import get_settings
 from lsa.database import Base, SessionLocal, engine, get_db
 from lsa.seed import bootstrap
@@ -47,6 +57,7 @@ app.include_router(agent_packages.router, prefix="/api/v1")
 app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(artifacts.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
+app.include_router(vulnerabilities.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["operations"])

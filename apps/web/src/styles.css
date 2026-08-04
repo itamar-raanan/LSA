@@ -577,6 +577,27 @@ img, video, canvas, svg { max-width: 100%; }
 .application-host-score { flex: 0 0 auto; border-left: 1px solid #ddd5c9; padding-left: 12px; text-align: right; }
 .application-host-score strong { color: #5f584f; font-family: var(--font-main); font-variant-numeric: tabular-nums; font-size: 14px; }
 .application-host-score small { color: #9a9184; font-size: 8px; }
+.intelligence-status { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 16px; border: 1px solid #d8c9b3; border-radius: 8px; padding: 12px 14px; color: #76501f; background: #f5ecdf; }
+.intelligence-status > svg { flex: 0 0 auto; margin-top: 1px; }
+.intelligence-status strong { display: block; color: #4b3a26; font-size: 11px; font-weight: 600; }
+.intelligence-status p { margin-top: 3px; color: #7f7160; font-size: 10px; line-height: 1.5; }
+.intelligence-status-error { border-color: #d9b5b0; color: #93483f; background: #f7e9e6; }
+.application-vulnerability-block { border-bottom: 1px solid #e1dbd0; padding: 18px; }
+.application-vulnerability-list { display: grid; gap: 7px; margin-top: 12px; }
+.application-vulnerability-item { display: block; width: 100%; border: 1px solid #ded6ca; border-radius: 7px; padding: 10px; text-align: left; background: #fbfaf7; transition: border-color 140ms ease, background 140ms ease; }
+.application-vulnerability-item:hover { border-color: #c5ad8b; background: #f7f1e7; }
+.application-vulnerability-item-active { border-color: #b8792b; background: #f2e7d6; }
+.application-vulnerability-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #3c3730; font-family: var(--font-main); font-size: 10px; font-weight: 650; }
+.application-vulnerability-item > small { display: block; margin-top: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #756d62; font-size: 9px; }
+.application-vulnerability-meta { display: block; margin-top: 6px; color: #91877a; font-family: var(--font-main); font-size: 8px; }
+.application-vulnerability-empty { margin-top: 12px; border: 1px dashed #d8d0c4; border-radius: 7px; padding: 13px; color: #847b70; font-size: 10px; line-height: 1.55; }
+.application-vulnerability-detail { margin-top: 9px; border-left: 2px solid #b8792b; padding: 2px 0 2px 10px; }
+.application-vulnerability-detail p { color: #655d53; font-size: 9px; line-height: 1.55; }
+.application-vulnerability-detail a { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; color: #86551d; font-size: 9px; font-weight: 600; }
+.kev-badge { display: inline-flex; align-items: center; border: 1px solid #c88d83; border-radius: 999px; padding: 2px 5px; color: #8a3f36; background: #f4dfdc; font-family: var(--font-main); font-size: 7px; font-weight: 650; letter-spacing: .02em; }
+.severity-unknown { border-color: #cec5b9; color: #716a61; background: #eee9e1; }
+.text-button { color: #88571d; font-family: var(--font-main); font-size: 9px; font-weight: 600; }
+.text-button:hover { color: #5f3810; }
 
 @keyframes menu-in { from { opacity: 0; transform: scale(.97); } }
 @keyframes tooltip-in { from { opacity: 0; transform: scale(.97); } }

@@ -18,6 +18,9 @@ flowchart LR
     I --> V["Validate, verify, and normalize"]
     V --> D[("PostgreSQL inventory and findings")]
     V --> E[("Immutable evidence vault")]
+    S["Vulnerability sync worker"] -->|"HTTPS"| OSV["OSV API"]
+    S -->|"HTTPS"| K["CISA KEV catalog"]
+    S --> D
     D --> C["Web console and API"]
     E --> C
 ```
@@ -42,6 +45,7 @@ The server is delivered as a Docker Compose stack. Only the TLS gateway is publi
 | **PostgreSQL** | Tenants, users, sessions, hosts, groups, policies, reports, findings, credentials, tasks, and audit metadata | Internal network |
 | **MinIO evidence vault** | Retention-enforced storage of original report artifacts with integrity verification | Internal network |
 | **Alembic migrations** | Applies versioned database changes before the API starts | Startup job |
+| **Vulnerability sync worker** | Queries OSV for observed Package URLs, enriches matching CVEs with CISA KEV, and writes the local advisory cache | Outbound HTTPS only |
 
 ### Server resource requirements
 
@@ -53,7 +57,7 @@ The following values are planning baselines for the bundled single-node Docker C
 | **Memory** | 4 GiB RAM | 8 GiB RAM; monitor PostgreSQL, API workers, and MinIO under real load |
 | **System and database disk** | 20 GiB free in addition to evidence storage | 50 GiB or more on SSD-backed storage, with database growth monitored |
 | **Evidence storage** | 10 GiB or enough for the test retention period | Size separately from measured bundle size, audit frequency, host count, and retention |
-| **Network** | Inbound TCP 8443 from administrators, scanners, and agents | Stable TLS endpoint on TCP 8443 plus DNS and time synchronization |
+| **Network** | Inbound TCP 8443 from administrators, scanners, and agents; outbound HTTPS from the intelligence worker | Stable TLS endpoint on TCP 8443 plus DNS and time synchronization |
 
 Estimate raw evidence capacity with:
 
@@ -72,6 +76,7 @@ The server host also requires Docker Engine with the Compose plugin. It must be 
 3. Report ingestion validates identity binding, schema, size, safe archive paths, checksums, duplicate submissions, and optional Ed25519 signatures.
 4. The original artifact is preserved in the evidence vault while normalized hosts, reports, controls, and findings are stored in PostgreSQL.
 5. The console reads those normalized projections to present fleet status, findings, compliance, evidence history, groups, and policies.
+6. A dedicated egress worker periodically queries OSV only for observed package identities, enriches CVEs found in CISA's Known Exploited Vulnerabilities catalog, and stores tenant-scoped application exposure matches. The API itself remains on the internal Docker network.
 
 ### Identity and security foundation
 
@@ -148,6 +153,22 @@ make up
 Open `https://localhost:8443` and sign in with the bootstrap email and password from `deploy/.env`. The first boot uses a self-signed localhost certificate. API documentation is available at `https://localhost:8443/docs`.
 
 The database and evidence objects are stored in named Docker volumes. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, MinIO, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
+
+### Vulnerability intelligence
+
+Open **Applications** to review package inventory, affected versions, matching advisories, fixed versions, CISA KEV priority, and the hosts exposed to each vulnerability. Administrators can queue an immediate refresh from this page. The `vulnerability-sync` container also refreshes automatically every 12 hours by default; configure the interval with `LSA_VULNERABILITY_REFRESH_HOURS`.
+
+Online synchronization sends only versioned Package URLs for active package inventory to OSV. It does not send hostnames, IP addresses, tags, findings, or credentials. The worker has outbound access, while the API, PostgreSQL, and MinIO remain attached only to the internal backend network.
+
+For an air-gapped LSA server, create a scoped snapshot on a connected workstation from one or more offline `report.json` files:
+
+```bash
+.venv/bin/python scanner/scripts/build_vulnerability_snapshot.py \
+  /path/to/report.json \
+  --output vulnerability-snapshot.json
+```
+
+Transfer the JSON through the approved media workflow, then choose **Import Snapshot** on the **Applications** page. Imported data follows the same correlation and audit path as online synchronization. Snapshot files contain public advisory data plus the Package URLs present in the input reports; handle them according to the organization's software-inventory policy.
 
 For direct local development and testing, install Python 3.12+ and Node.js 22+:
 

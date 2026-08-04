@@ -7,7 +7,16 @@ from sqlalchemy.orm import Session
 
 from lsa.database import get_db
 from lsa.dependencies import current_user
-from lsa.models import Finding, FindingStatus, Host, HostApplication, Report, User
+from lsa.models import (
+    Finding,
+    FindingStatus,
+    Host,
+    HostApplication,
+    HostApplicationVulnerability,
+    Report,
+    User,
+    Vulnerability,
+)
 from lsa.schemas import (
     ApplicationResponse,
     ApplicationEstateItem,
@@ -143,6 +152,30 @@ def list_estate_applications(
         .where(*active_filters)
     ).one()
 
+    vulnerability_grouped = (
+        select(
+            HostApplication.kind.label("kind"),
+            HostApplication.name.label("name"),
+            HostApplication.source.label("source"),
+            func.count(func.distinct(Vulnerability.id)).label("vulnerability_count"),
+            func.count(
+                func.distinct(case((Vulnerability.known_exploited.is_(True), Vulnerability.id)))
+            ).label("known_exploited_count"),
+        )
+        .join(
+            HostApplicationVulnerability,
+            HostApplicationVulnerability.host_application_id == HostApplication.id,
+        )
+        .join(Vulnerability, Vulnerability.id == HostApplicationVulnerability.vulnerability_id)
+        .where(
+            HostApplication.tenant_id == user.tenant_id,
+            HostApplication.removed_at.is_(None),
+            HostApplicationVulnerability.resolved_at.is_(None),
+        )
+        .group_by(HostApplication.kind, HostApplication.name, HostApplication.source)
+        .subquery()
+    )
+
     query = (
         select(
             HostApplication.kind,
@@ -154,10 +187,22 @@ def list_estate_applications(
             func.count(func.distinct(HostApplication.version)).label("version_count"),
             func.sum(case((HostApplication.running.is_(True), 1), else_=0)).label("running_host_count"),
             func.sum(case((HostApplication.enabled.is_(True), 1), else_=0)).label("enabled_host_count"),
+            func.coalesce(vulnerability_grouped.c.vulnerability_count, 0).label(
+                "vulnerability_count"
+            ),
+            func.coalesce(vulnerability_grouped.c.known_exploited_count, 0).label(
+                "known_exploited_count"
+            ),
             func.min(HostApplication.first_seen_at).label("first_seen_at"),
             func.max(HostApplication.last_seen_at).label("last_seen_at"),
         )
         .join(Host, Host.id == HostApplication.host_id)
+        .outerjoin(
+            vulnerability_grouped,
+            (vulnerability_grouped.c.kind == HostApplication.kind)
+            & (vulnerability_grouped.c.name == HostApplication.name)
+            & (vulnerability_grouped.c.source == HostApplication.source),
+        )
         .where(*active_filters)
     )
     if kind:
@@ -174,7 +219,11 @@ def list_estate_applications(
             )
         )
     query = query.group_by(
-        HostApplication.kind, HostApplication.name, HostApplication.source
+        HostApplication.kind,
+        HostApplication.name,
+        HostApplication.source,
+        vulnerability_grouped.c.vulnerability_count,
+        vulnerability_grouped.c.known_exploited_count,
     ).order_by(func.count(func.distinct(HostApplication.host_id)).desc(), HostApplication.name).limit(limit)
     applications = [
         ApplicationEstateItem(
@@ -187,6 +236,8 @@ def list_estate_applications(
             version_count=row.version_count,
             running_host_count=row.running_host_count or 0,
             enabled_host_count=row.enabled_host_count or 0,
+            vulnerability_count=row.vulnerability_count or 0,
+            known_exploited_count=row.known_exploited_count or 0,
             first_seen_at=row.first_seen_at,
             last_seen_at=row.last_seen_at,
         )

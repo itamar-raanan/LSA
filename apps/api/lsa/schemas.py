@@ -264,6 +264,8 @@ class ApplicationEstateItem(BaseModel):
     version_count: int
     running_host_count: int
     enabled_host_count: int
+    vulnerability_count: int
+    known_exploited_count: int
     first_seen_at: datetime
     last_seen_at: datetime
 
@@ -290,6 +292,66 @@ class ApplicationHostCorrelation(BaseModel):
     running: bool | None
     first_seen_at: datetime
     last_seen_at: datetime
+
+
+class VulnerabilitySyncRunResponse(BaseModel):
+    id: str
+    status: str
+    trigger: str
+    packages_queried: int
+    vulnerabilities_found: int
+    matches_found: int
+    error: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+
+
+class VulnerabilitySummaryResponse(BaseModel):
+    vulnerability_count: int
+    exposure_count: int
+    affected_hosts: int
+    affected_applications: int
+    known_exploited: int
+    severity_counts: dict[str, int]
+    intelligence_state: str
+    last_sync: VulnerabilitySyncRunResponse | None
+
+
+class ApplicationVulnerabilityResponse(BaseModel):
+    id: str
+    cve_id: str | None
+    aliases: list[str]
+    summary: str
+    severity: str
+    cvss_score: float | None
+    known_exploited: bool
+    fixed_versions: list[str]
+    affected_hosts: int
+    affected_host_ids: list[str]
+    affected_versions: list[str]
+    kev_due_date: datetime | None
+    kev_required_action: str | None
+    ransomware_use: str | None
+    published_at: datetime | None
+    modified_at: datetime | None
+    references: list[dict[str, str]]
+
+
+class HostVulnerabilityResponse(ApplicationVulnerabilityResponse):
+    application_id: str
+    application_name: str
+    installed_version: str | None
+    source_package: str | None
+    matched_purl: str
+    detected_at: datetime
+    last_seen_at: datetime
+
+
+class VulnerabilitySnapshotImportResponse(BaseModel):
+    packages_imported: int
+    vulnerabilities_found: int
+    matches_found: int
 
 
 class HostCreate(BaseModel):

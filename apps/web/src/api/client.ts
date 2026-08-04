@@ -27,6 +27,10 @@ import type {
   AgentPackage,
   AgentPolicyVersion,
   AgentTask,
+  ApplicationVulnerability,
+  VulnerabilitySummary,
+  VulnerabilitySyncRun,
+  HostVulnerability,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -139,6 +143,24 @@ export const api = {
   applicationCorrelation(name: string, kind: string, source: string): Promise<ApplicationHostCorrelation[]> {
     const params = new URLSearchParams({ name, kind, source })
     return request(`/applications/correlation?${params}`)
+  },
+  vulnerabilitySummary(): Promise<VulnerabilitySummary> {
+    return request('/vulnerabilities/summary')
+  },
+  applicationVulnerabilities(name: string, kind: string, source: string): Promise<ApplicationVulnerability[]> {
+    const params = new URLSearchParams({ name, kind, source })
+    return request(`/applications/vulnerabilities?${params}`)
+  },
+  queueVulnerabilitySync(): Promise<VulnerabilitySyncRun> {
+    return request('/vulnerabilities/sync', { method: 'POST' })
+  },
+  importVulnerabilitySnapshot(file: File): Promise<{ packages_imported: number; vulnerabilities_found: number; matches_found: number }> {
+    const body = new FormData()
+    body.append('file', file)
+    return request('/vulnerabilities/import', { method: 'POST', body })
+  },
+  hostVulnerabilities(hostId: string): Promise<HostVulnerability[]> {
+    return request(`/hosts/${hostId}/vulnerabilities`)
   },
   deleteHost(id: string): Promise<void> {
     return request(`/hosts/${id}`, { method: 'DELETE' })

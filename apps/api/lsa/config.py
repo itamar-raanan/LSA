@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     tls_certificate_path: str = "/tmp/lsa-tls/tls.crt"
     tls_private_key_path: str = "/tmp/lsa-tls/tls.key"
     tls_shared_gid: int | None = None
+    vulnerability_sync_enabled: bool = True
+    vulnerability_refresh_hours: int = Field(default=12, ge=1, le=168)
+    vulnerability_poll_seconds: int = Field(default=15, ge=2, le=300)
+    vulnerability_http_timeout_seconds: int = Field(default=30, ge=5, le=120)
+    vulnerability_run_timeout_minutes: int = Field(default=60, ge=10, le=1440)
+    osv_api_url: str = "https://api.osv.dev"
+    cisa_kev_url: str = (
+        "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    )
 
 
 @lru_cache

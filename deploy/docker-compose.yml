@@ -55,6 +55,7 @@ services:
     logging: *default-logging
 
   api:
+    image: lsa-api
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -104,6 +105,35 @@ services:
       - backend
     logging: *default-logging
 
+  vulnerability-sync:
+    image: lsa-api
+    command: ["python", "-m", "lsa.jobs.vulnerability_sync"]
+    restart: unless-stopped
+    environment:
+      LSA_ENVIRONMENT: production
+      LSA_DATABASE_URL: postgresql+psycopg://${LSA_POSTGRES_USER:-lsa}:${LSA_POSTGRES_PASSWORD}@postgres:5432/${LSA_POSTGRES_DB:-lsa}
+      LSA_VULNERABILITY_SYNC_ENABLED: ${LSA_VULNERABILITY_SYNC_ENABLED:-true}
+      LSA_VULNERABILITY_REFRESH_HOURS: ${LSA_VULNERABILITY_REFRESH_HOURS:-12}
+      LSA_VULNERABILITY_POLL_SECONDS: ${LSA_VULNERABILITY_POLL_SECONDS:-15}
+      LSA_VULNERABILITY_HTTP_TIMEOUT_SECONDS: ${LSA_VULNERABILITY_HTTP_TIMEOUT_SECONDS:-30}
+      LSA_VULNERABILITY_RUN_TIMEOUT_MINUTES: ${LSA_VULNERABILITY_RUN_TIMEOUT_MINUTES:-60}
+      LSA_OSV_API_URL: https://api.osv.dev
+      LSA_CISA_KEV_URL: https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    read_only: true
+    healthcheck:
+      disable: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    networks:
+      - backend
+      - intelligence-egress
+    logging: *default-logging
+
   web:
     build:
       context: ..
@@ -134,3 +164,5 @@ networks:
   backend:
     driver: bridge
     internal: true
+  intelligence-egress:
+    driver: bridge
