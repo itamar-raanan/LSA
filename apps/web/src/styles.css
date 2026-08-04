@@ -533,6 +533,7 @@ input[type="checkbox"] { accent-color: #a86b1f; }
 .panel .border-stone-700, .panel .border-stone-800 { border-color: #d8d0c4; }
 .text-rose-300, .text-rose-400 { color: #9d3f43; }
 .text-amber-200, .text-amber-300 { color: #806222; }
+.soc-main [class*="text-amber-"], .soc-main [class*="text-yellow-"] { color: #765719; }
 [class*="bg-rose-950"] { background-color: rgba(183,79,82,.08); }
 [class*="border-rose-900"] { border-color: rgba(183,79,82,.34); }
 [class*="bg-amber-950"] { background-color: rgba(183,138,50,.09); }
