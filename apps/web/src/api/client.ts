@@ -1,5 +1,7 @@
 import type {
   ApplicationInventoryItem,
+  ApplicationEstateResponse,
+  ApplicationHostCorrelation,
   DashboardData,
   Finding,
   Host,
@@ -127,6 +129,16 @@ export const api = {
   },
   applications(hostId: string): Promise<ApplicationInventoryItem[]> {
     return request(`/hosts/${hostId}/applications`)
+  },
+  applicationEstate(search = '', kind = ''): Promise<ApplicationEstateResponse> {
+    const params = new URLSearchParams()
+    if (search) params.set('search', search)
+    if (kind) params.set('kind', kind)
+    return request(`/applications${params.size ? `?${params}` : ''}`)
+  },
+  applicationCorrelation(name: string, kind: string, source: string): Promise<ApplicationHostCorrelation[]> {
+    const params = new URLSearchParams({ name, kind, source })
+    return request(`/applications/correlation?${params}`)
   },
   deleteHost(id: string): Promise<void> {
     return request(`/hosts/${id}`, { method: 'DELETE' })

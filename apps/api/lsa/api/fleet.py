@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from lsa.database import get_db
@@ -10,6 +10,10 @@ from lsa.dependencies import current_user
 from lsa.models import Finding, FindingStatus, Host, HostApplication, Report, User
 from lsa.schemas import (
     ApplicationResponse,
+    ApplicationEstateItem,
+    ApplicationEstateMetrics,
+    ApplicationEstateResponse,
+    ApplicationHostCorrelation,
     DashboardResponse,
     FindingDelta,
     FindingResponse,
@@ -95,6 +99,155 @@ def list_hosts(
         query = query.where(Host.os_family == os_family)
     hosts = db.scalars(query.order_by(Host.security_score.asc().nulls_last(), Host.hostname)).all()
     return [serialize_host(db, host) for host in hosts]
+
+
+@router.get("/applications", response_model=ApplicationEstateResponse)
+def list_estate_applications(
+    search: str | None = None,
+    kind: str | None = Query(default=None, pattern="^(package|service)$"),
+    limit: int = Query(default=500, ge=1, le=2000),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> ApplicationEstateResponse:
+    active_filters = (
+        HostApplication.tenant_id == user.tenant_id,
+        HostApplication.removed_at.is_(None),
+        Host.deleted_at.is_(None),
+    )
+    grouped = (
+        select(
+            HostApplication.kind.label("kind"),
+            HostApplication.name.label("name"),
+            HostApplication.source.label("source"),
+            func.count(func.distinct(HostApplication.version)).label("version_count"),
+        )
+        .join(Host, Host.id == HostApplication.host_id)
+        .where(*active_filters)
+        .group_by(HostApplication.kind, HostApplication.name, HostApplication.source)
+        .subquery()
+    )
+    metric_row = db.execute(
+        select(
+            func.count().label("unique_applications"),
+            func.sum(case((grouped.c.kind == "package", 1), else_=0)).label("package_count"),
+            func.sum(case((grouped.c.kind == "service", 1), else_=0)).label("service_count"),
+            func.sum(case((grouped.c.version_count > 1, 1), else_=0)).label("version_drift_count"),
+        ).select_from(grouped)
+    ).one()
+    installation_count, reporting_hosts = db.execute(
+        select(
+            func.count(HostApplication.id),
+            func.count(func.distinct(HostApplication.host_id)),
+        )
+        .join(Host, Host.id == HostApplication.host_id)
+        .where(*active_filters)
+    ).one()
+
+    query = (
+        select(
+            HostApplication.kind,
+            HostApplication.name,
+            HostApplication.source,
+            func.max(HostApplication.publisher).label("publisher"),
+            func.max(HostApplication.description).label("description"),
+            func.count(func.distinct(HostApplication.host_id)).label("host_count"),
+            func.count(func.distinct(HostApplication.version)).label("version_count"),
+            func.sum(case((HostApplication.running.is_(True), 1), else_=0)).label("running_host_count"),
+            func.sum(case((HostApplication.enabled.is_(True), 1), else_=0)).label("enabled_host_count"),
+            func.min(HostApplication.first_seen_at).label("first_seen_at"),
+            func.max(HostApplication.last_seen_at).label("last_seen_at"),
+        )
+        .join(Host, Host.id == HostApplication.host_id)
+        .where(*active_filters)
+    )
+    if kind:
+        query = query.where(HostApplication.kind == kind)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                HostApplication.name.ilike(pattern),
+                HostApplication.version.ilike(pattern),
+                HostApplication.publisher.ilike(pattern),
+                HostApplication.description.ilike(pattern),
+            )
+        )
+    query = query.group_by(
+        HostApplication.kind, HostApplication.name, HostApplication.source
+    ).order_by(func.count(func.distinct(HostApplication.host_id)).desc(), HostApplication.name).limit(limit)
+    applications = [
+        ApplicationEstateItem(
+            kind=row.kind,
+            name=row.name,
+            source=row.source,
+            publisher=row.publisher,
+            description=row.description,
+            host_count=row.host_count,
+            version_count=row.version_count,
+            running_host_count=row.running_host_count or 0,
+            enabled_host_count=row.enabled_host_count or 0,
+            first_seen_at=row.first_seen_at,
+            last_seen_at=row.last_seen_at,
+        )
+        for row in db.execute(query)
+    ]
+    return ApplicationEstateResponse(
+        metrics=ApplicationEstateMetrics(
+            unique_applications=metric_row.unique_applications or 0,
+            package_count=metric_row.package_count or 0,
+            service_count=metric_row.service_count or 0,
+            installation_count=installation_count or 0,
+            reporting_hosts=reporting_hosts or 0,
+            version_drift_count=metric_row.version_drift_count or 0,
+        ),
+        applications=applications,
+    )
+
+
+@router.get("/applications/correlation", response_model=list[ApplicationHostCorrelation])
+def application_host_correlation(
+    name: str = Query(min_length=1, max_length=300),
+    kind: str = Query(pattern="^(package|service)$"),
+    source: str = Query(pattern="^(dpkg|rpm|systemd)$"),
+    limit: int = Query(default=2000, ge=1, le=10000),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[ApplicationHostCorrelation]:
+    rows = db.execute(
+        select(HostApplication, Host)
+        .join(Host, Host.id == HostApplication.host_id)
+        .where(
+            HostApplication.tenant_id == user.tenant_id,
+            HostApplication.removed_at.is_(None),
+            Host.deleted_at.is_(None),
+            HostApplication.name == name,
+            HostApplication.kind == kind,
+            HostApplication.source == source,
+        )
+        .order_by(HostApplication.version, Host.hostname)
+        .limit(limit)
+    ).all()
+    return [
+        ApplicationHostCorrelation(
+            application_id=application.id,
+            host_id=host.id,
+            hostname=host.hostname,
+            fqdn=host.fqdn,
+            os_family=host.os_family,
+            os_version=host.os_version,
+            environment=(host.tags or {}).get("environment"),
+            security_score=host.security_score,
+            compliance_score=host.compliance_score,
+            version=application.version,
+            architecture=application.architecture,
+            status=application.status,
+            enabled=application.enabled,
+            running=application.running,
+            first_seen_at=application.first_seen_at,
+            last_seen_at=application.last_seen_at,
+        )
+        for application, host in rows
+    ]
 
 
 @router.get("/hosts/{host_id}", response_model=HostResponse)

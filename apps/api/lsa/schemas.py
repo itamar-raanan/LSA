@@ -239,6 +239,53 @@ class ApplicationResponse(BaseModel):
     removed_at: datetime | None
 
 
+class ApplicationEstateMetrics(BaseModel):
+    unique_applications: int
+    package_count: int
+    service_count: int
+    installation_count: int
+    reporting_hosts: int
+    version_drift_count: int
+
+
+class ApplicationEstateItem(BaseModel):
+    kind: str
+    name: str
+    source: str
+    publisher: str | None
+    description: str | None
+    host_count: int
+    version_count: int
+    running_host_count: int
+    enabled_host_count: int
+    first_seen_at: datetime
+    last_seen_at: datetime
+
+
+class ApplicationEstateResponse(BaseModel):
+    metrics: ApplicationEstateMetrics
+    applications: list[ApplicationEstateItem]
+
+
+class ApplicationHostCorrelation(BaseModel):
+    application_id: str
+    host_id: str
+    hostname: str
+    fqdn: str | None
+    os_family: str
+    os_version: str
+    environment: str | None
+    security_score: float | None
+    compliance_score: float | None
+    version: str | None
+    architecture: str | None
+    status: str
+    enabled: bool | None
+    running: bool | None
+    first_seen_at: datetime
+    last_seen_at: datetime
+
+
 class HostCreate(BaseModel):
     hostname: str = Field(min_length=1, max_length=253)
     fqdn: str | None = Field(default=None, max_length=253)

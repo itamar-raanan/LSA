@@ -44,6 +44,53 @@ export interface ApplicationInventoryItem {
   removed_at: string | null
 }
 
+export interface ApplicationEstateMetrics {
+  unique_applications: number
+  package_count: number
+  service_count: number
+  installation_count: number
+  reporting_hosts: number
+  version_drift_count: number
+}
+
+export interface ApplicationEstateItem {
+  kind: 'package' | 'service'
+  name: string
+  source: 'dpkg' | 'rpm' | 'systemd'
+  publisher: string | null
+  description: string | null
+  host_count: number
+  version_count: number
+  running_host_count: number
+  enabled_host_count: number
+  first_seen_at: string
+  last_seen_at: string
+}
+
+export interface ApplicationEstateResponse {
+  metrics: ApplicationEstateMetrics
+  applications: ApplicationEstateItem[]
+}
+
+export interface ApplicationHostCorrelation {
+  application_id: string
+  host_id: string
+  hostname: string
+  fqdn: string | null
+  os_family: string
+  os_version: string
+  environment: string | null
+  security_score: number | null
+  compliance_score: number | null
+  version: string | null
+  architecture: string | null
+  status: string
+  enabled: boolean | null
+  running: boolean | null
+  first_seen_at: string
+  last_seen_at: string
+}
+
 export interface Finding {
   id: string
   host_id: string

@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { Boxes, FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const commands = [
   { label: 'Security overview', detail: 'Review fleet posture and critical exposure', path: '/', icon: LayoutDashboard, keywords: 'overview home metrics' },
   { label: 'Asset inventory', detail: 'Search reporting Linux systems', path: '/hosts', icon: Server, keywords: 'hosts servers assets' },
+  { label: 'Application inventory', detail: 'Correlate packages, services, versions, and hosts', path: '/applications', icon: Boxes, keywords: 'applications packages services software versions' },
   { label: 'Agents & groups', detail: 'Manage agents, enrollment, and fleet groups', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints enrollment' },
   { label: 'Security findings', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'findings risk vulnerabilities' },
   { label: 'Import report', detail: 'Upload an offline evidence bundle', path: '/reports', icon: FileUp, keywords: 'offline upload report' },
