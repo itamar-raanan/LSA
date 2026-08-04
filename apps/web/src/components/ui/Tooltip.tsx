@@ -11,7 +11,7 @@ export function Tooltip({ children, content, side = 'right' }: { children: React
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content side={side} sideOffset={8} className="soc-tooltip">
-          {content}<TooltipPrimitive.Arrow className="fill-[#273245]" />
+          {content}<TooltipPrimitive.Arrow className="fill-[#35332e]" />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
