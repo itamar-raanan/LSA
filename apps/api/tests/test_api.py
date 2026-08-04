@@ -58,6 +58,9 @@ def report_payload() -> dict:
                 "version": "3.0.14-1",
                 "architecture": "amd64",
                 "source": "dpkg",
+                "source_package": "openssl",
+                "source_version": "3.0.14-1",
+                "purl": "pkg:deb/debian/openssl@3.0.14-1?arch=amd64&distro=debian-13",
                 "status": "installed",
                 "enabled": None,
                 "running": None,
@@ -444,6 +447,9 @@ def test_ingest_and_read_fleet(client):
         ("package", "openssl"),
         ("service", "ssh.service"),
     ]
+    assert applications.json()[0]["source_package"] == "openssl"
+    assert applications.json()[0]["source_version"] == "3.0.14-1"
+    assert applications.json()[0]["purl"].startswith("pkg:deb/debian/openssl@")
     dashboard = client.get("/api/v1/dashboard", headers=headers)
     assert dashboard.json()["total_hosts"] == 1
 
@@ -456,7 +462,14 @@ def test_application_inventory_tracks_versions_and_removals(client):
     second = report_payload()
     second["host"]["host_id"] = first["host"]["host_id"]
     second["host"]["machine_id_hash"] = first["host"]["machine_id_hash"]
-    second["applications"] = [{**first["applications"][0], "version": "3.0.15-1"}]
+    second["applications"] = [
+        {
+            **first["applications"][0],
+            "version": "3.0.15-1",
+            "source_version": "3.0.15-1",
+            "purl": "pkg:deb/debian/openssl@3.0.15-1?arch=amd64&distro=debian-13",
+        }
+    ]
     assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
 
     headers = {"Authorization": f"Bearer {login(client)}"}
@@ -474,12 +487,14 @@ def test_application_inventory_tracks_versions_and_removals(client):
 
 def test_application_estate_summary_and_host_correlation(client):
     first = report_payload()
+    first["applications"][0]["source_package"] = "openssl-source"
     second = report_payload()
     second["host"]["hostname"] = "test-db-02"
     second["host"]["fqdn"] = "test-db-02.example.test"
     second["host"]["machine_id_hash"] = f"sha256:{hashlib.sha256(b'test-db-02').hexdigest()}"
     second["host"]["tags"] = {"environment": "production"}
     second["applications"][0]["version"] = "3.0.15-1"
+    second["applications"][0]["source_package"] = "openssl-source"
     ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}
     assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=first).status_code == 202
     assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
@@ -499,6 +514,10 @@ def test_application_estate_summary_and_host_correlation(client):
     openssl = next(item for item in body["applications"] if item["name"] == "openssl")
     assert openssl["host_count"] == 2
     assert openssl["version_count"] == 2
+    source_search = client.get(
+        "/api/v1/applications", params={"search": "openssl-source"}, headers=headers
+    ).json()
+    assert [item["name"] for item in source_search["applications"]] == ["openssl"]
 
     correlation = client.get(
         "/api/v1/applications/correlation",

@@ -58,6 +58,9 @@ def synchronize_applications(db: Session, report_data: ReportInput, host: Host) 
             )
             db.add(application)
         application.publisher = item.publisher
+        application.source_package = item.source_package
+        application.source_version = item.source_version
+        application.purl = item.purl
         application.description = item.description
         application.status = item.status
         application.enabled = item.enabled

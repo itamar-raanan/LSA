@@ -167,6 +167,7 @@ def list_estate_applications(
         query = query.where(
             or_(
                 HostApplication.name.ilike(pattern),
+                HostApplication.source_package.ilike(pattern),
                 HostApplication.version.ilike(pattern),
                 HostApplication.publisher.ilike(pattern),
                 HostApplication.description.ilike(pattern),
@@ -283,7 +284,11 @@ def list_host_applications(
     if search:
         pattern = f"%{search}%"
         query = query.where(
-            or_(HostApplication.name.ilike(pattern), HostApplication.version.ilike(pattern))
+            or_(
+                HostApplication.name.ilike(pattern),
+                HostApplication.source_package.ilike(pattern),
+                HostApplication.version.ilike(pattern),
+            )
         )
     applications = db.scalars(
         query.order_by(HostApplication.kind, HostApplication.name, HostApplication.version).limit(limit)
@@ -297,6 +302,9 @@ def list_host_applications(
             version=item.version,
             architecture=item.architecture,
             source=item.source,
+            source_package=item.source_package,
+            source_version=item.source_version,
+            purl=item.purl,
             publisher=item.publisher,
             description=item.description,
             status=item.status,
