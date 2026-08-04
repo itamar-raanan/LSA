@@ -532,6 +532,143 @@ def test_application_estate_summary_and_host_correlation(client):
     assert correlation.json()[1]["environment"] == "production"
 
 
+def test_offline_vulnerability_snapshot_correlates_packages_and_kev(client):
+    payload = report_payload()
+    assert client.post(
+        "/api/v1/ingest/reports",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        json=payload,
+    ).status_code == 202
+    snapshot = {
+        "schema_version": "1.0",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "packages": [
+            {
+                "purl": payload["applications"][0]["purl"],
+                "vulnerabilities": [
+                    {
+                        "id": "DSA-9999-1",
+                        "aliases": ["CVE-2026-1234"],
+                        "summary": "OpenSSL memory safety issue",
+                        "details": "A crafted input can cause memory corruption.",
+                        "published": "2026-07-01T00:00:00Z",
+                        "modified": "2026-08-01T00:00:00Z",
+                        "database_specific": {"severity": "HIGH", "cvss_score": 8.1},
+                        "affected": [
+                            {
+                                "ranges": [
+                                    {
+                                        "type": "ECOSYSTEM",
+                                        "events": [
+                                            {"introduced": "0"},
+                                            {"fixed": "3.0.15-1"},
+                                        ],
+                                    }
+                                ]
+                            }
+                        ],
+                        "references": [{"type": "ADVISORY", "url": "https://example.test/DSA-9999-1"}],
+                    },
+                    {
+                        "id": "GHSA-test-duplicate",
+                        "aliases": ["CVE-2026-1234"],
+                        "summary": "Duplicate upstream advisory for the same CVE",
+                        "database_specific": {"severity": "HIGH"},
+                        "references": [{"type": "WEB", "url": "javascript:alert(1)"}],
+                    },
+                ],
+            }
+        ],
+        "kev_catalog": {
+            "vulnerabilities": [
+                {
+                    "cveID": "CVE-2026-1234",
+                    "vendorProject": "OpenSSL",
+                    "product": "OpenSSL",
+                    "dateAdded": "2026-08-02",
+                    "dueDate": "2026-08-15",
+                    "requiredAction": "Apply vendor updates.",
+                    "knownRansomwareCampaignUse": "Known",
+                }
+            ]
+        },
+    }
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    imported = client.post(
+        "/api/v1/vulnerabilities/import",
+        headers=headers,
+        files={"file": ("vulnerabilities.json", json.dumps(snapshot), "application/json")},
+    )
+    assert imported.status_code == 200, imported.text
+    assert imported.json() == {
+        "packages_imported": 1,
+        "vulnerabilities_found": 1,
+        "matches_found": 1,
+    }
+
+    summary = client.get("/api/v1/vulnerabilities/summary", headers=headers).json()
+    assert summary["vulnerability_count"] == 1
+    assert summary["exposure_count"] == 1
+    assert summary["affected_hosts"] == 1
+    assert summary["known_exploited"] == 1
+    assert summary["severity_counts"]["high"] == 1
+    assert summary["last_sync"]["trigger"] == "offline"
+
+    application_vulnerabilities = client.get(
+        "/api/v1/applications/vulnerabilities",
+        params={"name": "openssl", "kind": "package", "source": "dpkg"},
+        headers=headers,
+    ).json()
+    assert application_vulnerabilities[0]["cve_id"] == "CVE-2026-1234"
+    assert application_vulnerabilities[0]["known_exploited"] is True
+    assert application_vulnerabilities[0]["fixed_versions"] == ["3.0.15-1"]
+    assert set(application_vulnerabilities[0]["aliases"]) >= {
+        "DSA-9999-1",
+        "GHSA-test-duplicate",
+        "CVE-2026-1234",
+    }
+    assert all(
+        not reference.get("url", "").startswith("javascript:")
+        for reference in application_vulnerabilities[0]["references"]
+    )
+    assert application_vulnerabilities[0]["affected_host_ids"] == [payload["host"]["host_id"]]
+    estate = client.get("/api/v1/applications", headers=headers).json()
+    openssl = next(item for item in estate["applications"] if item["name"] == "openssl")
+    assert openssl["vulnerability_count"] == 1
+    assert openssl["known_exploited_count"] == 1
+
+    host_vulnerabilities = client.get(
+        f"/api/v1/hosts/{payload['host']['host_id']}/vulnerabilities", headers=headers
+    ).json()
+    assert host_vulnerabilities[0]["application_name"] == "openssl"
+    assert host_vulnerabilities[0]["installed_version"] == "3.0.14-1"
+    assert host_vulnerabilities[0]["matched_purl"] == payload["applications"][0]["purl"]
+
+    cleared = {
+        **snapshot,
+        "packages": [{"purl": payload["applications"][0]["purl"], "vulnerabilities": []}],
+    }
+    assert client.post(
+        "/api/v1/vulnerabilities/import",
+        headers=headers,
+        files={"file": ("cleared.json", json.dumps(cleared), "application/json")},
+    ).status_code == 200
+    assert client.get("/api/v1/vulnerabilities/summary", headers=headers).json()[
+        "exposure_count"
+    ] == 0
+
+
+def test_vulnerability_refresh_queue_is_idempotent(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    first = client.post("/api/v1/vulnerabilities/sync", headers=headers)
+    second = client.post("/api/v1/vulnerabilities/sync", headers=headers)
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert first.json()["status"] == "queued"
+    assert second.json()["id"] == first.json()["id"]
+
+
 def test_legacy_report_without_inventory_does_not_remove_existing_applications(client):
     first = report_payload()
     ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}

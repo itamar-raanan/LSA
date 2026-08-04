@@ -66,6 +66,8 @@ export interface ApplicationEstateItem {
   version_count: number
   running_host_count: number
   enabled_host_count: number
+  vulnerability_count: number
+  known_exploited_count: number
   first_seen_at: string
   last_seen_at: string
 }
@@ -91,6 +93,60 @@ export interface ApplicationHostCorrelation {
   enabled: boolean | null
   running: boolean | null
   first_seen_at: string
+  last_seen_at: string
+}
+
+export interface VulnerabilitySyncRun {
+  id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  trigger: 'manual' | 'scheduled' | 'offline'
+  packages_queried: number
+  vulnerabilities_found: number
+  matches_found: number
+  error: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface VulnerabilitySummary {
+  vulnerability_count: number
+  exposure_count: number
+  affected_hosts: number
+  affected_applications: number
+  known_exploited: number
+  severity_counts: Record<string, number>
+  intelligence_state: 'never' | 'fresh' | 'stale' | 'refreshing' | 'failed'
+  last_sync: VulnerabilitySyncRun | null
+}
+
+export interface ApplicationVulnerability {
+  id: string
+  cve_id: string | null
+  aliases: string[]
+  summary: string
+  severity: Severity | 'unknown'
+  cvss_score: number | null
+  known_exploited: boolean
+  fixed_versions: string[]
+  affected_hosts: number
+  affected_host_ids: string[]
+  affected_versions: string[]
+  kev_due_date: string | null
+  kev_required_action: string | null
+  ransomware_use: string | null
+  published_at: string | null
+  modified_at: string | null
+  references: Array<Record<string, string>>
+}
+
+export interface HostVulnerability extends ApplicationVulnerability {
+  application_id: string
+  application_name: string
+  installed_version: string | null
+  source_package: string | null
+  matched_purl: string
+  detected_at: string
   last_seen_at: string
 }
 

@@ -211,6 +211,77 @@ class HostApplication(Base):
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class Vulnerability(Base):
+    __tablename__ = "vulnerabilities"
+
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    cve_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    aliases: Mapped[list[str]] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(String(1000), default="")
+    details: Mapped[str] = mapped_column(Text, default="", deferred=True)
+    severity: Mapped[str] = mapped_column(String(20), default="unknown", index=True)
+    cvss_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    modified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    references: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
+    fixed_versions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    source_data: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, deferred=True)
+    known_exploited: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    kev_date_added: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    kev_due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    kev_vendor: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    kev_product: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    kev_required_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ransomware_use: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class HostApplicationVulnerability(Base):
+    __tablename__ = "host_application_vulnerabilities"
+    __table_args__ = (
+        UniqueConstraint(
+            "host_application_id",
+            "vulnerability_id",
+            name="uq_host_application_vulnerability",
+        ),
+        Index(
+            "ix_host_application_vulnerabilities_tenant_active",
+            "tenant_id",
+            "resolved_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    host_application_id: Mapped[str] = mapped_column(
+        ForeignKey("host_applications.id"), index=True
+    )
+    vulnerability_id: Mapped[str] = mapped_column(ForeignKey("vulnerabilities.id"), index=True)
+    matched_purl: Mapped[str] = mapped_column(String(1000))
+    fixed_versions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class VulnerabilitySyncRun(Base):
+    __tablename__ = "vulnerability_sync_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    trigger: Mapped[str] = mapped_column(String(20), default="manual")
+    requested_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    packages_queried: Mapped[int] = mapped_column(default=0)
+    vulnerabilities_found: Mapped[int] = mapped_column(default=0)
+    matches_found: Mapped[int] = mapped_column(default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class AgentPolicy(Base):
     __tablename__ = "agent_policies"
     __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_agent_policy_name"),)

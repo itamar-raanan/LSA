@@ -1,6 +1,10 @@
 #!/bin/sh
 set -eu
 
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
 echo "Applying database migrations..."
 alembic -c /app/alembic.ini upgrade head
 
