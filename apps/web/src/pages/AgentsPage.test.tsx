@@ -24,9 +24,9 @@ vi.mock('../api/client', () => ({
     createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token' }),
     agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444' }),
     agentPackages: vi.fn().mockResolvedValue([
-      { id: 'linux-deb', version: '0.4.0', filename: 'lsa-agent_0.4.0_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
-      { id: 'linux-rpm', version: '0.4.0', filename: 'lsa-agent-0.4.0-1.noarch.rpm', content_type: 'application/x-rpm', operating_system: 'RHEL / Rocky / AlmaLinux 9+', architecture: 'noarch', package_format: 'rpm', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'b'.repeat(64) },
-      { id: 'linux-universal', version: '0.4.0', filename: 'lsa-agent-0.4.0-linux-universal.tar.gz', content_type: 'application/gzip', operating_system: 'Linux (Debian, Ubuntu, RHEL)', architecture: 'x86_64 / arm64', package_format: 'tar.gz', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'c'.repeat(64) },
+      { id: 'linux-deb', version: '0.4.1', filename: 'lsa-agent_0.4.1_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
+      { id: 'linux-rpm', version: '0.4.1', filename: 'lsa-agent-0.4.1-1.noarch.rpm', content_type: 'application/x-rpm', operating_system: 'RHEL / Rocky / AlmaLinux 9+', architecture: 'noarch', package_format: 'rpm', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'b'.repeat(64) },
+      { id: 'linux-universal', version: '0.4.1', filename: 'lsa-agent-0.4.1-linux-universal.tar.gz', content_type: 'application/gzip', operating_system: 'Linux (Debian, Ubuntu, RHEL)', architecture: 'x86_64 / arm64', package_format: 'tar.gz', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'c'.repeat(64) },
     ]),
     downloadAgentPackage: vi.fn(),
     agentPolicyVersions: vi.fn().mockResolvedValue([
@@ -89,10 +89,10 @@ describe('Agents', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Download Package/ }))
     expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Download Package' })).toHaveLength(1)
-    expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.0_all.deb/)).toBeInTheDocument()
+    expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.1_all.deb/)).toBeInTheDocument()
     expect(screen.getByText(/--platform-url 'https:\/\/lsa.example.test:8444'/)).toBeInTheDocument()
     fireEvent.change(screen.getByRole('combobox', { name: 'Agent package' }), { target: { value: 'linux-rpm' } })
-    expect(screen.getByText(/sudo dnf install .*lsa-agent-0.4.0-1.noarch.rpm/)).toBeInTheDocument()
+    expect(screen.getByText(/sudo dnf install .*lsa-agent-0.4.1-1.noarch.rpm/)).toBeInTheDocument()
     expect(screen.getAllByText(/SHA-256/)).toHaveLength(1)
   })
 })

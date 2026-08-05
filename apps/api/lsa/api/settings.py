@@ -359,15 +359,12 @@ async def upload_tls_certificate(
     settings: Settings = Depends(get_settings),
 ):
     require_admin(user)
-    try:
-        certificate_pem = (await certificate.read(1024 * 1024 + 1)).decode()
-        private_key_pem = (await private_key.read(1024 * 1024 + 1)).decode()
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=422, detail="TLS files must be PEM text") from exc
-    if len(certificate_pem) > 1024 * 1024 or len(private_key_pem) > 1024 * 1024:
+    certificate_data = await certificate.read(1024 * 1024 + 1)
+    private_key_data = await private_key.read(1024 * 1024 + 1)
+    if len(certificate_data) > 1024 * 1024 or len(private_key_data) > 1024 * 1024:
         raise HTTPException(status_code=413, detail="TLS files must each be 1 MiB or smaller")
     item = install_certificate(
-        db, user.tenant_id, certificate_pem, private_key_pem, settings, user.id
+        db, user.tenant_id, certificate_data, private_key_data, settings, user.id
     )
     audit(
         db,

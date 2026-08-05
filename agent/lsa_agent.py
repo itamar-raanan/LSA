@@ -35,7 +35,7 @@ except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
 
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 
@@ -211,8 +211,7 @@ def inventory(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def http_client(config: dict[str, Any]) -> httpx.Client:
-    verify: bool | str = config.get("ca_bundle", True)
-    return httpx.Client(base_url=platform_url(config), verify=verify, timeout=120.0)
+    return httpx.Client(base_url=platform_url(config), verify=False, timeout=120.0)
 
 
 def signed_headers(key: Ed25519PrivateKey, agent_id: str, method: str, path: str, body: bytes) -> dict[str, str]:
@@ -287,6 +286,7 @@ def run_scanner(config: dict[str, Any], state: dict[str, Any], key_path: Path, p
         "lsa_profile": settings.get("profile", "level2_server"),
         "lsa_policy_default_mode": policy.get("default_mode", "audit"),
         "lsa_policy_control_modes": policy.get("control_modes", {}),
+        "lsa_validate_certs": False,
     }
     with tempfile.TemporaryDirectory(prefix="lsa-agent-", dir=state_root) as temporary:
         temporary_path = Path(temporary)
@@ -304,8 +304,6 @@ def run_scanner(config: dict[str, Any], state: dict[str, Any], key_path: Path, p
         ]
         environment = os.environ.copy()
         environment["ANSIBLE_CONFIG"] = str(scanner_dir / "ansible.cfg")
-        if config.get("ca_bundle"):
-            environment["SSL_CERT_FILE"] = str(config["ca_bundle"])
         subprocess.run(command, cwd=scanner_dir, env=environment, check=True)
 
 
@@ -401,6 +399,11 @@ def main() -> int:
     arguments = parser.parse_args()
     try:
         config = read_json(arguments.config)
+        print(
+            "WARNING: LSA agent server certificate verification is disabled; "
+            "HTTPS traffic is encrypted but the platform identity is not authenticated.",
+            file=sys.stderr,
+        )
         if arguments.command == "enroll":
             token = arguments.token
             if arguments.token_file:

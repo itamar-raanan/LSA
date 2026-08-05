@@ -11,6 +11,7 @@ from agent.lsa_agent import (
     VERSION,
     _scan_due,
     accept_policy_version,
+    http_client,
     platform_url,
     signed_headers,
 )
@@ -23,6 +24,30 @@ def test_runtime_version_matches_packaging_release():
 def test_platform_requires_https_by_default():
     with pytest.raises(RuntimeError, match="must use HTTPS"):
         platform_url({"platform_url": "http://lsa.example.test:8444"})
+
+
+def test_agent_http_client_disables_server_certificate_verification(monkeypatch):
+    captured = {}
+
+    class Client:
+        pass
+
+    def client_factory(**kwargs):
+        captured.update(kwargs)
+        return Client()
+
+    monkeypatch.setattr("agent.lsa_agent.httpx.Client", client_factory)
+
+    assert isinstance(
+        http_client(
+            {
+                "platform_url": "https://lsa.example.test:8444",
+                "ca_bundle": "/path/from/an/older/config.crt",
+            }
+        ),
+        Client,
+    )
+    assert captured["verify"] is False
 
 
 def test_agent_request_signature_covers_method_path_timestamp_and_body():

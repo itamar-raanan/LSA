@@ -35,9 +35,11 @@ The only published service is the TLS gateway. Management is available on `127.0
 
 ## TLS certificates and internet exposure
 
-The first boot generates a 30-day self-signed certificate for `localhost`, so the platform remains HTTPS-only during initial setup. The expected browser warning disappears after an administrator uploads the organization PEM certificate chain and matching private key under **Settings → TLS certificates**.
+The first boot generates a 30-day self-signed certificate for `localhost`, so the platform remains HTTPS-only during initial setup. The expected browser warning disappears after an administrator uploads the organization certificate and matching private key under **Settings → TLS certificates**. The upload accepts `.crt`/`.pem` certificates and `.key`/`.pem` private keys in PEM or DER encoding; private keys must be unencrypted. The leaf certificate must be first when a PEM chain contains multiple certificates.
 
 The private key is encrypted in PostgreSQL, materialized into an internal restricted volume, and reloaded atomically by the gateway. Set `LSA_TLS_HOST` to the externally visible management DNS name before configuring OpenID Connect because it forms the callback URL. Set `LSA_AGENT_PUBLIC_URL` to the externally visible agent origin. Change `LSA_TLS_BIND` or `LSA_AGENT_TLS_BIND` to `0.0.0.0` only when the host firewall permits the intended clients. Do not expose PostgreSQL, MinIO, or the API container directly.
+
+Managed agent release 0.4.1 keeps HTTPS encryption but does not validate the agent gateway certificate or hostname. Management browsers and identity-provider callbacks continue to use normal TLS validation on port 8443.
 
 ## Signed evidence policy
 

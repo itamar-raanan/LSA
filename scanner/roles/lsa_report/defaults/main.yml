@@ -6,6 +6,7 @@ lsa_controller_python: "{{ ansible_playbook_python }}"
 lsa_delivery_mode: upload_and_keep
 lsa_output_root: "{{ playbook_dir }}/../reports"
 lsa_platform_url: "https://lsa.example.com"
+lsa_validate_certs: true
 lsa_ingest_token_file: "{{ lookup('env', 'HOME') }}/.lsa/token"
 lsa_signing_key_file: ""
 lsa_signing_key_id: ""

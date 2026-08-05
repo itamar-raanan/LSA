@@ -183,7 +183,7 @@
     body_format: json
     status_code: 202
     timeout: 120
-    validate_certs: true
+    validate_certs: "{{ lsa_validate_certs | bool }}"
   delegate_to: localhost
   become: false
   no_log: true
@@ -205,7 +205,7 @@
         mime_type: application/zip
     status_code: 202
     timeout: 120
-    validate_certs: true
+    validate_certs: "{{ lsa_validate_certs | bool }}"
   delegate_to: localhost
   become: false
   no_log: true
