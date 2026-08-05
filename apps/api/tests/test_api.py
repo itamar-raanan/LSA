@@ -89,6 +89,10 @@ def report_payload() -> dict:
                 "status": "fail",
                 "expected": "module disabled",
                 "actual": "module enabled",
+                "remediation_summary": "Disable the module in /etc/modprobe.d/example.conf.",
+                "remediation_commands": ["printf 'install example /bin/false\\n' > /etc/modprobe.d/example.conf"],
+                "verification_commands": ["modprobe --showconfig | grep example"],
+                "service_restart": True,
             }
         ],
     }
@@ -456,6 +460,9 @@ def test_ingest_and_read_fleet(client):
     assert applications.json()[0]["purl"].startswith("pkg:deb/debian/openssl@")
     dashboard = client.get("/api/v1/dashboard", headers=headers)
     assert dashboard.json()["total_hosts"] == 1
+    finding = client.get("/api/v1/findings", headers=headers).json()[0]
+    assert finding["verification_commands"] == ["modprobe --showconfig | grep example"]
+    assert finding["service_restart"] is True
 
 
 def test_application_inventory_tracks_versions_and_removals(client):

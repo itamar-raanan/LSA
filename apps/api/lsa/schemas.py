@@ -423,7 +423,9 @@ class FindingResponse(BaseModel):
     actual: str | None
     remediation_summary: str | None
     remediation_commands: list[str]
+    verification_commands: list[str]
     reboot_required: bool
+    service_restart: bool
 
 
 class DashboardResponse(BaseModel):

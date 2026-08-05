@@ -1,9 +1,11 @@
-import { ArrowLeft, Copy, HardDrive, Network, ShieldCheck } from '@phosphor-icons/react'
+import { ArrowLeft, CaretDown, HardDrive, Network, ShieldCheck } from '@phosphor-icons/react'
 import { ShieldAlert } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
 import { ApplicationInventory } from '../components/ApplicationInventory'
+import { RemediationGuide } from '../components/RemediationGuide'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { ReportHistory } from '../components/ReportHistory'
 import { ErrorState, LoadingState } from '../components/StatePanel'
@@ -11,6 +13,7 @@ import { useApi } from '../hooks/useApi'
 
 export function HostDetailPage() {
   const { hostId = '' } = useParams()
+  const [expandedFinding, setExpandedFinding] = useState<string | null>(null)
   const hostState = useApi(() => api.host(hostId), [hostId])
   const findingState = useApi(() => api.findings({ host_id: hostId }), [hostId])
   const vulnerabilityState = useApi(() => api.hostVulnerabilities(hostId), [hostId])
@@ -60,10 +63,13 @@ export function HostDetailPage() {
         <div className="px-6 py-5 md:px-8"><p className="section-label">Open findings</p></div>
         {findingState.loading ? <div className="skeleton m-6 h-40 rounded-2xl" /> : findingState.error ? <div className="p-6 text-sm text-rose-300">{findingState.error}</div> : !findingState.data?.length ? <div className="border-t border-stone-800 p-10 text-center text-sm text-stone-500">No open findings in the latest report.</div> : (
           <div className="divide-y divide-stone-800 border-t border-stone-800">{findingState.data.map((finding) => (
-            <article key={finding.id} className="grid gap-5 px-6 py-5 md:grid-cols-[auto_1fr_auto] md:px-8">
-              <SeverityBadge severity={finding.severity} />
-              <div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-stone-200">{finding.title}</p><span className="font-mono text-[9px] text-stone-600">{finding.control_id}</span></div><p className="mt-2 text-xs leading-5 text-stone-500">{finding.remediation_summary ?? 'No remediation guidance supplied.'}</p></div>
-              {finding.remediation_commands[0] && <button className="icon-button" aria-label="Copy remediation command" onClick={() => void navigator.clipboard.writeText(finding.remediation_commands[0])}><Copy size={16} /></button>}
+            <article key={finding.id}>
+              <button className="grid w-full gap-5 px-6 py-5 text-left md:grid-cols-[auto_1fr_auto] md:px-8" onClick={() => setExpandedFinding(expandedFinding === finding.id ? null : finding.id)} aria-expanded={expandedFinding === finding.id}>
+                <SeverityBadge severity={finding.severity} />
+                <div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-stone-200">{finding.title}</p><span className="font-mono text-[9px] text-stone-600">{finding.control_id}</span></div><p className="mt-2 text-xs leading-5 text-stone-500">{finding.remediation_summary ?? 'Open the guide to compare the current and required states.'}</p></div>
+                <CaretDown size={16} className={`mt-1 text-stone-600 transition-transform ${expandedFinding === finding.id ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedFinding === finding.id && <div className="border-t border-stone-800 bg-[#f7f3eb] px-5 py-6 md:px-8"><RemediationGuide finding={finding} /></div>}
             </article>
           ))}</div>
         )}
