@@ -117,6 +117,9 @@ services:
       LSA_VULNERABILITY_REFRESH_HOURS: ${LSA_VULNERABILITY_REFRESH_HOURS:-12}
       LSA_VULNERABILITY_POLL_SECONDS: ${LSA_VULNERABILITY_POLL_SECONDS:-15}
       LSA_VULNERABILITY_HTTP_TIMEOUT_SECONDS: ${LSA_VULNERABILITY_HTTP_TIMEOUT_SECONDS:-30}
+      LSA_VULNERABILITY_HTTP_RETRIES: ${LSA_VULNERABILITY_HTTP_RETRIES:-3}
+      LSA_VULNERABILITY_CA_BUNDLE: ${LSA_VULNERABILITY_CA_BUNDLE:-}
+      LSA_VULNERABILITY_FAILURE_RETRY_MINUTES: ${LSA_VULNERABILITY_FAILURE_RETRY_MINUTES:-15}
       LSA_VULNERABILITY_RUN_TIMEOUT_MINUTES: ${LSA_VULNERABILITY_RUN_TIMEOUT_MINUTES:-60}
       LSA_OSV_API_URL: https://api.osv.dev
       LSA_CISA_KEV_URL: https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
@@ -134,6 +137,8 @@ services:
       start_period: 10s
     tmpfs:
       - /tmp:size=32m,mode=1777
+    volumes:
+      - ./ca:/etc/lsa/ca:ro
     networks:
       - backend
       - intelligence-egress

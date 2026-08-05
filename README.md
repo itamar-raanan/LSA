@@ -161,6 +161,8 @@ Open **Applications** to review package inventory, affected versions, matching a
 
 Online synchronization sends only versioned Package URLs for active package inventory to OSV. It does not send hostnames, IP addresses, tags, findings, or credentials. The worker has outbound access, while the API, PostgreSQL, and MinIO remain attached only to the internal backend network.
 
+The worker verifies upstream TLS certificates and retries transient connection, rate-limit, and gateway failures three times by default. A failed scheduled run is queued again after 15 minutes instead of waiting for the normal refresh interval. Set `LSA_VULNERABILITY_HTTP_RETRIES` and `LSA_VULNERABILITY_FAILURE_RETRY_MINUTES` to tune those limits. Networks that inspect outbound TLS can place their approved PEM CA bundle in `deploy/ca` and set `LSA_VULNERABILITY_CA_BUNDLE` to its container path (for example, `/etc/lsa/ca/company-ca.pem`). Do not disable certificate verification.
+
 For an air-gapped LSA server, create a scoped snapshot on a connected workstation from one or more offline `report.json` files:
 
 ```bash
