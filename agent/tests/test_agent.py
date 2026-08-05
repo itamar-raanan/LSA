@@ -13,6 +13,7 @@ from agent.lsa_agent import (
     accept_policy_version,
     http_client,
     platform_url,
+    run_scanner,
     signed_headers,
 )
 
@@ -73,6 +74,51 @@ def test_policy_version_cannot_roll_back():
     assert state["highest_policy_version"] == 4
     with pytest.raises(RuntimeError, match="policy rollback rejected"):
         accept_policy_version(state, {"policy_version": 3})
+
+
+def test_scanner_uses_writable_ansible_runtime_paths_under_agent_state(tmp_path, monkeypatch):
+    scanner_dir = tmp_path / "scanner"
+    (scanner_dir / "playbooks").mkdir(parents=True)
+    (scanner_dir / "playbooks" / "scan.yml").write_text("---\n", encoding="utf-8")
+    (scanner_dir / "ansible.cfg").write_text("[defaults]\n", encoding="utf-8")
+    state_dir = tmp_path / "state"
+    key_path = tmp_path / "agent-signing-key.pem"
+
+    def fake_run(command, *, cwd, env, check):
+        assert cwd == scanner_dir
+        assert check is True
+        assert command[0] == "/opt/lsa-agent/venv/bin/ansible-playbook"
+        assert env["ANSIBLE_CONFIG"] == str(scanner_dir / "ansible.cfg")
+
+        runtime_paths = (
+            env["ANSIBLE_HOME"],
+            env["ANSIBLE_LOCAL_TEMP"],
+            env["ANSIBLE_REMOTE_TEMP"],
+            env["ANSIBLE_REMOTE_TMP"],
+        )
+        assert env["ANSIBLE_REMOTE_TEMP"] == env["ANSIBLE_REMOTE_TMP"]
+        for value in runtime_paths:
+            path = Path(value)
+            assert path.is_relative_to(state_dir)
+            assert path.is_dir()
+            assert path.stat().st_mode & 0o777 == 0o700
+
+    monkeypatch.setattr("agent.lsa_agent.subprocess.run", fake_run)
+    run_scanner(
+        {
+            "scanner_dir": str(scanner_dir),
+            "state_dir": str(state_dir),
+            "platform_url": "https://lsa.example.test:8444",
+            "ansible_playbook": "/opt/lsa-agent/venv/bin/ansible-playbook",
+        },
+        {
+            "host_id": "host-id",
+            "ingestion_token": "ingestion-token",
+            "signing_key_id": "signing-key-id",
+        },
+        key_path,
+        {"enforcement_enabled": False, "settings": {}, "default_mode": "audit"},
+    )
 
 
 def test_runtime_manifest_detects_modified_managed_file(tmp_path):

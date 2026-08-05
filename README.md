@@ -129,7 +129,7 @@ Agent sizing is per managed host. The figures below describe available headroom 
 | **CPU** | 1 available vCPU | 2 available vCPU during larger audit profiles |
 | **Memory** | 512 MiB available | 1 GiB available during an audit |
 | **Disk** | 500 MiB free for runtime, virtual environment, controls, state, and initial reports | 1 GiB or more, plus capacity for retained report history |
-| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.4.1 encrypts HTTPS traffic but does not validate the gateway certificate or hostname |
+| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.4.3 encrypts HTTPS traffic but does not validate the gateway certificate or hostname |
 
 The host requires Python 3.11 or newer, `venv` support, systemd, and root privileges so read-only controls can inspect protected system state. Enrollment installs constrained Python dependencies into `/opt/lsa-agent/venv`, so it also requires access to the dependency source or an internal/offline package mirror. No inbound agent port is required.
 
@@ -220,7 +220,7 @@ curl --fail-with-body \
 Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
 
 ```bash
-sudo apt install ./lsa-agent_0.4.1_all.deb
+sudo apt install ./lsa-agent_0.4.3_all.deb
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
 ```
 
