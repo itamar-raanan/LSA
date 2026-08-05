@@ -166,7 +166,9 @@ export interface Finding {
   actual: string | null
   remediation_summary: string | null
   remediation_commands: string[]
+  verification_commands: string[]
   reboot_required: boolean
+  service_restart: boolean
 }
 
 export interface DashboardData {

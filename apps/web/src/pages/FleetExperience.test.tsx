@@ -10,7 +10,7 @@ const host = {
 }
 
 const finding = {
-  id: 'finding-1', host_id: host.id, hostname: host.hostname, report_id: 'report-1', control_id: 'LSA-SSH-1', module: 'cis', category: 'ssh', title: 'Disable root login', severity: 'high', status: 'fail', lifecycle: 'new', expected: 'no', actual: 'yes', remediation_summary: 'Disable it.', remediation_commands: [], reboot_required: false,
+  id: 'finding-1', host_id: host.id, hostname: host.hostname, report_id: 'report-1', control_id: 'LSA-SSH-1', module: 'cis', category: 'ssh', title: 'Disable root login', severity: 'high', status: 'fail', lifecycle: 'new', expected: 'PermitRootLogin no', actual: 'PermitRootLogin yes in /etc/ssh/sshd_config', remediation_summary: 'Disable direct root SSH access after confirming sudo access for an administrative account.', remediation_commands: ["printf '%s\\n' 'PermitRootLogin no' > /etc/ssh/sshd_config.d/10-lsa-root-login.conf", 'systemctl reload ssh'], verification_commands: ['sshd -T | grep ^permitrootlogin'], reboot_required: false, service_restart: true,
 }
 
 const apiMock = vi.hoisted(() => ({
@@ -62,6 +62,19 @@ describe('Fleet console experience', () => {
     expect(screen.queryByText('Disable root login')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /SSH/ }))
     expect(screen.getByText('Disable root login')).toBeInTheDocument()
+  })
+
+  it('presents remediation as a current-to-required operator guide', async () => {
+    render(<FindingsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /SSH/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Disable root login/ }))
+    expect(screen.getByText('Current State')).toBeInTheDocument()
+    expect(screen.getByText('Required State')).toBeInTheDocument()
+    expect(screen.getByText('Why This Setting Is Used')).toBeInTheDocument()
+    expect(screen.getByText('/etc/ssh/sshd_config')).toBeInTheDocument()
+    expect(screen.getByText('Apply Step 1')).toBeInTheDocument()
+    expect(screen.getByText('Verify Step 1')).toBeInTheDocument()
+    expect(screen.getByText('A service restart is required and may interrupt active sessions.')).toBeInTheDocument()
   })
 
   it('shows searchable package and service inventory on the host record', async () => {

@@ -515,7 +515,9 @@ def list_findings(
             actual=finding.actual,
             remediation_summary=finding.remediation_summary,
             remediation_commands=finding.remediation_commands or [],
+            verification_commands=finding.verification_commands or [],
             reboot_required=finding.reboot_required,
+            service_restart=finding.service_restart,
         )
         for finding, hostname in rows
     ]

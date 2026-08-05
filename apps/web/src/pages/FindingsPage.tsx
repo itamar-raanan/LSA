@@ -1,7 +1,8 @@
-import { CaretDown, Check, Copy, Funnel } from '@phosphor-icons/react'
+import { CaretDown, Funnel } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
+import { RemediationGuide } from '../components/RemediationGuide'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
@@ -25,7 +26,6 @@ export function FindingsPage() {
   const [severity, setSeverity] = useState('')
   const [category, setCategory] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
   const { data, error, loading, reload } = useApi(() => api.findings(), [])
   const categories = useMemo(() => {
     const known = new Set(categoryCatalog.map((item) => item.id))
@@ -35,12 +35,6 @@ export function FindingsPage() {
     return [...categoryCatalog, ...discovered]
   }, [data])
   const visible = (data ?? []).filter((item) => item.category === category && (!severity || item.severity === severity))
-
-  async function copyCommand(id: string, command: string) {
-    await navigator.clipboard.writeText(command)
-    setCopied(id)
-    window.setTimeout(() => setCopied(null), 1600)
-  }
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Risk queue" title="Findings by control category" detail="Start with the complete control surface, then open a category to inspect relevant unresolved findings." />
@@ -72,8 +66,7 @@ export function FindingsPage() {
                 <CaretDown size={16} className={`mt-1 text-stone-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
               </button>
               {isExpanded && <div className="border-t border-stone-800 bg-[#f7f3eb] px-5 py-6 md:px-7">
-                <div className="grid gap-7 lg:grid-cols-2"><div><p className="detail-label">Observed</p><pre className="evidence-block">{finding.actual ?? 'No observed value supplied'}</pre></div><div><p className="detail-label">Expected</p><pre className="evidence-block">{finding.expected ?? 'No expected value supplied'}</pre></div></div>
-                <div className="mt-7 border-t border-stone-800 pt-6"><p className="detail-label">Remediation</p><p className="mt-3 text-sm leading-6 text-stone-400">{finding.remediation_summary ?? 'No remediation guidance supplied.'}</p>{finding.remediation_commands.map((command) => <div key={command} className="mt-4 flex items-center gap-3 rounded-xl border border-stone-800 bg-[#eee8dd] px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-[#4f6f5c]">{command}</code><button className="icon-button shrink-0" aria-label="Copy command" onClick={() => void copyCommand(finding.id, command)}>{copied === finding.id ? <Check size={16} /> : <Copy size={16} />}</button></div>)}</div>
+                <RemediationGuide finding={finding} />
               </div>}
             </article>
           })}
