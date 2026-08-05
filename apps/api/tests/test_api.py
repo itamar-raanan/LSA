@@ -105,6 +105,10 @@ def login(client) -> str:
 
 def test_admin_can_download_versioned_agent_package(client):
     headers = {"Authorization": f"Bearer {login(client)}"}
+    connectivity = client.get("/api/v1/agent-connectivity", headers=headers)
+    assert connectivity.status_code == 200, connectivity.text
+    assert connectivity.json() == {"public_url": "https://localhost:8444"}
+
     listed = client.get("/api/v1/agent-packages", headers=headers)
     assert listed.status_code == 200, listed.text
     packages = listed.json()

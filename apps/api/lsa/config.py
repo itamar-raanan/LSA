@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
     s3_secret_key: str | None = None
     s3_server_side_encryption: Literal["AES256", "aws:kms", "none"] = "AES256"
     public_url: str = "https://localhost:8443"
+    agent_public_url: str = "https://localhost:8444"
     allow_private_identity_providers: bool = False
     tls_certificate_path: str = "/tmp/lsa-tls/tls.crt"
     tls_private_key_path: str = "/tmp/lsa-tls/tls.key"
@@ -42,6 +44,15 @@ class Settings(BaseSettings):
     cisa_kev_url: str = (
         "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
     )
+
+    @field_validator("agent_public_url")
+    @classmethod
+    def validate_agent_public_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        parsed = urlparse(normalized)
+        if parsed.scheme != "https" or not parsed.netloc or parsed.path:
+            raise ValueError("agent_public_url must be an HTTPS origin without a path")
+        return normalized
 
 
 @lru_cache

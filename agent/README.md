@@ -12,14 +12,14 @@ For Debian 13 or Ubuntu 24.04+:
 
 ```bash
 sudo apt install ./lsa-agent_0.4.0_all.deb
-sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
 ```
 
 For RHEL, Rocky Linux, or AlmaLinux 9+:
 
 ```bash
 sudo dnf install ./lsa-agent-0.4.0-1.noarch.rpm
-sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
 ```
 
 The native package only stages the runtime. It does not start the service before successful enrollment.
@@ -31,12 +31,12 @@ Create a one-time enrollment token for the target group, then run:
 ```bash
 tar -xzf lsa-agent-0.4.0-linux-universal.tar.gz
 cd lsa-agent-0.4.0
-sudo ./install.sh --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
+sudo ./install.sh --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
 ```
 
 For a platform certificate issued by a private CA, copy the CA certificate to the host and pass `--ca-bundle /path/to/ca.pem`. The installer places the runtime in `/opt/lsa-agent`, configuration in `/etc/lsa-agent`, state in `/var/lib/lsa-agent`, and the service unit in `/usr/lib/systemd/system`.
 
-The private key, host ingestion token, and local state are stored with mode `0600` under `/var/lib/lsa-agent`. The server only receives the public key. Set `ca_bundle` to the CA that issued the platform certificate on TCP 8443.
+The private key, host ingestion token, and local state are stored with mode `0600` under `/var/lib/lsa-agent`. The server only receives the public key. Set `ca_bundle` to the CA that issued the platform certificate on the dedicated agent gateway, TCP 8444 by default. The agent does not use the management console port.
 
 The daemon polls every 60 seconds by default while scheduled audits continue to follow the group policy interval and jitter. **Run audit now** queues only the built-in `audit` task. The signed protocol cannot carry a command, script, or remediation payload, and the agent reports completion or a bounded failure message back to the console.
 

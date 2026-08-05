@@ -406,3 +406,7 @@ export interface AgentPackage {
   size_bytes: number
   sha256: string
 }
+
+export interface AgentConnectivity {
+  public_url: string
+}

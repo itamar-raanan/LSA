@@ -125,10 +125,10 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
 
 export function AgentsSettingsPage() {
   const { data, error, loading, reload, refresh } = useApi(async () => {
-    const [agents, groups, policies, controls, enrollmentTokens, packages] = await Promise.all([
-      api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(),
+    const [agents, groups, policies, controls, enrollmentTokens, packages, connectivity] = await Promise.all([
+      api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(), api.agentConnectivity(),
     ])
-    return { agents, groups, policies, controls, enrollmentTokens, packages }
+    return { agents, groups, policies, controls, enrollmentTokens, packages, connectivity }
   }, [])
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('hosts')
@@ -308,7 +308,7 @@ export function AgentsSettingsPage() {
       action={<button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Deploy Agent</button>}
     />
     {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
-    {showDownloads && <AgentDownloadPanel packages={data.packages} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
+    {showDownloads && <AgentDownloadPanel packages={data.packages} platformUrl={data.connectivity.public_url} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
 
     {showEnrollment && <section className="panel mb-6 overflow-hidden">
       <div className="flex items-start justify-between border-b border-stone-800 px-6 py-5">
