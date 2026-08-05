@@ -52,6 +52,9 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Wed Aug 05 2026 Linux Security Auditor - 0.4.3-1
+- Keep Ansible runtime and temporary files inside the agent's writable state directory.
+
 * Wed Aug 05 2026 Linux Security Auditor - 0.4.1-1
 - Disable platform TLS certificate verification for managed-agent transport.
 

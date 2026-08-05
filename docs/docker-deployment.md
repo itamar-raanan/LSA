@@ -39,7 +39,7 @@ The first boot generates a 30-day self-signed certificate for `localhost`, so th
 
 The private key is encrypted in PostgreSQL, materialized into an internal restricted volume, and reloaded atomically by the gateway. Set `LSA_TLS_HOST` to the externally visible management DNS name before configuring OpenID Connect because it forms the callback URL. Set `LSA_AGENT_PUBLIC_URL` to the externally visible agent origin. Change `LSA_TLS_BIND` or `LSA_AGENT_TLS_BIND` to `0.0.0.0` only when the host firewall permits the intended clients. Do not expose PostgreSQL, MinIO, or the API container directly.
 
-Managed agent release 0.4.1 keeps HTTPS encryption but does not validate the agent gateway certificate or hostname. Management browsers and identity-provider callbacks continue to use normal TLS validation on port 8443.
+Managed agent release 0.4.3 keeps HTTPS encryption but does not validate the agent gateway certificate or hostname. Management browsers and identity-provider callbacks continue to use normal TLS validation on port 8443.
 
 ## Signed evidence policy
 

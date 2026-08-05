@@ -35,7 +35,7 @@ except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
 
 
-VERSION = "0.4.2"
+VERSION = "0.4.3"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 
@@ -271,6 +271,7 @@ def run_scanner(config: dict[str, Any], state: dict[str, Any], key_path: Path, p
     if not playbook.is_file():
         raise RuntimeError(f"scanner playbook not found: {playbook}")
     state_root = Path(config.get("state_dir", DEFAULT_STATE_DIR))
+    state_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     token_path = state_root / "ingestion-token"
     token_path.write_text(state["ingestion_token"], encoding="utf-8")
     os.chmod(token_path, 0o600)
@@ -290,6 +291,12 @@ def run_scanner(config: dict[str, Any], state: dict[str, Any], key_path: Path, p
     }
     with tempfile.TemporaryDirectory(prefix="lsa-agent-", dir=state_root) as temporary:
         temporary_path = Path(temporary)
+        ansible_home = temporary_path / "ansible-home"
+        ansible_local_temp = temporary_path / "ansible-local"
+        ansible_remote_temp = temporary_path / "ansible-remote"
+        for runtime_path in (ansible_home, ansible_local_temp, ansible_remote_temp):
+            runtime_path.mkdir(mode=0o700)
+            os.chmod(runtime_path, 0o700)
         inventory_path = temporary_path / "inventory.ini"
         variables_path = temporary_path / "policy.json"
         inventory_path.write_text("[managed]\nlocalhost ansible_connection=local\n", encoding="utf-8")
@@ -304,6 +311,10 @@ def run_scanner(config: dict[str, Any], state: dict[str, Any], key_path: Path, p
         ]
         environment = os.environ.copy()
         environment["ANSIBLE_CONFIG"] = str(scanner_dir / "ansible.cfg")
+        environment["ANSIBLE_HOME"] = str(ansible_home)
+        environment["ANSIBLE_LOCAL_TEMP"] = str(ansible_local_temp)
+        environment["ANSIBLE_REMOTE_TEMP"] = str(ansible_remote_temp)
+        environment["ANSIBLE_REMOTE_TMP"] = str(ansible_remote_temp)
         subprocess.run(command, cwd=scanner_dir, env=environment, check=True)
 
 
