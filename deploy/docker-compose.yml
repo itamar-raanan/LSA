@@ -67,6 +67,7 @@ services:
       LSA_SESSION_SECRET: ${LSA_SESSION_SECRET:?Set LSA_SESSION_SECRET in deploy/.env}
       LSA_SETTINGS_ENCRYPTION_KEY: ${LSA_SETTINGS_ENCRYPTION_KEY:?Set LSA_SETTINGS_ENCRYPTION_KEY in deploy/.env}
       LSA_PUBLIC_URL: https://${LSA_TLS_HOST:-localhost}:${LSA_TLS_PORT:-8443}
+      LSA_AGENT_PUBLIC_URL: ${LSA_AGENT_PUBLIC_URL:-https://localhost:8444}
       LSA_ALLOW_PRIVATE_IDENTITY_PROVIDERS: ${LSA_ALLOW_PRIVATE_IDENTITY_PROVIDERS:-false}
       LSA_TLS_CERTIFICATE_PATH: /tls/tls.crt
       LSA_TLS_PRIVATE_KEY_PATH: /tls/tls.key
@@ -150,6 +151,7 @@ services:
         condition: service_healthy
     ports:
       - "${LSA_TLS_BIND:-127.0.0.1}:${LSA_TLS_PORT:-8443}:8443"
+      - "${LSA_AGENT_TLS_BIND:-127.0.0.1}:${LSA_AGENT_TLS_PORT:-8444}:8444"
     volumes:
       - lsa-tls-runtime:/tls:ro
     networks:

@@ -1,5 +1,5 @@
 {
-  "platform_url": "https://lsa.example.com:8443",
+  "platform_url": "https://lsa.example.com:8444",
   "scanner_dir": "/opt/lsa-agent/scanner",
   "state_dir": "/var/lib/lsa-agent",
   "ansible_playbook": "ansible-playbook",

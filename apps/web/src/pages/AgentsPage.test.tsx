@@ -22,6 +22,7 @@ vi.mock('../api/client', () => ({
     controlCatalog: vi.fn().mockResolvedValue([{ control_id: 'CIS-DEBIAN13-1.1.1', title: 'Disable unused filesystem', category: 'filesystem', module: 'cis_debian13' }]),
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
     createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token' }),
+    agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444' }),
     agentPackages: vi.fn().mockResolvedValue([
       { id: 'linux-deb', version: '0.4.0', filename: 'lsa-agent_0.4.0_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
       { id: 'linux-rpm', version: '0.4.0', filename: 'lsa-agent-0.4.0-1.noarch.rpm', content_type: 'application/x-rpm', operating_system: 'RHEL / Rocky / AlmaLinux 9+', architecture: 'noarch', package_format: 'rpm', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'b'.repeat(64) },
@@ -89,6 +90,7 @@ describe('Agents', () => {
     expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Download Package' })).toHaveLength(1)
     expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.0_all.deb/)).toBeInTheDocument()
+    expect(screen.getByText(/--platform-url 'https:\/\/lsa.example.test:8444'/)).toBeInTheDocument()
     fireEvent.change(screen.getByRole('combobox', { name: 'Agent package' }), { target: { value: 'linux-rpm' } })
     expect(screen.getByText(/sudo dnf install .*lsa-agent-0.4.0-1.noarch.rpm/)).toBeInTheDocument()
     expect(screen.getAllByText(/SHA-256/)).toHaveLength(1)

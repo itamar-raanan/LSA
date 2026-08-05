@@ -697,3 +697,7 @@ class AgentPackageResponse(BaseModel):
     audit_only: bool
     size_bytes: int
     sha256: str
+
+
+class AgentConnectivityResponse(BaseModel):
+    public_url: str

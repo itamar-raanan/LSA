@@ -23,7 +23,7 @@ export function CertificatesSettingsPage() {
   }
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Transport security" title="TLS certificates" detail="Install and atomically rotate the certificate chain used by the HTTPS-only console and API on port 8443." action={<span className="settings-state">TLS only · 8443</span>} />
+    <PageHeader eyebrow="Transport security" title="TLS certificates" detail="Install and atomically rotate the certificate chain shared by management on port 8443 and the agent gateway on port 8444." action={<span className="settings-state">TLS · 8443 / 8444</span>} />
     {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : <section className="panel overflow-hidden">
       <div className="grid gap-6 px-6 py-7 md:grid-cols-[1fr_1.15fr] md:px-7">
         <div><span className="grid size-11 place-items-center rounded-xl border border-stone-800 bg-[#f7f3eb] text-[#4f6f5c]"><Certificate size={22} weight="duotone" /></span><h2 className="mt-5 text-lg font-medium tracking-tight text-stone-200">{certificate ? 'Active certificate' : 'Certificate upload'}</h2>

@@ -37,7 +37,7 @@ INSTALL_SCRIPT = r'''#!/bin/sh
 set -eu
 
 usage() {
-  echo "Usage: sudo ./install.sh --platform-url https://lsa.example.com:8443 --token lsa_enroll_... [--ca-bundle /path/to/ca.pem]" >&2
+  echo "Usage: sudo ./install.sh --platform-url https://lsa.example.com:8444 --token lsa_enroll_... [--ca-bundle /path/to/ca.pem]" >&2
   exit 2
 }
 

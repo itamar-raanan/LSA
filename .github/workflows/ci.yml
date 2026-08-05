@@ -50,6 +50,10 @@ jobs:
           curl --insecure --fail --silent --show-error https://127.0.0.1:8443/health | grep -q '"status":"ok"'
           curl --insecure --fail --silent --show-error https://127.0.0.1:8443/ready | grep -q '"database":"connected"'
           curl --insecure --fail --silent --show-error https://127.0.0.1:8443/ready | grep -q '"evidence_vault":"connected"'
+          curl --insecure --fail --silent --show-error https://127.0.0.1:8444/agent-healthz | grep -q "ok"
+          test "$(curl --insecure --silent --output /dev/null --write-out '%{http_code}' https://127.0.0.1:8443/api/v1/agent/policy)" = "404"
+          test "$(curl --insecure --silent --output /dev/null --write-out '%{http_code}' https://127.0.0.1:8444/api/v1/auth/providers)" = "404"
+          test "$(curl --insecure --silent --output /dev/null --write-out '%{http_code}' https://127.0.0.1:8444/)" = "404"
           python3 deploy/smoke_test.py \
             https://127.0.0.1:8443 \
             admin@example.com \

@@ -22,7 +22,7 @@ def test_runtime_version_matches_packaging_release():
 
 def test_platform_requires_https_by_default():
     with pytest.raises(RuntimeError, match="must use HTTPS"):
-        platform_url({"platform_url": "http://lsa.example.test:8443"})
+        platform_url({"platform_url": "http://lsa.example.test:8444"})
 
 
 def test_agent_request_signature_covers_method_path_timestamp_and_body():

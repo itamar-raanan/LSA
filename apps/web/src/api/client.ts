@@ -24,6 +24,7 @@ import type {
   AgentEnrollmentTokenCreated,
   AgentEnrollmentToken,
   PolicyMode,
+  AgentConnectivity,
   AgentPackage,
   AgentPolicyVersion,
   AgentTask,
@@ -248,6 +249,9 @@ export const api = {
   },
   revokeAgentEnrollmentToken(id: string): Promise<void> {
     return request(`/agent-enrollment-tokens/${id}`, { method: 'DELETE' })
+  },
+  agentConnectivity(): Promise<AgentConnectivity> {
+    return request('/agent-connectivity')
   },
   agentPackages(): Promise<AgentPackage[]> {
     return request('/agent-packages')

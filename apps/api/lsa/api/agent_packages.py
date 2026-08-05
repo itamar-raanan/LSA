@@ -3,11 +3,21 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from lsa.api.admin import require_admin
 from lsa.dependencies import current_user
 from lsa.models import User
-from lsa.schemas import AgentPackageResponse
+from lsa.config import Settings, get_settings
+from lsa.schemas import AgentConnectivityResponse, AgentPackageResponse
 from lsa.services.agent_packages import AgentPackage, agent_packages, get_agent_package
 
 
 router = APIRouter(tags=["agent packages"])
+
+
+@router.get("/agent-connectivity", response_model=AgentConnectivityResponse)
+def agent_connectivity(
+    user: User = Depends(current_user),
+    settings: Settings = Depends(get_settings),
+) -> AgentConnectivityResponse:
+    require_admin(user)
+    return AgentConnectivityResponse(public_url=settings.agent_public_url.rstrip("/"))
 
 
 def _response(package: AgentPackage) -> AgentPackageResponse:

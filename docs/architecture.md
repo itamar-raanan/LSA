@@ -10,7 +10,7 @@ An operator runs the Ansible scanner from a customer-controlled controller. The 
 
 ### Managed agent
 
-The unified agent runs on the audited host and makes outbound HTTPS connections to the platform on TCP 8443. Enrollment consumes a one-time, expiring group token. The agent generates an Ed25519 private key locally; the platform stores only its public key and returns host-scoped ingestion credentials. The agent then signs policy and heartbeat requests, executes the locally installed scanner, signs its evidence bundle, and uploads it through the existing ingestion boundary.
+The unified agent runs on the audited host and makes outbound HTTPS connections to the dedicated agent gateway on TCP 8444. Enrollment consumes a one-time, expiring group token. The agent generates an Ed25519 private key locally; the platform stores only its public key and returns host-scoped ingestion credentials. The agent then signs policy and heartbeat requests, executes the locally installed scanner, signs its evidence bundle, and uploads it through the existing ingestion boundary.
 
 Each agent belongs to exactly one group. Each group points to one policy, and every policy update creates an immutable version. A policy has a default mode and optional per-control modes: `disabled`, `audit`, `manual`, or `remediate`. In the current foundation, `manual` and `remediate` are staged intent only: the API returns `enforcement_enabled: false`, the agent requires that lock, and every enabled control remains read-only.
 
@@ -35,7 +35,7 @@ The canonical contract lives in `packages/contracts/report-v1.schema.json`. A re
 
 The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API, PostgreSQL, and MinIO communicate only on an internal Docker network; neither data service has a published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.
 
-Only the TLS web gateway publishes a host port, bound to `127.0.0.1:8443` by default. No plaintext HTTP listener is published. Platform state lives in named PostgreSQL and evidence-object volumes; certificate keys are encrypted in PostgreSQL and materialized into a restricted gateway volume.
+Only the TLS gateway publishes host ports: management is bound to `127.0.0.1:8443` and the restricted agent data plane to `127.0.0.1:8444` by default. No plaintext HTTP listener is published. The agent listener exposes only managed-agent control routes and report ingestion; it does not serve the console, management APIs, or documentation. Platform state lives in named PostgreSQL and evidence-object volumes; certificate keys are encrypted in PostgreSQL and materialized into a restricted gateway volume.
 
 ## Identity and access
 

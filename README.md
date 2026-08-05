@@ -14,7 +14,7 @@ Both models feed the same validation, normalization, evidence, and finding pipel
 ```mermaid
 flowchart LR
     O["Offline Ansible scanner"] -->|"Signed ZIP or JSON report"| I["LSA ingestion pipeline"]
-    A["Managed Linux agent"] -->|"Outbound HTTPS on 8443"| I
+    A["Managed Linux agent"] -->|"Outbound HTTPS on 8444"| I
     I --> V["Validate, verify, and normalize"]
     V --> D[("PostgreSQL inventory and findings")]
     V --> E[("Immutable evidence vault")]
@@ -40,7 +40,8 @@ The server is delivered as a Docker Compose stack. Only the TLS gateway is publi
 
 | Component | Responsibility | Exposure |
 | --- | --- | --- |
-| **TLS gateway and web console** | Terminates HTTPS, serves the React console, and proxies API, documentation, and health requests | TCP 8443 only |
+| **TLS gateway and web console** | Terminates HTTPS, serves the React console, and proxies management API, documentation, and health requests | Management TCP 8443 |
+| **Agent gateway** | Terminates HTTPS for enrollment, signed policy/task polling, heartbeats, and report ingestion without exposing the console | Agent TCP 8444 |
 | **FastAPI service** | Authentication, fleet management, groups, policies, enrollment, ingestion, validation, findings, and audit events | Internal network |
 | **PostgreSQL** | Tenants, users, sessions, hosts, groups, policies, reports, findings, credentials, tasks, and audit metadata | Internal network |
 | **MinIO evidence vault** | Retention-enforced storage of original report artifacts with integrity verification | Internal network |
@@ -57,7 +58,7 @@ The following values are planning baselines for the bundled single-node Docker C
 | **Memory** | 4 GiB RAM | 8 GiB RAM; monitor PostgreSQL, API workers, and MinIO under real load |
 | **System and database disk** | 20 GiB free in addition to evidence storage | 50 GiB or more on SSD-backed storage, with database growth monitored |
 | **Evidence storage** | 10 GiB or enough for the test retention period | Size separately from measured bundle size, audit frequency, host count, and retention |
-| **Network** | Inbound TCP 8443 from administrators, scanners, and agents; outbound HTTPS from the intelligence worker | Stable TLS endpoint on TCP 8443 plus DNS and time synchronization |
+| **Network** | Inbound TCP 8443 from administrators and TCP 8444 from agents; outbound HTTPS from the intelligence worker | Stable TLS endpoints on management TCP 8443 and agent TCP 8444, plus DNS and time synchronization |
 
 Estimate raw evidence capacity with:
 
@@ -71,7 +72,7 @@ The server host also requires Docker Engine with the Compose plugin. It must be 
 
 ### Server data flow
 
-1. The gateway accepts a request over HTTPS on port 8443 and routes it to the console or API.
+1. The gateway accepts management traffic over HTTPS on port 8443 and agent traffic over the restricted HTTPS listener on port 8444.
 2. The API authenticates the user, offline-scanner token, or agent identity and applies tenant and resource authorization.
 3. Report ingestion validates identity binding, schema, size, safe archive paths, checksums, duplicate submissions, and optional Ed25519 signatures.
 4. The original artifact is preserved in the evidence vault while normalized hosts, reports, controls, and findings are stored in PostgreSQL.
@@ -99,7 +100,7 @@ The offline scanner and managed agent share normalized contracts and control log
 | | Offline report | Managed agent |
 | --- | --- | --- |
 | **Runtime** | Ansible from a customer-controlled controller | Installed service on each Linux host |
-| **Connectivity** | None required for scanning; upload is optional | Outbound HTTPS to LSA on port 8443 |
+| **Connectivity** | None required for scanning; upload is optional | Outbound HTTPS to LSA on port 8444 |
 | **Platform connection** | Signed ZIP transfer or token-authenticated JSON/ZIP upload | Enrolled Ed25519 machine identity |
 | **Policy source** | Scanner inventory and variables | Group policy retrieved from LSA |
 | **Reporting** | HTML, findings CSV, application CSV, JSON, checksum, manifest, and ZIP | Signed heartbeat, policy state, audit task, application inventory, and report exchange |
@@ -128,7 +129,7 @@ Agent sizing is per managed host. The figures below describe available headroom 
 | **CPU** | 1 available vCPU | 2 available vCPU during larger audit profiles |
 | **Memory** | 512 MiB available | 1 GiB available during an audit |
 | **Disk** | 500 MiB free for runtime, virtual environment, controls, state, and initial reports | 1 GiB or more, plus capacity for retained report history |
-| **Network** | Outbound TCP 8443 to the LSA platform | Reliable DNS, time synchronization, and TLS trust for the platform certificate |
+| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS, time synchronization, and TLS trust for the platform certificate |
 
 The host requires Python 3.11 or newer, `venv` support, systemd, and root privileges so read-only controls can inspect protected system state. Enrollment installs constrained Python dependencies into `/opt/lsa-agent/venv`, so it also requires access to the dependency source or an internal/offline package mirror. No inbound agent port is required.
 
@@ -218,7 +219,7 @@ Open **Agents** in the primary console navigation, choose **Install agent**, and
 
 ```bash
 sudo apt install ./lsa-agent_0.4.0_all.deb
-sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8443' --token 'lsa_enroll_...'
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
 ```
 
 The **Agents** workspace opens on **All hosts**. Select a group in the left fleet rail to view its hosts and effective policy. From there, administrators can publish categorized control overrides, request an audit, move agents to another group, or revoke them.

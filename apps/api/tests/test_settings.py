@@ -14,6 +14,7 @@ import pytest
 from fastapi import HTTPException
 
 from lsa.config import get_settings
+from lsa.config import Settings
 from lsa.models import AuthTransaction, IdentityProvider, User, now_utc
 from lsa.security import encrypt_secret
 from lsa.services.identity import validate_id_token
@@ -30,6 +31,14 @@ def login(client) -> str:
 
 def headers(client) -> dict[str, str]:
     return {"Authorization": f"Bearer {login(client)}"}
+
+
+def test_agent_public_url_requires_a_dedicated_https_origin():
+    assert Settings(agent_public_url="https://agents.example.test:8444/").agent_public_url == (
+        "https://agents.example.test:8444"
+    )
+    with pytest.raises(ValueError, match="HTTPS origin"):
+        Settings(agent_public_url="http://agents.example.test:8444/api")
 
 
 def test_provider_secret_is_write_only_and_public_listing_is_minimal(client):
