@@ -2,19 +2,17 @@
 set -eu
 
 usage() {
-  echo "Usage: sudo lsa-agent-enroll --platform-url https://lsa.example.com:8444 --token lsa_enroll_... [--ca-bundle /path/to/ca.pem]" >&2
+  echo "Usage: sudo lsa-agent-enroll --platform-url https://lsa.example.com:8444 --token lsa_enroll_..." >&2
   exit 2
 }
 
 PLATFORM_URL=""
 ENROLLMENT_TOKEN=""
-CA_BUNDLE=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --platform-url) [ "$#" -ge 2 ] || usage; PLATFORM_URL="$2"; shift 2 ;;
     --token) [ "$#" -ge 2 ] || usage; ENROLLMENT_TOKEN="$2"; shift 2 ;;
-    --ca-bundle) [ "$#" -ge 2 ] || usage; CA_BUNDLE="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -25,13 +23,6 @@ case "$PLATFORM_URL" in
   https://*) ;;
   *) echo "The platform URL must use HTTPS." >&2; exit 1 ;;
 esac
-
-if [ -z "$CA_BUNDLE" ]; then
-  for candidate in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt; do
-    if [ -f "$candidate" ]; then CA_BUNDLE="$candidate"; break; fi
-  done
-fi
-[ -f "$CA_BUNDLE" ] || { echo "A readable system or private CA bundle is required." >&2; exit 1; }
 
 PYTHON=""
 for candidate in python3.13 python3.12 python3.11 python3; do
@@ -59,19 +50,19 @@ if [ ! -x "$INSTALL_DIR/venv/bin/python" ]; then
 fi
 "$INSTALL_DIR/venv/bin/pip" install --disable-pip-version-check --no-cache-dir -r "$INSTALL_DIR/requirements.txt"
 
-"$PYTHON" - "$CONFIG_DIR/config.json" "$PLATFORM_URL" "$CA_BUNDLE" <<'PY'
+"$PYTHON" - "$CONFIG_DIR/config.json" "$PLATFORM_URL" <<'PY'
 import json
 import os
 import sys
 import tempfile
 
-path, platform_url, ca_bundle = sys.argv[1:]
+path, platform_url = sys.argv[1:]
 payload = {
     "platform_url": platform_url.rstrip("/"),
     "scanner_dir": "/opt/lsa-agent/scanner",
     "state_dir": "/var/lib/lsa-agent",
     "ansible_playbook": "/opt/lsa-agent/venv/bin/ansible-playbook",
-    "ca_bundle": ca_bundle,
+    "verify_tls": False,
     "tags": {},
 }
 descriptor, temporary = tempfile.mkstemp(prefix=".config.", dir=os.path.dirname(path))

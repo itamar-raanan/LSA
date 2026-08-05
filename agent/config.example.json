@@ -3,7 +3,7 @@
   "scanner_dir": "/opt/lsa-agent/scanner",
   "state_dir": "/var/lib/lsa-agent",
   "ansible_playbook": "ansible-playbook",
-  "ca_bundle": "/etc/ssl/certs/ca-certificates.crt",
+  "verify_tls": false,
   "tags": {
     "environment": "production",
     "owner": "platform"

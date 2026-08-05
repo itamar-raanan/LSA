@@ -318,3 +318,33 @@ def test_tls_upload_validates_and_never_returns_private_key(client):
     )
     assert mismatch.status_code == 422
     assert mismatch.json()["detail"] == "TLS certificate does not match the private key"
+
+
+def test_tls_upload_accepts_der_encoded_crt_and_key(client):
+    certificate_pem, private_key_pem = certificate_pair("der.lsa.example.com")
+    certificate = x509.load_pem_x509_certificate(certificate_pem)
+    private_key = serialization.load_pem_private_key(private_key_pem, password=None)
+
+    response = client.post(
+        "/api/v1/settings/tls-certificate",
+        headers=headers(client),
+        files={
+            "certificate": (
+                "server.crt",
+                certificate.public_bytes(serialization.Encoding.DER),
+                "application/pkix-cert",
+            ),
+            "private_key": (
+                "server.key",
+                private_key.private_bytes(
+                    serialization.Encoding.DER,
+                    serialization.PrivateFormat.PKCS8,
+                    serialization.NoEncryption(),
+                ),
+                "application/octet-stream",
+            ),
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["hostnames"] == ["der.lsa.example.com"]

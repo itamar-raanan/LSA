@@ -16,18 +16,60 @@ from lsa.models import Tenant, TlsCertificate, now_utc
 from lsa.security import decrypt_secret, encrypt_secret
 
 
-def certificate_details(certificate_pem: str, private_key_pem: str) -> dict[str, object]:
+def normalize_certificate_chain(certificate_data: bytes | str) -> tuple[x509.Certificate, str]:
+    encoded = certificate_data.encode() if isinstance(certificate_data, str) else certificate_data
     try:
-        certificate = x509.load_pem_x509_certificate(certificate_pem.encode())
-        private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
-    except (TypeError, ValueError) as exc:
+        certificates = x509.load_pem_x509_certificates(encoded)
+    except ValueError:
+        try:
+            certificates = [x509.load_der_x509_certificate(encoded)]
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Certificate must be a PEM or DER encoded .crt/.pem file",
+            ) from exc
+    if not certificates:
+        raise HTTPException(status_code=422, detail="Certificate file contains no certificates")
+    normalized = b"".join(
+        certificate.public_bytes(serialization.Encoding.PEM) for certificate in certificates
+    ).decode()
+    return certificates[0], normalized
+
+
+def normalize_private_key(private_key_data: bytes | str) -> tuple[object, str]:
+    encoded = private_key_data.encode() if isinstance(private_key_data, str) else private_key_data
+    try:
+        private_key = serialization.load_pem_private_key(encoded, password=None)
+    except (TypeError, ValueError):
+        try:
+            private_key = serialization.load_der_private_key(encoded, password=None)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Private key must be an unencrypted PEM or DER encoded .key/.pem file",
+            ) from exc
+    normalized = private_key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    return private_key, normalized
+
+
+def certificate_details(
+    certificate_data: bytes | str, private_key_data: bytes | str
+) -> tuple[dict[str, object], str, str]:
+    certificate, certificate_pem = normalize_certificate_chain(certificate_data)
+    private_key, private_key_pem = normalize_private_key(private_key_data)
+    try:
+        private_public = private_key.public_key().public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
         raise HTTPException(
-            status_code=422, detail="Certificate and unencrypted PEM private key are required"
+            status_code=422, detail="TLS private key type is not supported"
         ) from exc
     certificate_public = certificate.public_key().public_bytes(
-        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
-    )
-    private_public = private_key.public_key().public_bytes(
         serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
     )
     if certificate_public != private_public:
@@ -45,7 +87,7 @@ def certificate_details(certificate_pem: str, private_key_pem: str) -> dict[str,
         ).value.get_values_for_type(x509.DNSName)
     except x509.ExtensionNotFound:
         hostnames = []
-    return {
+    details = {
         "fingerprint": certificate.fingerprint(hashes.SHA256()).hex(),
         "subject": certificate.subject.rfc4514_string(),
         "issuer": certificate.issuer.rfc4514_string(),
@@ -53,6 +95,7 @@ def certificate_details(certificate_pem: str, private_key_pem: str) -> dict[str,
         "not_valid_before": certificate.not_valid_before_utc,
         "not_valid_after": certificate.not_valid_after_utc,
     }
+    return details, certificate_pem, private_key_pem
 
 
 def _atomic_write(path_text: str, content: str, mode: int, shared_gid: int | None = None) -> None:
@@ -86,17 +129,21 @@ def materialize_certificate(certificate: TlsCertificate, settings: Settings) -> 
         settings.tls_shared_gid,
     )
     _atomic_write(settings.tls_private_key_path, private_key, 0o640, settings.tls_shared_gid)
+    reload_marker = str(Path(settings.tls_certificate_path).with_name("tls.reload"))
+    _atomic_write(reload_marker, f"{now_utc().isoformat()}\n", 0o640, settings.tls_shared_gid)
 
 
 def install_certificate(
     db: Session,
     tenant_id: str,
-    certificate_pem: str,
-    private_key_pem: str,
+    certificate_data: bytes | str,
+    private_key_data: bytes | str,
     settings: Settings,
     uploaded_by: str | None,
 ) -> TlsCertificate:
-    details = certificate_details(certificate_pem, private_key_pem)
+    details, certificate_pem, private_key_pem = certificate_details(
+        certificate_data, private_key_data
+    )
     for current in db.scalars(
         select(TlsCertificate).where(
             TlsCertificate.tenant_id == tenant_id, TlsCertificate.is_active.is_(True)

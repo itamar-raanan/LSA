@@ -52,5 +52,8 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Wed Aug 05 2026 Linux Security Auditor - 0.4.1-1
+- Disable platform TLS certificate verification for managed-agent transport.
+
 * Mon Aug 03 2026 Linux Security Auditor - 0.4.0-1
 - Add runtime integrity verification and policy rollback protection.

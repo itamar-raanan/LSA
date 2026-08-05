@@ -104,7 +104,7 @@ export function AgentDownloadPanel({ packages, platformUrl, enrollmentToken, clo
         <button className="button-secondary min-h-9 px-3" onClick={() => void copy('command', installCommand)}>{copied === 'command' ? <Check size={14} /> : <Copy size={14} />} {copied === 'command' ? 'Copied' : 'Copy command'}</button>
       </div>
       <pre className="mt-4 overflow-x-auto rounded-xl border border-stone-800 bg-[#f7f3eb] p-4 font-mono text-[11px] leading-6 text-[#4f6f5c]"><code>{installCommand}</code></pre>
-      <p className="mt-3 text-[11px] leading-5 text-stone-600">Agents connect outbound to the dedicated gateway at <code className="text-stone-500">{platformUrl}</code>. Package installation stages the audit-only runtime but does not start it. Enrollment requires Python 3.11+, systemd, and network access to install constrained Python dependencies. For a private CA, copy its certificate to the host and add <code className="text-stone-500">--ca-bundle /path/to/ca.pem</code>.</p>
+      <p className="mt-3 text-[11px] leading-5 text-stone-600">Agents connect outbound to the dedicated HTTPS gateway at <code className="text-stone-500">{platformUrl}</code>. Package installation stages the audit-only runtime but does not start it. Enrollment requires Python 3.11+, systemd, and network access to install constrained Python dependencies. Agent certificate and hostname verification are disabled; traffic remains encrypted, but the platform identity is not authenticated.</p>
       {!enrollmentToken && <p className="mt-2 text-[11px] text-amber-300/80">Create an enrollment token before running the command and replace the token placeholder.</p>}
     </div>
   </section>
