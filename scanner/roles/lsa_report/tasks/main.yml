@@ -193,23 +193,29 @@
     - lsa_signing_key_file | length == 0
 
 - name: Submit signed report bundle
-  ansible.builtin.uri:
-    url: "{{ lsa_platform_url }}/api/v1/ingest/bundles"
-    method: POST
-    headers:
-      Authorization: "Bearer {{ lookup('file', lsa_ingest_token_file) | trim }}"
-    body_format: form-multipart
-    body:
-      file:
-        filename: "{{ lsa_bundle_build.stdout }}"
-        mime_type: application/zip
-    status_code: 202
-    timeout: 120
-    validate_certs: "{{ lsa_validate_certs | bool }}"
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [
+          lsa_controller_python,
+          role_path + '/../../scripts/submit_bundle.py',
+          lsa_platform_url,
+          lsa_ingest_token_file,
+          lsa_bundle_build.stdout
+        ]
+        + ([] if lsa_validate_certs | bool else ['--no-verify-tls'])
+      }}
   delegate_to: localhost
   become: false
-  no_log: true
   register: lsa_submission
+  changed_when: true
+  when:
+    - lsa_delivery_mode in ['upload', 'upload_and_keep']
+    - lsa_signing_key_file | length > 0
+
+- name: Parse accepted signed upload
+  ansible.builtin.set_fact:
+    lsa_submission: "{{ lsa_submission | combine({'json': lsa_submission.stdout | from_json}) }}"
   when:
     - lsa_delivery_mode in ['upload', 'upload_and_keep']
     - lsa_signing_key_file | length > 0

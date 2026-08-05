@@ -39,6 +39,20 @@ class VerifiedBundle:
     signature_bytes: bytes | None
 
 
+def report_validation_detail(error: ValidationError) -> dict[str, object]:
+    """Expose actionable schema locations without echoing submitted report values."""
+    errors = []
+    for item in error.errors(include_url=False, include_context=False, include_input=False)[:20]:
+        errors.append(
+            {
+                "field": ".".join(str(part) for part in item["loc"]),
+                "message": item["msg"],
+                "type": item["type"],
+            }
+        )
+    return {"message": "Invalid report.json", "errors": errors}
+
+
 def verify_bundle(
     bundle: zipfile.ZipFile,
     max_expanded_bytes: int,
@@ -170,7 +184,9 @@ async def submit_bundle(
         report = ReportInput.model_validate(json.loads(verified.report_bytes))
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=422, detail="Invalid ZIP bundle") from exc
-    except (json.JSONDecodeError, UnicodeDecodeError, ValidationError) as exc:
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=report_validation_detail(exc)) from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=422, detail="Invalid report.json") from exc
     signing_key_id = verify_signing_key(db, principal, report, verified)
     if db.get(Report, str(report.report_id)) is not None:

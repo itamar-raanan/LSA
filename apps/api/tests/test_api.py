@@ -905,6 +905,29 @@ def test_offline_bundle_verifies_all_checksums(client, tmp_path: Path):
     assert download.headers["x-lsa-artifact-sha256"] == hashlib.sha256(download.content).hexdigest()
 
 
+def test_bundle_schema_rejection_identifies_invalid_field_without_echoing_value(
+    client, tmp_path: Path
+):
+    payload = report_payload()
+    invalid_name = "sensitive-package-name-" + ("x" * 300)
+    payload["applications"][0]["name"] = invalid_name
+    report_path = tmp_path / "invalid-report.json"
+    report_path.write_text(json.dumps(payload), encoding="utf-8")
+    bundle_path = build(report_path, tmp_path)
+
+    response = client.post(
+        "/api/v1/ingest/bundles",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        files={"file": (bundle_path.name, bundle_path.read_bytes(), "application/zip")},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["message"] == "Invalid report.json"
+    assert detail["errors"][0]["field"] == "applications.0.name"
+    assert invalid_name not in response.text
+
+
 def test_evidence_download_rejects_vault_tampering(client, tmp_path: Path):
     bundle_path = build(Path("tests/fixtures/report.json"), tmp_path)
     response = client.post(
