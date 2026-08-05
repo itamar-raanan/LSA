@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     vulnerability_refresh_hours: int = Field(default=12, ge=1, le=168)
     vulnerability_poll_seconds: int = Field(default=15, ge=2, le=300)
     vulnerability_http_timeout_seconds: int = Field(default=30, ge=5, le=120)
+    vulnerability_http_retries: int = Field(default=3, ge=0, le=10)
+    vulnerability_ca_bundle: str | None = None
+    vulnerability_failure_retry_minutes: int = Field(default=15, ge=1, le=1440)
     vulnerability_run_timeout_minutes: int = Field(default=60, ge=10, le=1440)
     osv_api_url: str = "https://api.osv.dev"
     cisa_kev_url: str = (

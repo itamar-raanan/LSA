@@ -12,6 +12,11 @@ RUN chmod 0755 packaging/build-agent-packages.sh agent/lsa-agent-enroll \
 
 FROM python:3.13-slim
 
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/apps/api \
