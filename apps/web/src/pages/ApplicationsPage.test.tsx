@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AuthContext } from '../auth/context'
@@ -31,11 +31,13 @@ describe('ApplicationsPage', () => {
     expect(await screen.findByRole('heading', { name: 'Applications' })).toBeInTheDocument()
     expect(screen.getByText('Unique Applications')).toBeInTheDocument()
     expect(screen.getByText('Active Exposures')).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Application Inventory' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /openssl/ })).toBeInTheDocument()
-    expect(screen.getByText('2 observed versions')).toBeInTheDocument()
+    expect(screen.getByText('2 Observed Versions')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /openssl/ }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /openssl/ })) })
 
+    expect(await screen.findByRole('complementary', { name: 'openssl investigation' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'openssl' })).toBeInTheDocument()
     expect(screen.getByText('3.0.14-1')).toBeInTheDocument()
     expect(screen.getByText('3.0.15-1')).toBeInTheDocument()
@@ -44,8 +46,15 @@ describe('ApplicationsPage', () => {
     expect(screen.getByRole('link', { name: /web-01/ })).toHaveAttribute('href', '/hosts/host-1')
     expect(screen.getByRole('link', { name: /db-02/ })).toHaveAttribute('href', '/hosts/host-2')
 
-    fireEvent.click(screen.getByRole('button', { name: /CVE-2026-1234/ }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /CVE-2026-1234/ })) })
     expect(screen.getByRole('link', { name: /web-01/ })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /db-02/ })).not.toBeInTheDocument()
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Close application investigation' })) })
+    expect(screen.queryByRole('complementary', { name: 'openssl investigation' })).not.toBeInTheDocument()
+
+    await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Filter Application Risk' }), { target: { value: 'kev' } }) })
+    expect(screen.getByRole('button', { name: /openssl/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ssh\.service/ })).not.toBeInTheDocument()
   })
 })
