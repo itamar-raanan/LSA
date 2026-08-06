@@ -324,13 +324,15 @@ input[type="checkbox"] { accent-color: var(--accent); }
 
 /* security data table */
 .security-table-shell { min-width: 0; border: 1px solid #d8d1c5; background: var(--surface); box-shadow: inset 0 1px 0 rgba(255,255,255,.85), var(--shadow); }
+.security-table-shell-embedded { border: 0; box-shadow: none; }
 .security-table-toolbar { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #ddd6ca; padding: 10px 14px; }
 .soc-search { display: flex; width: min(390px, 100%); height: 34px; align-items: center; gap: 8px; border: 1px solid #d6cec1; border-radius: 5px; background: #f4f0e8; padding: 0 10px; color: #8c8274; transition: border-color 140ms ease, box-shadow 140ms ease; }
 .soc-search:focus-within { border-color: #b47a31; box-shadow: 0 0 0 2px rgba(180,122,49,.12); }
 .soc-search input { min-width: 0; flex: 1; border: 0; outline: 0; color: #302d28; background: transparent; font-size: 11px; }.soc-search input::placeholder { color: #999083; }
 .security-table { min-width: 1050px; width: 100%; border-collapse: collapse; text-align: left; }
 .security-table th { height: 36px; border-bottom: 1px solid #ddd6ca; padding: 0 12px; background: #f0ece4; }
-.security-table th button { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-main); font-size: 10px; font-weight: 600; letter-spacing: .01em; color: #837a6d; }.security-table th button:not(:disabled):hover { color: #433e37; }
+.security-table th button, .security-table-heading { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-main); font-size: 10px; font-weight: 600; letter-spacing: .01em; color: #837a6d; }.security-table th button:hover { color: #433e37; }
+.security-table tbody tr.selected-row > td { background: #f3ead9; }
 .security-table td { height: 58px; border-bottom: 1px solid #e5dfd5; padding: 8px 12px; color: #625b52; font-size: 11px; }
 .security-table tbody tr:not(.expanded-row):hover > td { background: #f7f3ec; }
 .security-table tbody tr { transition: background-color 120ms ease; }

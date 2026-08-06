@@ -110,9 +110,11 @@ describe('Agents', () => {
     const row = (await screen.findByText('web-01')).closest('tr')
     expect(row).not.toBeNull()
     expect(screen.getByRole('columnheader', { name: 'Connection' })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: 'Report freshness' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Report Freshness' })).toBeInTheDocument()
     expect(within(row!).getByText('online')).toBeInTheDocument()
     expect(within(row!).getByText('fresh')).toBeInTheDocument()
+    fireEvent.click(within(row!).getByRole('checkbox', { name: 'Select web-01' }))
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
 
     fireEvent.click(within(row!).getByRole('button', { name: 'Revoke web-01' }))
     expect(screen.getByRole('dialog', { name: 'Revoke web-01?' })).toHaveTextContent('cannot reconnect or submit new evidence')
