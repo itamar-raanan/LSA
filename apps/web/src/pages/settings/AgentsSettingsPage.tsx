@@ -5,7 +5,6 @@ import {
   DownloadSimple,
   FolderSimple,
   Key,
-  MagnifyingGlass,
   Play,
   Plus,
   Prohibit,
@@ -17,7 +16,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import { AgentDownloadPanel } from '../../components/AgentDownloadPanel'
 import { PageHeader } from '../../components/PageHeader'
-import { EmptyState, ErrorState, LoadingState } from '../../components/StatePanel'
+import { type SecurityColumn, SecurityTable } from '../../components/security/SecurityTable'
+import { ErrorState, LoadingState } from '../../components/StatePanel'
 import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { useApi } from '../../hooks/useApi'
@@ -43,47 +43,48 @@ function reportStatus(agent: LinuxAgent): ReportStatus {
   return Date.now() - new Date(agent.last_scan_at).getTime() <= 24 * 60 * 60_000 ? 'fresh' : 'stale'
 }
 
-function AgentTable({ agents, groups, packageVersion, submit, selected, toggle, toggleAll }: {
+function AgentTable({ agents, groups, packageVersion, submit, selected, setSelected, search, setSearch, statusFilter, setStatusFilter }: {
   agents: LinuxAgent[]
   groups: AgentGroup[]
   packageVersion?: string
   submit: (action: () => Promise<unknown>) => Promise<void>
   selected: Set<string>
-  toggle: (id: string) => void
-  toggleAll: () => void
+  setSelected: (selected: Set<string>) => void
+  search: string
+  setSearch: (search: string) => void
+  statusFilter: 'all' | AgentStatus
+  setStatusFilter: (status: 'all' | AgentStatus) => void
 }) {
   const [revoking, setRevoking] = useState<LinuxAgent | null>(null)
-  if (!agents.length) {
-    return <EmptyState title="No agents in this scope" detail="Create an enrollment token for this group, install the Linux package, and the host will appear here after enrollment." />
-  }
+  const columns: SecurityColumn<LinuxAgent>[] = [
+    { id: 'host', header: 'Host', hideable: false, sortValue: (agent) => agent.hostname, exportValue: (agent) => agent.hostname, cell: (agent) => <span className="table-primary">{agent.hostname}<small>Agent {agent.agent_version} · {packageVersion && agent.agent_version !== packageVersion ? `Upgrade ${packageVersion} Available` : agent.capabilities.join(', ') || 'No Capabilities'}</small></span> },
+    { id: 'connection', header: 'Connection', sortValue: (agent) => agentStatus(agent), exportValue: (agent) => agentStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">Outbound Agent Heartbeat</span></> },
+    { id: 'report', header: 'Report Freshness', sortValue: (agent) => reportStatus(agent), exportValue: (agent) => reportStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${reportStatus(agent) === 'fresh' ? 'online' : reportStatus(agent)}`}>{reportStatus(agent)}</span><span className="table-subtitle">{agent.last_scan_at ? new Date(agent.last_scan_at).toLocaleString() : 'No Accepted Report'}</span></> },
+    { id: 'group', header: 'Group', sortValue: (agent) => agent.group_name, exportValue: (agent) => agent.group_name, cell: (agent) => <select aria-label={`Group for ${agent.hostname}`} className="select-input min-h-9" value={agent.group_id} disabled={!!agent.revoked_at} onChange={(event) => void submit(() => api.assignAgentGroup(agent.id, event.target.value))}>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select> },
+    { id: 'policy', header: 'Policy', sortValue: (agent) => agent.policy_name, exportValue: (agent) => `${agent.policy_name} v${agent.policy_version}`, cell: (agent) => <span className="table-primary">{agent.policy_name}<small>Expected V{agent.policy_version} · Reported V{agent.last_policy_version ?? '—'}</small></span> },
+    { id: 'heartbeat', header: 'Last Heartbeat', sortValue: (agent) => agent.last_seen_at ?? '', exportValue: (agent) => agent.last_seen_at, cell: (agent) => <span className="table-primary">{agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : 'Never'}<small>{agent.latest_task_status ? `Latest Audit ${agent.latest_task_status}` : 'No Requested Audit'}</small></span> },
+    { id: 'actions', header: '', hideable: false, cell: (agent) => <button className="icon-button ml-auto" aria-label={`Revoke ${agent.hostname}`} title="Revoke agent" disabled={!!agent.revoked_at} onClick={() => setRevoking(agent)}><Prohibit size={15} /></button> },
+  ]
 
   return <>
-  <div className="overflow-x-auto">
-    <table className="data-table min-w-[920px]">
-      <thead><tr><th><input type="checkbox" aria-label="Select all visible agents" checked={agents.length > 0 && agents.every(agent => selected.has(agent.id))} onChange={toggleAll} /></th><th>Host</th><th>Connection</th><th>Report freshness</th><th>Group</th><th>Policy</th><th>Last heartbeat</th><th /></tr></thead>
-      <tbody>{agents.map(agent => <tr key={agent.id}>
-        <td><input type="checkbox" aria-label={`Select ${agent.hostname}`} checked={selected.has(agent.id)} disabled={!!agent.revoked_at} onChange={() => toggle(agent.id)} /></td>
-        <td>
-          <span className="font-medium text-stone-200">{agent.hostname}</span>
-          <span className="table-subtitle">agent {agent.agent_version} · {packageVersion && agent.agent_version !== packageVersion ? `upgrade ${packageVersion} available` : agent.capabilities.join(', ') || 'no capabilities'}</span>
-        </td>
-        <td><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">Outbound agent heartbeat</span></td>
-        <td><span className={`status-pill status-pill-${reportStatus(agent) === 'fresh' ? 'online' : reportStatus(agent)}`}>{reportStatus(agent)}</span><span className="table-subtitle">{agent.last_scan_at ? new Date(agent.last_scan_at).toLocaleString() : 'No accepted report'}</span></td>
-        <td>
-          <select
-            aria-label={`Group for ${agent.hostname}`}
-            className="select-input min-h-9"
-            value={agent.group_id}
-            disabled={!!agent.revoked_at}
-            onChange={event => void submit(() => api.assignAgentGroup(agent.id, event.target.value))}
-          >{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select>
-        </td>
-        <td>{agent.policy_name}<span className="table-subtitle">Expected v{agent.policy_version} · reported v{agent.last_policy_version ?? '—'}</span></td>
-        <td>{agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : 'Never'}<span className="table-subtitle">{agent.latest_task_status ? `Latest audit ${agent.latest_task_status}` : 'No requested audit'}</span></td>
-        <td><button className="icon-button ml-auto" aria-label={`Revoke ${agent.hostname}`} title="Revoke agent" disabled={!!agent.revoked_at} onClick={() => setRevoking(agent)}><Prohibit size={15} /></button></td>
-      </tr>)}</tbody>
-    </table>
-  </div>
+  <SecurityTable
+    rows={agents}
+    columns={columns}
+    ariaLabel="Managed Linux Agents"
+    query={search}
+    onQueryChange={setSearch}
+    searchText={(agent) => `${agent.hostname} ${agent.group_name} ${agent.policy_name} ${agent.agent_version}`}
+    rowLabel={(agent) => agent.hostname}
+    searchPlaceholder="Search Hostname, Group, Policy, Or Version"
+    filename="lsa-agents.csv"
+    embedded
+    emptyTitle="No Agents In This Scope"
+    emptyDetail="Create an enrollment token, install the Linux package, and the host will appear after enrollment."
+    selectedRowIds={selected}
+    onSelectionChange={setSelected}
+    isRowSelectable={(agent) => !agent.revoked_at}
+    toolbarActions={<select className="select-input min-h-9" aria-label="Filter agent status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | AgentStatus)}><option value="all">All Statuses</option><option value="online">Online</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="never">Never Connected</option><option value="revoked">Revoked</option></select>}
+  />
   <Dialog
     open={revoking !== null}
     onOpenChange={(open) => { if (!open) setRevoking(null) }}
@@ -335,7 +336,7 @@ export function AgentsSettingsPage() {
   if (error || !data) return <ErrorState message={error ?? 'Unable to load agents'} retry={reload} />
 
   const scopedAgents = data.agents.filter(agent => selectedGroupId === 'all' || agent.group_id === selectedGroupId)
-  const visibleAgents = scopedAgents.filter(agent => agent.hostname.toLowerCase().includes(search.trim().toLowerCase()) && (statusFilter === 'all' || agentStatus(agent) === statusFilter))
+  const visibleAgents = scopedAgents.filter(agent => statusFilter === 'all' || agentStatus(agent) === statusFilter)
   const activeCount = scopedAgents.filter(agent => !agent.revoked_at).length
   const categoryControls = selectedCategory === 'overview' ? [] : categories.find(([category]) => category === selectedCategory)?.[1] ?? []
 
@@ -384,17 +385,13 @@ export function AgentsSettingsPage() {
           </header>
 
           {activeTab === 'hosts' && <div>
-            <div className="flex flex-col gap-3 border-b border-stone-800 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-              <div className="relative w-full max-w-md"><MagnifyingGlass size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-600" /><input className="search-input" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search hostname" aria-label="Search agents" /></div>
-              <div className="flex items-center gap-3"><select className="select-input min-h-9" aria-label="Filter agent status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | AgentStatus)}><option value="all">All statuses</option><option value="online">Online</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="never">Never connected</option><option value="revoked">Revoked</option></select><span className="font-mono text-[10px] text-stone-600">{visibleAgents.length} of {scopedAgents.length} hosts</span></div>
-            </div>
             {selectedAgents.size > 0 && <div className="flex flex-col gap-3 border-b border-[#b8c5ba] bg-[#edf1eb] px-5 py-4 sm:px-7 xl:flex-row xl:items-center">
               <strong className="mr-auto text-xs text-[#4f6f5c]">{selectedAgents.size} selected</strong>
               <button className="button-secondary min-h-9" disabled={saving} onClick={() => void submit(() => api.runAgentAudits([...selectedAgents])).then(() => setSelectedAgents(new Set()))}><Play size={14} /> Run audit now</button>
               <div className="flex gap-2"><select className="select-input min-h-9" aria-label="Bulk destination group" value={bulkGroupId} onChange={event => setBulkGroupId(event.target.value)}><option value="">Move to group…</option>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button-secondary min-h-9" disabled={saving || !bulkGroupId} onClick={() => void submit(() => api.bulkAssignAgentGroup([...selectedAgents], bulkGroupId)).then(() => { setSelectedAgents(new Set()); setBulkGroupId('') })}>Apply</button></div>
               <Button variant="danger" disabled={saving} onClick={() => setConfirmBulkRevoke(true)}>Revoke selected</Button>
             </div>}
-            <AgentTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} toggle={id => setSelectedAgents(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} toggleAll={() => setSelectedAgents(current => { const selectable = visibleAgents.filter(agent => !agent.revoked_at); const allSelected = selectable.length > 0 && selectable.every(agent => current.has(agent.id)); const next = new Set(current); selectable.forEach(agent => allSelected ? next.delete(agent.id) : next.add(agent.id)); return next })} />
+            <AgentTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} setSelected={setSelectedAgents} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
           </div>}
 
           {activeTab === 'deployment' && <div>
