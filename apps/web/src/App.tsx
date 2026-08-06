@@ -10,6 +10,7 @@ const HostDetailPage = lazy(() => import('./pages/HostDetailPage').then((module)
 const HostsPage = lazy(() => import('./pages/HostsPage').then((module) => ({ default: module.HostsPage })))
 const EvidenceIntakePage = lazy(() => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
 const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((module) => ({ default: module.ApplicationsPage })))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 const AuthenticationSettingsPage = lazy(() => import('./pages/settings/AuthenticationSettingsPage').then((module) => ({ default: module.AuthenticationSettingsPage })))
 const CertificatesSettingsPage = lazy(() => import('./pages/settings/CertificatesSettingsPage').then((module) => ({ default: module.CertificatesSettingsPage })))
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout').then((module) => ({ default: module.SettingsLayout })))
@@ -48,8 +49,8 @@ export default function App() {
         </Route>
         <Route path="tokens" element={<Navigate to="/settings/credentials?view=tokens" replace />} />
         <Route path="signing-keys" element={<Navigate to="/settings/credentials?view=signing-keys" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

@@ -29,9 +29,15 @@ describe('SecurityTable', () => {
     render(<TableHarness />)
 
     const table = screen.getByRole('table', { name: 'Test Assets' })
+    const nameHeading = within(table).getByRole('columnheader', { name: 'Name' })
+    expect(nameHeading).toHaveAttribute('aria-sort', 'none')
     expect(within(table).getAllByRole('row')[1]).toHaveTextContent('Beta Host')
     fireEvent.click(screen.getByRole('button', { name: 'Sort by Name' }))
+    expect(nameHeading).toHaveAttribute('aria-sort', 'ascending')
     expect(within(table).getAllByRole('row')[1]).toHaveTextContent('Alpha Host')
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Name' }))
+    expect(nameHeading).toHaveAttribute('aria-sort', 'descending')
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Name' }))
 
     const alphaSelection = screen.getByRole('checkbox', { name: 'Select Alpha Host' })
     fireEvent.click(alphaSelection)
