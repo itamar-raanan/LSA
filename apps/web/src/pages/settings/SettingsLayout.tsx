@@ -1,6 +1,5 @@
 import {
   Certificate,
-  Fingerprint,
   Key,
   LockKey,
   UsersThree,
@@ -12,8 +11,7 @@ import { ErrorState } from '../../components/StatePanel'
 const sections = [
   { to: '/settings/users', label: 'Users & access', detail: 'Roles and permissions', icon: UsersThree },
   { to: '/settings/authentication', label: 'Authentication', detail: 'SSO and RADIUS', icon: LockKey },
-  { to: '/settings/tokens', label: 'Tokens', detail: 'Scanner credentials', icon: Key },
-  { to: '/settings/signing-keys', label: 'Signing keys', detail: 'Evidence trust', icon: Fingerprint },
+  { to: '/settings/credentials', label: 'Credentials & Trust', detail: 'Tokens and signing keys', icon: Key },
   { to: '/settings/certificates', label: 'TLS certificates', detail: 'HTTPS identity', icon: Certificate },
 ]
 

@@ -1,4 +1,5 @@
 import { ArrowClockwise, Database, WarningCircle } from '@phosphor-icons/react'
+import type { ReactNode } from 'react'
 
 export function LoadingState() {
   return (
@@ -27,7 +28,7 @@ export function ErrorState({ message, retry }: { message: string; retry: () => v
   )
 }
 
-export function EmptyState({ title, detail }: { title: string; detail: string }) {
+export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
   return (
     <div className="panel flex min-h-72 flex-col items-center justify-center overflow-hidden px-6 py-16 text-center">
       <div className="mb-5 grid size-12 place-items-center rounded-[14px] border border-[#b8c5ba] bg-[#edf1eb] text-[#4f6f5c]">
@@ -35,6 +36,7 @@ export function EmptyState({ title, detail }: { title: string; detail: string })
       </div>
       <h2 className="text-base font-semibold text-stone-100">{title}</h2>
       <p className="mt-2 max-w-md text-sm leading-6 text-stone-500">{detail}</p>
+      {action && <div className="mt-5">{action}</div>}
     </div>
   )
 }

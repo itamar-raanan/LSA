@@ -22,7 +22,7 @@ function fingerprint(value: string): string {
   return value.match(/.{1,8}/g)?.join(':') ?? value
 }
 
-export function SigningKeysPage() {
+export function SigningKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth()
   const [creating, setCreating] = useState(false)
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -52,19 +52,20 @@ export function SigningKeysPage() {
   const activeCount = keys.filter((item) => keyState(item) === 'active').length
   const scopedCount = keys.filter((item) => item.host_id).length
   const hostnames = new Map((data?.hosts ?? []).map((host) => [host.id, host.hostname]))
+  const createAction = <button className="button-primary" onClick={() => setCreating(true)}><Plus size={16} /> Register Key</button>
 
   return (
-    <div className="page-reveal">
-      <PageHeader eyebrow="Trust governance" title="Signing keys" detail="Register scanner public keys, constrain their host scope, and verify that report evidence came from a trusted controller." action={<button className="button-primary" onClick={() => setCreating(true)}><Plus size={16} /> Register key</button>} />
+    <div className={embedded ? 'credential-workspace' : 'page-reveal'}>
+      {embedded ? <header className="credential-workspace-heading"><div><p className="section-label">Evidence Provenance</p><h2>Signing Keys</h2><p>Register scanner public keys, constrain their scope, and verify evidence origin.</p></div>{createAction}</header> : <PageHeader eyebrow="Trust Governance" title="Signing Keys" detail="Register scanner public keys, constrain their host scope, and verify that report evidence came from a trusted controller." action={createAction} />}
       {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : (
         <>
-          <section className="mb-4 grid overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb] sm:grid-cols-[1.2fr_1fr_1fr]">
+          <section className="credential-summary sm:grid-cols-[1.2fr_1fr_1fr]">
             <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Evidence trust</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Ed25519 signatures bind each report manifest to a registered controller key.</p></div>
             <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-100">{activeCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Active keys</p></div>
             <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-100">{scopedCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Host-scoped keys</p></div>
           </section>
           {actionError && <p className="mb-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{actionError}</p>}
-          {!keys.length ? <EmptyState title="No trusted signing keys" detail="Generate a key on the scanner controller, then register its public half to verify future report bundles." /> : (
+          {!keys.length ? <EmptyState title="No Trusted Signing Keys" detail="Generate a key on the scanner controller, then register its public half to verify future report bundles." action={createAction} /> : (
             <section className="panel overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="data-table min-w-[980px]">

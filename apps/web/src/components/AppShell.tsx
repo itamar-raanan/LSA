@@ -22,7 +22,7 @@ const navigation: NavigationGroup[] = [
     { to: '/applications', label: 'Applications', icon: Boxes },
     { to: '/agents', label: 'Agents & groups', icon: MonitorCog, adminOnly: true },
     { to: '/findings', label: 'Security findings', icon: ShieldAlert },
-    { to: '/reports', label: 'Reports', icon: FileBarChart },
+    { to: '/evidence', label: 'Evidence Intake', icon: FileBarChart },
   ] },
   { label: 'System', items: [
     { to: '/settings', label: 'Administration', icon: Settings, adminOnly: true },
