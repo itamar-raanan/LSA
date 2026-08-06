@@ -12,19 +12,21 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   UsersThree,
-  X,
 } from '@phosphor-icons/react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import { AgentDownloadPanel } from '../../components/AgentDownloadPanel'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../../components/StatePanel'
+import { Button } from '../../components/ui/Button'
+import { Dialog } from '../../components/ui/Dialog'
 import { useApi } from '../../hooks/useApi'
 import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, LinuxAgent, PolicyMode } from '../../types'
 
 const modes: PolicyMode[] = ['audit', 'manual', 'remediate', 'disabled']
-type WorkspaceTab = 'hosts' | 'policy'
+type WorkspaceTab = 'hosts' | 'policy' | 'deployment'
 type AgentStatus = 'online' | 'stale' | 'offline' | 'never' | 'revoked'
+type ReportStatus = 'fresh' | 'stale' | 'never'
 
 function agentStatus(agent: LinuxAgent): AgentStatus {
   if (agent.revoked_at) return 'revoked'
@@ -33,6 +35,11 @@ function agentStatus(agent: LinuxAgent): AgentStatus {
   if (age <= 5 * 60_000) return 'online'
   if (age <= 24 * 60 * 60_000) return 'stale'
   return 'offline'
+}
+
+function reportStatus(agent: LinuxAgent): ReportStatus {
+  if (!agent.last_scan_at) return 'never'
+  return Date.now() - new Date(agent.last_scan_at).getTime() <= 24 * 60 * 60_000 ? 'fresh' : 'stale'
 }
 
 function AgentTable({ agents, groups, packageVersion, submit, selected, toggle, toggleAll }: {
@@ -44,21 +51,23 @@ function AgentTable({ agents, groups, packageVersion, submit, selected, toggle, 
   toggle: (id: string) => void
   toggleAll: () => void
 }) {
-  const [confirming, setConfirming] = useState<string | null>(null)
+  const [revoking, setRevoking] = useState<LinuxAgent | null>(null)
   if (!agents.length) {
     return <EmptyState title="No agents in this scope" detail="Create an enrollment token for this group, install the Linux package, and the host will appear here after enrollment." />
   }
 
-  return <div className="overflow-x-auto">
+  return <>
+  <div className="overflow-x-auto">
     <table className="data-table min-w-[920px]">
-      <thead><tr><th><input type="checkbox" aria-label="Select all visible agents" checked={agents.length > 0 && agents.every(agent => selected.has(agent.id))} onChange={toggleAll} /></th><th>Host</th><th>Status</th><th>Group</th><th>Effective policy</th><th>Last heartbeat</th><th /></tr></thead>
+      <thead><tr><th><input type="checkbox" aria-label="Select all visible agents" checked={agents.length > 0 && agents.every(agent => selected.has(agent.id))} onChange={toggleAll} /></th><th>Host</th><th>Connection</th><th>Report freshness</th><th>Group</th><th>Policy</th><th>Last heartbeat</th><th /></tr></thead>
       <tbody>{agents.map(agent => <tr key={agent.id}>
         <td><input type="checkbox" aria-label={`Select ${agent.hostname}`} checked={selected.has(agent.id)} disabled={!!agent.revoked_at} onChange={() => toggle(agent.id)} /></td>
         <td>
           <span className="font-medium text-stone-200">{agent.hostname}</span>
           <span className="table-subtitle">agent {agent.agent_version} · {packageVersion && agent.agent_version !== packageVersion ? `upgrade ${packageVersion} available` : agent.capabilities.join(', ') || 'no capabilities'}</span>
         </td>
-        <td><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">{agent.latest_task_status ? `audit ${agent.latest_task_status}` : 'no requested audit'}</span></td>
+        <td><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">Outbound agent heartbeat</span></td>
+        <td><span className={`status-pill status-pill-${reportStatus(agent) === 'fresh' ? 'online' : reportStatus(agent)}`}>{reportStatus(agent)}</span><span className="table-subtitle">{agent.last_scan_at ? new Date(agent.last_scan_at).toLocaleString() : 'No accepted report'}</span></td>
         <td>
           <select
             aria-label={`Group for ${agent.hostname}`}
@@ -68,15 +77,23 @@ function AgentTable({ agents, groups, packageVersion, submit, selected, toggle, 
             onChange={event => void submit(() => api.assignAgentGroup(agent.id, event.target.value))}
           >{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select>
         </td>
-        <td>{agent.policy_name}<span className="table-subtitle">v{agent.policy_version} · reported v{agent.last_policy_version ?? '—'}</span></td>
-        <td>{agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : 'Never'}<span className="table-subtitle">{agent.last_scan_at ? `scan ${new Date(agent.last_scan_at).toLocaleString()}` : 'never scanned'}</span></td>
-        <td>{confirming === agent.id ? <div className="flex justify-end gap-2">
-          <button className="button-secondary min-h-9 px-3" onClick={() => setConfirming(null)}>Cancel</button>
-          <button className="button-secondary min-h-9 border-rose-900/60 px-3 text-rose-300" onClick={() => void submit(() => api.revokeAgent(agent.id)).finally(() => setConfirming(null))}>Confirm</button>
-        </div> : <button className="icon-button ml-auto" aria-label={`Revoke ${agent.hostname}`} title="Revoke agent" disabled={!!agent.revoked_at} onClick={() => setConfirming(agent.id)}><Prohibit size={15} /></button>}</td>
+        <td>{agent.policy_name}<span className="table-subtitle">Expected v{agent.policy_version} · reported v{agent.last_policy_version ?? '—'}</span></td>
+        <td>{agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : 'Never'}<span className="table-subtitle">{agent.latest_task_status ? `Latest audit ${agent.latest_task_status}` : 'No requested audit'}</span></td>
+        <td><button className="icon-button ml-auto" aria-label={`Revoke ${agent.hostname}`} title="Revoke agent" disabled={!!agent.revoked_at} onClick={() => setRevoking(agent)}><Prohibit size={15} /></button></td>
       </tr>)}</tbody>
     </table>
   </div>
+  <Dialog
+    open={revoking !== null}
+    onOpenChange={(open) => { if (!open) setRevoking(null) }}
+    eyebrow="Agent trust"
+    title={`Revoke ${revoking?.hostname ?? 'agent'}?`}
+    description="The agent identity will be rejected immediately. Existing reports remain available, but this installation cannot reconnect or submit new evidence."
+  >
+    <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-300">Re-enrolling this host later creates a new agent identity and requires a new one-time enrollment token.</div>
+    <div className="mt-6 flex justify-end gap-3"><Button onClick={() => setRevoking(null)}>Cancel</Button><Button variant="danger" disabled={!revoking} onClick={() => { if (revoking) void submit(() => api.revokeAgent(revoking.id)).finally(() => setRevoking(null)) }}>Revoke agent</Button></div>
+  </Dialog>
+  </>
 }
 
 function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, setShowCreate, createGroup, policies, saving }: {
@@ -141,7 +158,6 @@ export function AgentsSettingsPage() {
   const [historyError, setHistoryError] = useState('')
   const [showGroup, setShowGroup] = useState(false)
   const [showPolicy, setShowPolicy] = useState(false)
-  const [showEnrollment, setShowEnrollment] = useState(false)
   const [showDownloads, setShowDownloads] = useState(false)
   const [token, setToken] = useState('')
   const [formError, setFormError] = useState('')
@@ -303,28 +319,12 @@ export function AgentsSettingsPage() {
   return <div className="page-reveal">
     <PageHeader
       eyebrow="Managed Linux fleet"
-      title="Agents & Groups"
-      detail="Select a fleet group, review its agents, then open Policy to configure audit and remediation behavior."
-      action={<button className="button-primary" onClick={() => { setShowEnrollment(true); setToken('') }}><Key size={16} /> Deploy Agent</button>}
+      title="Agents"
+      detail="Monitor agent connectivity, review accepted report freshness, and manage group-specific policy and deployment."
+      action={<button className="button-primary" onClick={() => { setActiveTab('deployment'); setToken('') }}><Key size={16} /> Deploy agent</button>}
     />
     {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
     {showDownloads && <AgentDownloadPanel packages={data.packages} platformUrl={data.connectivity.public_url} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
-
-    {showEnrollment && <section className="panel mb-6 overflow-hidden">
-      <div className="flex items-start justify-between border-b border-stone-800 px-6 py-5">
-        <div><p className="section-label">One-time trust bootstrap</p><h2 className="mt-2 text-base font-semibold">Create enrollment token</h2></div>
-        <button className="icon-button" onClick={() => setShowEnrollment(false)} aria-label="Close enrollment"><X size={16} /></button>
-      </div>
-      {token ? <div className="px-6 py-6">
-        <p className="text-xs text-stone-500">Copy this token now. It is displayed once and becomes invalid after enrollment.</p>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row"><code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-stone-800 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code><button className="button-secondary" onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy Token</button><button className="button-primary" onClick={() => { setShowEnrollment(false); setShowDownloads(true) }}><DownloadSimple size={15} /> Download Package</button></div>
-      </div> : <form className="grid gap-4 px-6 py-6 md:grid-cols-3" onSubmit={createEnrollment}>
-        <label className="form-field">Name<input name="name" required placeholder="Production enrollment" /></label>
-        <label className="form-field">Group<select name="group_id" required className="select-input w-full" defaultValue={selectedGroup?.id ?? data.groups[0]?.id}>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
-        <label className="form-field">Valid for<select name="hours" className="select-input w-full" defaultValue="24"><option value="1">1 hour</option><option value="24">24 hours</option><option value="168">7 days</option></select></label>
-        <div className="md:col-span-3 flex justify-end"><button className="button-primary" disabled={saving || !data.groups.length}>Create token</button></div>
-      </form>}
-    </section>}
 
     <section className="panel overflow-hidden">
       <div className="grid min-w-0 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -354,8 +354,9 @@ export function AgentsSettingsPage() {
               </div>
             </div>
             <nav className="mt-6 flex gap-6" aria-label="Group workspace tabs">
-              <button className={`workspace-tab ${activeTab === 'hosts' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('hosts')}><DesktopTower size={15} /> Agents</button>
+              <button className={`workspace-tab ${activeTab === 'hosts' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('hosts')}><DesktopTower size={15} /> Hosts</button>
               {selectedGroup && <button className={`workspace-tab ${activeTab === 'policy' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('policy')}><SlidersHorizontal size={15} /> Policy</button>}
+              <button className={`workspace-tab ${activeTab === 'deployment' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('deployment')}><DownloadSimple size={15} /> Deployment</button>
             </nav>
           </header>
 
@@ -368,9 +369,44 @@ export function AgentsSettingsPage() {
               <strong className="mr-auto text-xs text-[#4f6f5c]">{selectedAgents.size} selected</strong>
               <button className="button-secondary min-h-9" disabled={saving} onClick={() => void submit(() => api.runAgentAudits([...selectedAgents])).then(() => setSelectedAgents(new Set()))}><Play size={14} /> Run audit now</button>
               <div className="flex gap-2"><select className="select-input min-h-9" aria-label="Bulk destination group" value={bulkGroupId} onChange={event => setBulkGroupId(event.target.value)}><option value="">Move to group…</option>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button-secondary min-h-9" disabled={saving || !bulkGroupId} onClick={() => void submit(() => api.bulkAssignAgentGroup([...selectedAgents], bulkGroupId)).then(() => { setSelectedAgents(new Set()); setBulkGroupId('') })}>Apply</button></div>
-              {confirmBulkRevoke ? <div className="flex gap-2"><button className="button-secondary min-h-9" onClick={() => setConfirmBulkRevoke(false)}>Cancel</button><button className="button-secondary min-h-9 border-rose-900/60 text-rose-300" disabled={saving} onClick={() => void submit(() => api.bulkRevokeAgents([...selectedAgents])).then(() => { setSelectedAgents(new Set()); setConfirmBulkRevoke(false) })}>Confirm revoke</button></div> : <button className="button-secondary min-h-9 text-rose-300" onClick={() => setConfirmBulkRevoke(true)}>Revoke selected</button>}
+              <Button variant="danger" disabled={saving} onClick={() => setConfirmBulkRevoke(true)}>Revoke selected</Button>
             </div>}
             <AgentTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} toggle={id => setSelectedAgents(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} toggleAll={() => setSelectedAgents(current => { const selectable = visibleAgents.filter(agent => !agent.revoked_at); const allSelected = selectable.length > 0 && selectable.every(agent => current.has(agent.id)); const next = new Set(current); selectable.forEach(agent => allSelected ? next.delete(agent.id) : next.add(agent.id)); return next })} />
+          </div>}
+
+          {activeTab === 'deployment' && <div>
+            <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
+              <p className="section-label">Agent deployment</p>
+              <h3 className="mt-2 text-base font-semibold text-stone-100">Enroll Linux hosts</h3>
+              <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-500">Create one short-lived token for the destination group, download the signed package, verify its checksum, then run the generated installation command on each host.</p>
+            </div>
+            <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,.8fr)]">
+              <section className="min-w-0 border-b border-stone-800 px-5 py-6 sm:px-7 lg:border-b-0 lg:border-r">
+                <div className="flex items-start justify-between gap-4">
+                  <div><p className="section-label">Connection destination</p><p className="mt-3 text-sm font-medium text-stone-200">Dedicated agent gateway</p><code className="mt-2 block break-all text-[11px] text-stone-500">{data.connectivity.public_url}</code></div>
+                  <span className="status-pill status-pill-online">HTTPS</span>
+                </div>
+                <div className="mt-6 grid gap-4 border-t border-stone-800 pt-5 sm:grid-cols-2">
+                  <div><span className="detail-label">Current release</span><strong className="mt-2 block text-sm font-semibold text-stone-200">{data.packages[0]?.version ?? 'Unavailable'}</strong><span className="table-subtitle">{data.packages.length} package formats</span></div>
+                  <div><span className="detail-label">Operating mode</span><strong className="mt-2 block text-sm font-semibold text-stone-200">Audit only</strong><span className="table-subtitle">Host configuration is not changed</span></div>
+                </div>
+                <Button className="mt-6" disabled={!data.packages.length} onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> View packages and commands</Button>
+              </section>
+
+              <section className="min-w-0 px-5 py-6 sm:px-7">
+                <p className="section-label">One-time enrollment</p>
+                {token ? <div className="mt-4">
+                  <p className="text-xs leading-5 text-stone-500">Copy this token now. It is displayed once and becomes invalid after the first successful enrollment.</p>
+                  <code className="mt-4 block min-w-0 overflow-x-auto rounded-lg border border-stone-800 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code>
+                  <div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy token</Button><Button variant="primary" onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> Continue to installation</Button></div>
+                </div> : <form className="mt-4 grid gap-4" onSubmit={createEnrollment}>
+                  <label className="form-field">Token name<input name="name" required placeholder="Production enrollment" /></label>
+                  <label className="form-field">Destination group<select name="group_id" required className="select-input w-full" defaultValue={selectedGroup?.id ?? data.groups[0]?.id}>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
+                  <label className="form-field">Expires after<select name="hours" className="select-input w-full" defaultValue="24"><option value="1">1 hour</option><option value="24">24 hours</option><option value="168">7 days</option></select></label>
+                  <Button variant="primary" disabled={saving || !data.groups.length}>{saving ? 'Creating token' : 'Create enrollment token'}</Button>
+                </form>}
+              </section>
+            </div>
           </div>}
 
           {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] min-w-0 md:grid-cols-[210px_minmax(0,1fr)]">
@@ -468,5 +504,15 @@ export function AgentsSettingsPage() {
         </div>
       </div>
     </section>
+    <Dialog
+      open={confirmBulkRevoke}
+      onOpenChange={(open) => { if (!open && !saving) setConfirmBulkRevoke(false) }}
+      eyebrow="Fleet trust"
+      title={`Revoke ${selectedAgents.size} selected agents?`}
+      description="Every selected agent identity will be rejected immediately. Existing host records and reports remain available, but these installations cannot reconnect or submit new evidence."
+    >
+      <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-300">Restoring connectivity requires reinstalling or re-enrolling every affected host with a new one-time token.</div>
+      <div className="mt-6 flex justify-end gap-3"><Button onClick={() => setConfirmBulkRevoke(false)} disabled={saving}>Cancel</Button><Button variant="danger" disabled={saving || selectedAgents.size === 0} onClick={() => void submit(() => api.bulkRevokeAgents([...selectedAgents])).then(() => { setSelectedAgents(new Set()); setConfirmBulkRevoke(false) })}>{saving ? 'Revoking agents' : 'Revoke agents'}</Button></div>
+    </Dialog>
   </div>
 }

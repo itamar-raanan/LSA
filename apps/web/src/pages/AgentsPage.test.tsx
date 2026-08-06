@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
+import { api } from '../api/client'
 import { AppShell } from '../components/AppShell'
 import { AgentsSettingsPage } from './settings/AgentsSettingsPage'
 
@@ -36,6 +37,8 @@ vi.mock('../api/client', () => ({
     runAgentAudits: vi.fn(),
     bulkAssignAgentGroup: vi.fn(),
     bulkRevokeAgents: vi.fn(),
+    revokeAgent: vi.fn().mockResolvedValue(undefined),
+    assignAgentGroup: vi.fn(),
   },
 }))
 
@@ -54,7 +57,7 @@ describe('Agents', () => {
   it('opens with all hosts and scopes categorized policy controls by group', async () => {
     render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
 
-    expect(await screen.findByRole('heading', { name: 'Agents & Groups' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Agents' })).toBeInTheDocument()
     const groupNavigation = screen.getByRole('navigation', { name: 'Fleet groups' })
     expect(within(groupNavigation).getByRole('button', { name: /All Agents/ })).toBeInTheDocument()
     const groupButton = within(groupNavigation).getByRole('button', { name: /Default Linux Fleet/ })
@@ -63,7 +66,8 @@ describe('Agents', () => {
     expect(screen.getByRole('textbox', { name: 'Group name' }).closest('form')).toHaveClass('min-w-0')
     fireEvent.click(createGroupToggle)
     expect(screen.getByRole('heading', { name: 'All Agents' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Agents' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Hosts' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Deployment' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Policy' })).not.toBeInTheDocument()
 
     fireEvent.click(groupButton)
@@ -83,10 +87,10 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Policy' }))
     expect(screen.getByRole('heading', { name: 'Production Baseline' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Deploy Agent/ }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Production Deployment' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create token' }))
-    fireEvent.click(await screen.findByRole('button', { name: /Download Package/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Deploy agent/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Token name' }), { target: { value: 'Production Deployment' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create enrollment token' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Continue to installation/ }))
     expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Download Package' })).toHaveLength(1)
     expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.1_all.deb/)).toBeInTheDocument()
@@ -94,5 +98,25 @@ describe('Agents', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Agent package' }), { target: { value: 'linux-rpm' } })
     expect(screen.getByText(/sudo dnf install .*lsa-agent-0.4.1-1.noarch.rpm/)).toBeInTheDocument()
     expect(screen.getAllByText(/SHA-256/)).toHaveLength(1)
+  })
+
+  it('separates connection and report freshness and explains agent revocation', async () => {
+    vi.mocked(api.agents).mockResolvedValueOnce([{
+      id: 'agent-1', host_id: 'host-1', hostname: 'web-01', group_id: 'group-1', group_name: 'Default Linux Fleet', policy_name: 'Monitor (Audit Only)', policy_version: 1, agent_version: '0.4.1', capabilities: ['audit'], fingerprint: 'fingerprint', last_seen_at: new Date().toISOString(), last_policy_version: 1, last_scan_at: new Date().toISOString(), latest_task_status: 'completed', latest_task_created_at: new Date().toISOString(), revoked_at: null, created_at: '2026-01-01T00:00:00Z',
+    }])
+    render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
+
+    const row = (await screen.findByText('web-01')).closest('tr')
+    expect(row).not.toBeNull()
+    expect(screen.getByRole('columnheader', { name: 'Connection' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Report freshness' })).toBeInTheDocument()
+    expect(within(row!).getByText('online')).toBeInTheDocument()
+    expect(within(row!).getByText('fresh')).toBeInTheDocument()
+
+    fireEvent.click(within(row!).getByRole('button', { name: 'Revoke web-01' }))
+    expect(screen.getByRole('dialog', { name: 'Revoke web-01?' })).toHaveTextContent('cannot reconnect or submit new evidence')
+    expect(api.revokeAgent).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke agent' }))
+    await waitFor(() => expect(api.revokeAgent).toHaveBeenCalledWith('agent-1'))
   })
 })

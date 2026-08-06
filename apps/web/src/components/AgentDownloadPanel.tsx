@@ -1,7 +1,8 @@
-import { Check, Copy, DownloadSimple, Package, TerminalWindow, X } from '@phosphor-icons/react'
+import { Check, Copy, DownloadSimple, Package, TerminalWindow } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { AgentPackage } from '../types'
+import { Dialog } from './ui/Dialog'
 
 interface AgentDownloadPanelProps {
   packages: AgentPackage[]
@@ -68,19 +69,10 @@ export function AgentDownloadPanel({ packages, platformUrl, enrollmentToken, clo
     }
   }
 
-  return <section className="panel mb-7 overflow-hidden" aria-labelledby="agent-download-title">
-    <div className="flex items-start justify-between gap-5 border-b border-stone-800 px-6 py-5">
-      <div>
-        <p className="section-label">Secure distribution</p>
-        <h2 id="agent-download-title" className="mt-2 text-base font-semibold text-stone-100">Install the unified Linux agent</h2>
-        <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-500">The signed-in administrator downloads the versioned runtime and all audit controls. Verify its checksum before installing it on a managed host.</p>
-      </div>
-      <button className="icon-button shrink-0" onClick={close} aria-label="Close agent downloads"><X size={16} /></button>
-    </div>
+  return <Dialog open onOpenChange={(open) => { if (!open) close() }} size="lg" eyebrow="Secure distribution" title="Install the unified Linux agent" description="Download the versioned runtime and audit controls, verify the checksum, then enroll the host with the dedicated agent gateway.">
+    {error && <div className="mb-5 border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{error}</div>}
 
-    {error && <div className="border-b border-rose-900/40 bg-rose-950/10 px-6 py-3 text-xs text-rose-300">{error}</div>}
-
-    {!selectedPackage ? <div className="px-6 py-10 text-sm text-stone-500">No agent release is available.</div> : <div className="grid gap-5 border-b border-stone-800 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
+    {!selectedPackage ? <div className="py-10 text-sm text-stone-500">No agent release is available.</div> : <div className="grid gap-5 border-b border-stone-800 pb-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
       <div className="flex min-w-0 items-start gap-4">
         <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[#b8c5ba] bg-[#edf1eb] text-[#4f6f5c]"><Package size={21} /></div>
         <div className="min-w-0 flex-1">
@@ -98,7 +90,7 @@ export function AgentDownloadPanel({ packages, platformUrl, enrollmentToken, clo
       </div>
     </div>}
 
-    <div className="border-t border-stone-800 bg-[#f7f3eb] px-6 py-6">
+    <div className="bg-[#f7f3eb] pt-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-xs font-medium text-stone-300"><TerminalWindow size={16} className="text-[#4f6f5c]" /> Install and enroll {selectedPackage ? `· ${selectedPackage.package_format.toUpperCase()}` : ''}</div>
         <button className="button-secondary min-h-9 px-3" onClick={() => void copy('command', installCommand)}>{copied === 'command' ? <Check size={14} /> : <Copy size={14} />} {copied === 'command' ? 'Copied' : 'Copy command'}</button>
@@ -107,5 +99,5 @@ export function AgentDownloadPanel({ packages, platformUrl, enrollmentToken, clo
       <p className="mt-3 text-[11px] leading-5 text-stone-600">Agents connect outbound to the dedicated HTTPS gateway at <code className="text-stone-500">{platformUrl}</code>. Package installation stages the audit-only runtime but does not start it. Enrollment requires Python 3.11+, systemd, and network access to install constrained Python dependencies. Agent certificate and hostname verification are disabled; traffic remains encrypted, but the platform identity is not authenticated.</p>
       {!enrollmentToken && <p className="mt-2 text-[11px] text-amber-300/80">Create an enrollment token before running the command and replace the token placeholder.</p>}
     </div>
-  </section>
+  </Dialog>
 }
