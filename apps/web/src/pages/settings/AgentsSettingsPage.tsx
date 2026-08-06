@@ -25,6 +25,7 @@ import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, L
 
 const modes: PolicyMode[] = ['audit', 'manual', 'remediate', 'disabled']
 type WorkspaceTab = 'hosts' | 'policy' | 'deployment'
+type PolicyStage = 'configure' | 'review'
 type AgentStatus = 'online' | 'stale' | 'offline' | 'never' | 'revoked'
 type ReportStatus = 'fresh' | 'stale' | 'never'
 
@@ -167,10 +168,31 @@ export function AgentsSettingsPage() {
   const [draftDescription, setDraftDescription] = useState('')
   const [draftDefaultMode, setDraftDefaultMode] = useState<PolicyMode>('audit')
   const [draftSchedule, setDraftSchedule] = useState(60)
+  const [policyStage, setPolicyStage] = useState<PolicyStage>('configure')
 
   const selectedGroup = data?.groups.find(group => group.id === selectedGroupId) ?? null
 
   const assignedPolicy = selectedGroup ? data?.policies.find(policy => policy.id === selectedGroup.policy_id) ?? null : null
+  const policyChanges = useMemo(() => {
+    if (!assignedPolicy) return { defaultMode: false, schedule: false, description: false, controls: [] }
+    const controlIds = new Set([...Object.keys(assignedPolicy.control_modes), ...Object.keys(controlModes)])
+    return {
+      defaultMode: draftDefaultMode !== assignedPolicy.default_mode,
+      schedule: draftSchedule !== Number(assignedPolicy.settings.schedule_minutes ?? 60),
+      description: draftDescription !== assignedPolicy.description,
+      controls: [...controlIds].filter(controlId => (assignedPolicy.control_modes[controlId] ?? null) !== (controlModes[controlId] ?? null)).map(controlId => {
+        const catalogControl = data?.controls.find(control => control.control_id === controlId)
+        return {
+          controlId,
+          title: catalogControl?.title ?? controlId,
+          from: assignedPolicy.control_modes[controlId] ?? `Inherit ${assignedPolicy.default_mode}`,
+          to: controlModes[controlId] ?? `Inherit ${draftDefaultMode}`,
+        }
+      }),
+    }
+  }, [assignedPolicy, controlModes, data?.controls, draftDefaultMode, draftDescription, draftSchedule])
+  const hasPolicyChanges = policyChanges.defaultMode || policyChanges.schedule || policyChanges.description || policyChanges.controls.length > 0
+  const policyChangeCount = Number(policyChanges.defaultMode) + Number(policyChanges.schedule) + Number(policyChanges.description) + policyChanges.controls.length
   const categories = useMemo(() => {
     const grouped = new Map<string, ControlCatalogItem[]>()
     for (const control of data?.controls ?? []) {
@@ -188,6 +210,7 @@ export function AgentsSettingsPage() {
     setDraftDefaultMode(assignedPolicy.default_mode)
     setDraftSchedule(Number(assignedPolicy.settings.schedule_minutes ?? 60))
     setSelectedCategory('overview')
+    setPolicyStage('configure')
   }, [assignedPolicy])
 
   useEffect(() => {
@@ -299,13 +322,13 @@ export function AgentsSettingsPage() {
   }
 
   function publishPolicy() {
-    if (!assignedPolicy || assignedPolicy.assigned_groups > 1) return
+    if (!assignedPolicy || assignedPolicy.assigned_groups > 1 || !hasPolicyChanges) return
     void submit(() => api.updateAgentPolicy(assignedPolicy.id, {
       description: draftDescription,
       default_mode: draftDefaultMode,
       control_modes: controlModes,
       settings: { ...assignedPolicy.settings, schedule_minutes: draftSchedule, profile: String(assignedPolicy.settings.profile ?? 'level2_server') },
-    }))
+    }), () => setPolicyStage('configure'))
   }
 
   if (loading) return <LoadingState />
@@ -411,13 +434,59 @@ export function AgentsSettingsPage() {
 
           {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] min-w-0 md:grid-cols-[210px_minmax(0,1fr)]">
             <nav className="min-w-0 overflow-hidden border-b border-stone-800 bg-[#f7f3eb] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
-              <button className={`policy-category-item ${selectedCategory === 'overview' ? 'policy-category-item-active' : ''}`} onClick={() => setSelectedCategory('overview')}><SlidersHorizontal size={15} /><span>Overview</span></button>
+              <button className={`policy-category-item ${selectedCategory === 'overview' && policyStage === 'configure' ? 'policy-category-item-active' : ''}`} onClick={() => { setSelectedCategory('overview'); setPolicyStage('configure') }}><SlidersHorizontal size={15} /><span>Overview</span></button>
               <div className="px-3 pb-2 pt-5"><span className="section-label">Control categories</span></div>
-              <div className="flex gap-1 overflow-x-auto md:block md:space-y-1">{categories.map(([category, controls]) => <button key={category} className={`policy-category-item min-w-44 md:min-w-0 ${selectedCategory === category ? 'policy-category-item-active' : ''}`} onClick={() => setSelectedCategory(category)}><span className="min-w-0 flex-1 truncate text-left capitalize">{category.replaceAll('_', ' ')}</span><span className="font-mono text-[9px] text-stone-600">{controls.length}</span></button>)}</div>
+              <div className="flex gap-1 overflow-x-auto md:block md:space-y-1">{categories.map(([category, controls]) => <button key={category} className={`policy-category-item min-w-44 md:min-w-0 ${selectedCategory === category && policyStage === 'configure' ? 'policy-category-item-active' : ''}`} onClick={() => { setSelectedCategory(category); setPolicyStage('configure') }}><span className="min-w-0 flex-1 truncate text-left capitalize">{category.replaceAll('_', ' ')}</span><span className="font-mono text-[9px] text-stone-600">{controls.length}</span></button>)}</div>
             </nav>
 
             <div className="min-w-0">
-              {selectedCategory === 'overview' ? <div>
+              {policyStage === 'review' ? <div>
+                <div className="policy-safety-note flex items-start gap-3 border-b px-5 py-4 text-xs leading-5 sm:px-7">
+                  <ShieldCheck size={17} className="mt-0.5 shrink-0" />
+                  <span><strong>Audit-Only Safety Lock Is Active.</strong> Publishing changes what the agent audits, but this release still cannot modify host configuration.</span>
+                </div>
+                <div className="border-b border-stone-800 px-5 py-6 sm:px-7">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                      <p className="section-label">Review Policy Changes</p>
+                      <h3 className="mt-2 text-xl font-semibold text-stone-100">Confirm Version {assignedPolicy.version + 1}</h3>
+                      <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-500">Review the differences below before publishing an immutable policy version for {selectedGroup.name}.</p>
+                    </div>
+                    <span className="settings-state">{policyChangeCount} {policyChangeCount === 1 ? 'Change' : 'Changes'}</span>
+                  </div>
+                  <ol className="mt-6 grid max-w-2xl grid-cols-3 border-y border-stone-800 py-3 text-[11px]">
+                    <li className="text-stone-500"><span className="mr-2 font-mono">01</span>Configure</li>
+                    <li className="font-semibold text-[#80551f]"><span className="mr-2 font-mono">02</span>Review</li>
+                    <li className="text-stone-500"><span className="mr-2 font-mono">03</span>Publish</li>
+                  </ol>
+                </div>
+
+                <div className="px-5 py-6 sm:px-7">
+                  <div className="grid gap-px overflow-hidden rounded-xl border border-stone-800 bg-stone-800 sm:grid-cols-2">
+                    <div className="bg-[#fbfaf7] p-4"><span className="detail-label">Policy</span><strong className="mt-2 block text-sm text-stone-200">{assignedPolicy.name}</strong><span className="table-subtitle">Version {assignedPolicy.version} → {assignedPolicy.version + 1}</span></div>
+                    <div className="bg-[#fbfaf7] p-4"><span className="detail-label">Assigned Group</span><strong className="mt-2 block text-sm text-stone-200">{selectedGroup.name}</strong><span className="table-subtitle">{selectedGroup.agent_count} Enrolled Hosts</span></div>
+                  </div>
+
+                  <div className="mt-6 border-y border-stone-800">
+                    {policyChanges.defaultMode && <div className="grid gap-2 border-b border-stone-800 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Default Mode</span><span className="text-xs text-stone-300"><s className="mr-3 text-stone-500">{assignedPolicy.default_mode}</s><strong>{draftDefaultMode}</strong></span></div>}
+                    {policyChanges.schedule && <div className="grid gap-2 border-b border-stone-800 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Audit Schedule</span><span className="text-xs text-stone-300"><s className="mr-3 text-stone-500">{Number(assignedPolicy.settings.schedule_minutes ?? 60)} Minutes</s><strong>{draftSchedule} Minutes</strong></span></div>}
+                    {policyChanges.description && <div className="grid gap-2 border-b border-stone-800 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Description</span><div className="text-xs leading-5 text-stone-300"><p className="text-stone-500">{assignedPolicy.description || 'No Description'}</p><p className="mt-1 font-medium">{draftDescription || 'No Description'}</p></div></div>}
+                    {policyChanges.controls.length > 0 && <div className="py-4">
+                      <div className="mb-3 flex items-center justify-between gap-3"><span className="detail-label">Control Overrides</span><span className="font-mono text-[10px] text-stone-500">{policyChanges.controls.length} Changed</span></div>
+                      <div className="divide-y divide-stone-800">{policyChanges.controls.map(change => <div key={change.controlId} className="grid gap-2 py-3 sm:grid-cols-[180px_minmax(0,1fr)_160px] sm:items-center">
+                        <code className="text-[10px] text-stone-500">{change.controlId}</code>
+                        <span className="text-xs text-stone-300">{change.title}</span>
+                        <span className="text-[11px] text-stone-500"><s>{change.from}</s><strong className="ml-2 text-stone-300">{change.to}</strong></span>
+                      </div>)}</div>
+                    </div>}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 border-t border-stone-800 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                  <Button disabled={saving} onClick={() => setPolicyStage('configure')}>Back To Configuration</Button>
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center"><span className="flex items-center gap-2 text-xs text-stone-600"><CheckCircle size={16} /> Version {assignedPolicy.version + 1} Cannot Be Edited After Publication</span><Button variant="primary" disabled={saving || !hasPolicyChanges} onClick={publishPolicy}>{saving ? 'Publishing…' : `Publish Version ${assignedPolicy.version + 1}`}</Button></div>
+                </div>
+              </div> : selectedCategory === 'overview' ? <div>
                 <div className="policy-safety-note flex items-start gap-3 border-b px-5 py-4 text-xs leading-5 sm:px-7">
                   <ShieldCheck size={17} className="mt-0.5 shrink-0" />
                   <span><strong>Audit-Only Safety Lock Is Active.</strong> Remediation modes can be staged here, but this agent release cannot change host configuration.</span>
@@ -466,9 +535,9 @@ export function AgentsSettingsPage() {
                   </div>)}</div>}
                 </div>
 
-                <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-7">
-                  <span className="flex items-center gap-2 text-xs text-stone-600"><CheckCircle size={16} /> Saving publishes immutable version {assignedPolicy.version + 1}</span>
-                  <button className="button-primary" disabled={saving || assignedPolicy.assigned_groups > 1} onClick={publishPolicy}>{saving ? 'Publishing…' : `Publish version ${assignedPolicy.version + 1}`}</button>
+                <div className="flex flex-col items-start justify-between gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7">
+                  <span className="flex items-center gap-2 text-xs text-stone-600"><CheckCircle size={16} /> {hasPolicyChanges ? `${policyChangeCount} Pending ${policyChangeCount === 1 ? 'Change' : 'Changes'}` : 'No Unpublished Changes'}</span>
+                  <button className="button-primary" disabled={saving || assignedPolicy.assigned_groups > 1 || !hasPolicyChanges} onClick={() => setPolicyStage('review')}>Review Changes</button>
                 </div>
               </div> : <div>
                 <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
@@ -494,9 +563,9 @@ export function AgentsSettingsPage() {
                     }}
                   ><option value="">Inherit {draftDefaultMode}</option>{modes.map(mode => <option key={mode}>{mode}</option>)}</select>
                 </div>)}</div>
-                <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-stone-800 bg-[#f7f3eb]/95 px-5 py-4 backdrop-blur sm:px-7">
-                  <span className="text-xs text-stone-600">{Object.keys(controlModes).length} explicit overrides across all categories</span>
-                  <button className="button-primary" disabled={saving || assignedPolicy.assigned_groups > 1} onClick={publishPolicy}>{saving ? 'Publishing…' : `Publish version ${assignedPolicy.version + 1}`}</button>
+                <div className="sticky bottom-0 flex flex-col items-start justify-between gap-4 border-t border-stone-800 bg-[#f7f3eb]/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:px-7">
+                  <span className="text-xs text-stone-600">{hasPolicyChanges ? `${policyChangeCount} Pending ${policyChangeCount === 1 ? 'Change' : 'Changes'}` : 'No Unpublished Changes'}</span>
+                  <button className="button-primary" disabled={saving || assignedPolicy.assigned_groups > 1 || !hasPolicyChanges} onClick={() => setPolicyStage('review')}>Review Changes</button>
                 </div>
               </div>}
             </div>
