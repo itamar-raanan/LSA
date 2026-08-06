@@ -57,7 +57,7 @@ describe('Fleet console experience', () => {
 
   it('shows all 12 categories before revealing category findings', async () => {
     render(<FindingsPage />)
-    expect(await screen.findByRole('button', { name: /Mandatory access/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Mandatory Access/i })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { pressed: false })).toHaveLength(12)
     expect(screen.queryByText('Disable root login')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /SSH/ }))
@@ -68,6 +68,7 @@ describe('Fleet console experience', () => {
     render(<FindingsPage />)
     fireEvent.click(await screen.findByRole('button', { name: /SSH/ }))
     fireEvent.click(screen.getByRole('button', { name: /Disable root login/ }))
+    expect(screen.getByRole('complementary', { name: 'Disable root login details' })).toBeInTheDocument()
     expect(screen.getByText('Current State')).toBeInTheDocument()
     expect(screen.getByText('Required State')).toBeInTheDocument()
     expect(screen.getByText('Why This Setting Is Used')).toBeInTheDocument()
@@ -75,6 +76,31 @@ describe('Fleet console experience', () => {
     expect(screen.getByText('Apply Step 1')).toBeInTheDocument()
     expect(screen.getByText('Verify Step 1')).toBeInTheDocument()
     expect(screen.getByText('A service restart is required and may interrupt active sessions.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close finding details' }))
+    expect(screen.queryByRole('complementary', { name: 'Disable root login details' })).not.toBeInTheDocument()
+  })
+
+  it('searches and filters a category queue without hiding the category catalog', async () => {
+    apiMock.findings.mockResolvedValueOnce([finding, {
+      ...finding,
+      id: 'finding-2',
+      control_id: 'LSA-SSH-2',
+      title: 'Disable weak SSH ciphers',
+      severity: 'critical',
+      lifecycle: 'persistent',
+      actual: 'aes128-cbc enabled',
+    }])
+    render(<FindingsPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /SSH/ }))
+    expect(screen.getByRole('table', { name: 'SSH Findings' })).toBeInTheDocument()
+    expect(screen.getByText('Disable root login')).toBeInTheDocument()
+    expect(screen.getByText('Disable weak SSH ciphers')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by severity' }), { target: { value: 'critical' } })
+    expect(screen.queryByText('Disable root login')).not.toBeInTheDocument()
+    expect(screen.getByText('Disable weak SSH ciphers')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Accounts/ })).toBeInTheDocument()
   })
 
   it('shows searchable package and service inventory on the host record', async () => {
