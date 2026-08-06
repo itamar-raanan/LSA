@@ -1,7 +1,9 @@
-import { Check, Copy, X } from '@phosphor-icons/react'
+import { Check, Copy } from '@phosphor-icons/react'
 import { useState, type FormEvent } from 'react'
 import { api } from '../api/client'
 import type { Host, TokenCreated } from '../types'
+import { Button } from './ui/Button'
+import { Dialog } from './ui/Dialog'
 
 export function EnrollHostPanel({ close, created }: { close: () => void; created: () => void }) {
   const [form, setForm] = useState({ hostname: '', fqdn: '', os_family: 'debian', os_version: '13', environment: 'production', owner: '' })
@@ -43,11 +45,9 @@ export function EnrollHostPanel({ close, created }: { close: () => void; created
   }
 
   return (
-    <div className="fixed inset-0 z-30 grid place-items-center bg-[#080b09]/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="enroll-title">
-      <section className="panel max-h-[92dvh] w-full max-w-2xl overflow-y-auto p-6 md:p-8">
-        <div className="flex items-start justify-between"><div><p className="section-label">Host identity</p><h2 id="enroll-title" className="mt-3 text-2xl font-medium tracking-[-0.04em]">Enroll a Linux host</h2></div><button className="icon-button" onClick={close} aria-label="Close enrollment"><X size={17} /></button></div>
+    <Dialog open onOpenChange={(open) => { if (!open) close() }} eyebrow="Host identity" title="Enroll a Linux host" size="lg">
         {!result ? (
-          <form className="mt-8" onSubmit={submit}>
+          <form onSubmit={submit}>
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="form-field"><span>Hostname</span><input required value={form.hostname} onChange={(event) => update('hostname', event.target.value)} placeholder="web-prod-01" /></label>
               <label className="form-field"><span>FQDN</span><input value={form.fqdn} onChange={(event) => update('fqdn', event.target.value)} placeholder="web-prod-01.example.com" /></label>
@@ -57,7 +57,7 @@ export function EnrollHostPanel({ close, created }: { close: () => void; created
               <label className="form-field"><span>Owner</span><input value={form.owner} onChange={(event) => update('owner', event.target.value)} placeholder="platform" /></label>
             </div>
             {error && <p className="mt-5 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{error}</p>}
-            <div className="mt-7 flex justify-end gap-3"><button type="button" className="button-secondary" onClick={close}>Cancel</button><button className="button-primary" disabled={submitting}>{submitting ? 'Creating identity' : 'Create host and token'}</button></div>
+            <div className="mt-7 flex justify-end gap-3"><Button type="button" onClick={close}>Cancel</Button><Button variant="primary" disabled={submitting}>{submitting ? 'Creating identity' : 'Create host and token'}</Button></div>
           </form>
         ) : (
           <div className="mt-8">
@@ -65,14 +65,13 @@ export function EnrollHostPanel({ close, created }: { close: () => void; created
             <CredentialRow label="Host UUID" value={result.host.id} copied={copied} copy={copy} />
             <CredentialRow label="Ingestion token" value={result.token.token} copied={copied} copy={copy} />
             <div className="mt-6"><p className="detail-label">Ansible inventory variables</p><pre className="evidence-block">{`lsa_host_id=${result.host.id}\nlsa_ingest_token_file=~/.lsa/token`}</pre></div>
-            <div className="mt-7 flex justify-end"><button className="button-primary" onClick={close}>Done</button></div>
+            <div className="mt-7 flex justify-end"><Button variant="primary" onClick={close}>Done</Button></div>
           </div>
         )}
-      </section>
-    </div>
+    </Dialog>
   )
 }
 
 function CredentialRow({ label, value, copied, copy }: { label: string; value: string; copied: string; copy: (label: string, value: string) => Promise<void> }) {
-  return <div className="mt-5"><p className="detail-label">{label}</p><div className="mt-2 flex items-center gap-3 rounded-xl border border-stone-800 bg-[#eee8dd] px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-stone-300">{value}</code><button className="icon-button shrink-0" aria-label={`Copy ${label}`} onClick={() => void copy(label, value)}>{copied === label ? <Check size={16} /> : <Copy size={16} />}</button></div></div>
+  return <div className="mt-5"><p className="detail-label">{label}</p><div className="mt-2 flex items-center gap-3 rounded-xl border border-stone-800 bg-[#eee8dd] px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-stone-300">{value}</code><Button variant="ghost" size="icon" className="shrink-0" aria-label={`Copy ${label}`} onClick={() => void copy(label, value)}>{copied === label ? <Check size={16} /> : <Copy size={16} />}</Button></div></div>
 }
