@@ -3,6 +3,8 @@ import { useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../../components/StatePanel'
+import { Button } from '../../components/ui/Button'
+import { Dialog } from '../../components/ui/Dialog'
 import { useApi } from '../../hooks/useApi'
 import type { IdentityProvider, ProviderType } from '../../types'
 
@@ -14,6 +16,8 @@ export function AuthenticationSettingsPage() {
   const [type, setType] = useState<ProviderType>('entra')
   const [actionError, setActionError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState<IdentityProvider | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -43,7 +47,16 @@ export function AuthenticationSettingsPage() {
 
   async function remove(provider: IdentityProvider) {
     setActionError('')
-    try { await api.deleteProvider(provider.id); await reload() } catch (reason) { setActionError(reason instanceof Error ? reason.message : 'Provider removal failed') }
+    setRemoving(true)
+    try {
+      await api.deleteProvider(provider.id)
+      setDeleting(null)
+      await reload()
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'Provider removal failed')
+    } finally {
+      setRemoving(false)
+    }
   }
 
   return <div className="page-reveal">
@@ -74,9 +87,24 @@ export function AuthenticationSettingsPage() {
       {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !providers?.length ? <EmptyState title="No identity providers" detail="Add Entra ID, Okta, Google Workspace, ADFS, generic OpenID Connect, or RADIUS." /> : <div className="divide-y divide-stone-800 overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb]">{providers.map((provider) => <section key={provider.id} className="grid gap-5 px-6 py-6 md:grid-cols-[44px_1fr_auto] md:items-center md:px-7">
         <span className="grid size-11 place-items-center rounded-xl border border-stone-800 bg-[#f7f3eb] text-stone-500">{provider.provider_type === 'radius' ? <Network size={21} /> : <Buildings size={21} />}</span>
         <div><p className="text-sm font-medium text-stone-200">{provider.name}</p><p className="mt-2 text-xs text-stone-600">{providerLabels[provider.provider_type]} · {provider.issuer_url ?? String(provider.config.host ?? '')}</p><p className="mt-2 font-mono text-[9px] capitalize tracking-wider text-stone-700">Secret {provider.secret_configured ? 'configured' : 'missing'} · default role auditor</p></div>
-        <div className="flex items-center gap-2"><button className="button-secondary min-h-9 px-3" onClick={() => void setEnabled(provider, !provider.is_enabled)}><CheckCircle size={15} />{provider.is_enabled ? 'Disable' : 'Enable'}</button><button className="icon-button" aria-label={`Delete ${provider.name}`} onClick={() => void remove(provider)}><Trash size={15} /></button></div>
+        <div className="flex items-center gap-2"><button className="button-secondary min-h-9 px-3" onClick={() => void setEnabled(provider, !provider.is_enabled)}><CheckCircle size={15} />{provider.is_enabled ? 'Disable' : 'Enable'}</button><Button variant="ghost" size="icon" aria-label={`Delete ${provider.name}`} onClick={() => setDeleting(provider)}><Trash size={15} /></Button></div>
       </section>)}</div>}
     </div>
     <div className="mt-5 flex items-start gap-3 rounded-[18px] border border-amber-900/40 bg-amber-950/10 px-5 py-4 text-xs leading-5 text-amber-200/70"><WarningCircle size={18} className="mt-0.5 shrink-0" />Provider secrets are encrypted. OIDC uses discovery, authorization code with PKCE, state, nonce, issuer, audience, expiry, and signing-key validation. RADIUS should remain on a protected internal network.</div>
+    <Dialog
+      open={deleting !== null}
+      onOpenChange={(open) => { if (!open && !removing) setDeleting(null) }}
+      eyebrow="Authentication safety"
+      title={`Delete ${deleting?.name ?? 'provider'}?`}
+      description="Users assigned to this provider will no longer be able to start new sign-ins. Existing sessions are not a substitute for a tested fallback administrator."
+    >
+      <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-300">
+        Confirm that another enabled provider or local administrator account works before deleting this configuration.
+      </div>
+      <div className="mt-6 flex justify-end gap-3">
+        <Button onClick={() => setDeleting(null)} disabled={removing}>Cancel</Button>
+        <Button variant="danger" disabled={!deleting || removing} onClick={() => { if (deleting) void remove(deleting) }}>{removing ? 'Deleting provider' : 'Delete provider'}</Button>
+      </div>
+    </Dialog>
   </div>
 }

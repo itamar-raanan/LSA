@@ -4,7 +4,10 @@ import { api } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../../components/StatePanel'
+import { Button } from '../../components/ui/Button'
+import { Dialog } from '../../components/ui/Dialog'
 import { useApi } from '../../hooks/useApi'
+import type { ManagedUser } from '../../types'
 
 const permissions = [
   { capability: 'View hosts, findings, and reports', admin: true, analyst: true, auditor: true },
@@ -22,10 +25,31 @@ export function UsersSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [providerId, setProviderId] = useState('')
+  const [pendingChange, setPendingChange] = useState<
+    | { kind: 'status'; managed: ManagedUser; active: boolean }
+    | { kind: 'role'; managed: ManagedUser; role: string }
+    | null
+  >(null)
+  const [updating, setUpdating] = useState(false)
   const selectedProvider = useMemo(() => providers?.find((item) => item.id === providerId), [providers, providerId])
 
-  async function changeRole(id: string, role: string) { await api.updateUserRole(id, role); await reload() }
-  async function changeStatus(id: string, active: boolean) { await api.updateUserStatus(id, active); await reload() }
+  async function applyPendingChange() {
+    if (!pendingChange) return
+    setUpdating(true)
+    try {
+      if (pendingChange.kind === 'role') await api.updateUserRole(pendingChange.managed.id, pendingChange.role)
+      else await api.updateUserStatus(pendingChange.managed.id, pendingChange.active)
+      setPendingChange(null)
+      await reload()
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  function requestRoleChange(managed: ManagedUser, role: string) {
+    if (managed.role === 'admin' || role === 'admin') setPendingChange({ kind: 'role', managed, role })
+    else void api.updateUserRole(managed.id, role).then(reload)
+  }
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -69,8 +93,8 @@ export function UsersSettingsPage() {
       <div className="overflow-x-auto"><table className="data-table min-w-[900px]"><thead><tr><th>User</th><th>Identity source</th><th>Role</th><th>Status</th><th>Last login</th></tr></thead><tbody>{users.map((managed) => <tr key={managed.id}>
         <td><span className="font-medium text-stone-200">{managed.name}</span><span className="table-subtitle">{managed.email}{managed.id === user?.id ? ' · current user' : ''}</span></td>
         <td>{managed.provider_name ?? (managed.auth_source === 'local' ? 'Emergency local' : managed.auth_source)}<span className="table-subtitle">{managed.auth_source}</span></td>
-        <td><select className="select-input min-h-9" value={managed.role} disabled={managed.id === user?.id} onChange={(event) => void changeRole(managed.id, event.target.value)}><option value="admin">Administrator</option><option value="analyst">Analyst</option><option value="auditor">Auditor</option></select></td>
-        <td><button className="button-secondary min-h-9 px-3" disabled={managed.id === user?.id} onClick={() => void changeStatus(managed.id, !managed.is_active)}>{managed.is_active ? 'Disable' : 'Enable'}</button></td>
+        <td><select className="select-input min-h-9" value={managed.role} disabled={managed.id === user?.id} onChange={(event) => requestRoleChange(managed, event.target.value)}><option value="admin">Administrator</option><option value="analyst">Analyst</option><option value="auditor">Auditor</option></select></td>
+        <td><Button size="sm" disabled={managed.id === user?.id} onClick={() => managed.is_active ? setPendingChange({ kind: 'status', managed, active: false }) : void api.updateUserStatus(managed.id, true).then(reload)}>{managed.is_active ? 'Disable' : 'Enable'}</Button></td>
         <td>{managed.last_login_at ? new Date(managed.last_login_at).toLocaleString() : 'Never'}</td>
       </tr>)}</tbody></table></div>
       <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><UsersThree size={17} className="mt-0.5 shrink-0" />Disabling a user immediately revokes every active browser session. User identities remain linked to their provider subject.</div>
@@ -80,5 +104,28 @@ export function UsersSettingsPage() {
       <div className="overflow-x-auto"><table className="data-table min-w-[680px]"><thead><tr><th>Capability</th><th>Administrator</th><th>Analyst</th><th>Auditor</th></tr></thead><tbody>{permissions.map((permission) => <tr key={permission.capability}><td>{permission.capability}</td>{(['admin', 'analyst', 'auditor'] as const).map((role) => <td key={role}>{permission[role] ? <Check size={16} className="text-[#4f6f5c]" aria-label="Allowed" /> : <Minus size={16} className="text-stone-700" aria-label="Not allowed" />}</td>)}</tr>)}</tbody></table></div>
       <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />Role mapping originates in OIDC groups or the configured RADIUS reply attribute and can be corrected here.</div>
     </section>
+    <Dialog
+      open={pendingChange !== null}
+      onOpenChange={(open) => { if (!open && !updating) setPendingChange(null) }}
+      eyebrow="Access safety"
+      title={pendingChange?.kind === 'role'
+        ? `Change ${pendingChange.managed.name}'s role?`
+        : `Disable ${pendingChange?.managed.name ?? 'user'}?`}
+      description={pendingChange?.kind === 'role'
+        ? `The account will change from ${pendingChange.managed.role} to ${pendingChange.role}. This changes the permissions enforced by both the console and API.`
+        : 'The account will be blocked immediately and every active browser session will be revoked. The linked identity record will be retained.'}
+    >
+      <div className="rounded-lg border border-amber-900/40 bg-amber-950/10 px-4 py-3 text-xs leading-5 text-amber-800">
+        {pendingChange?.kind === 'role'
+          ? 'Administrator access can manage users, authentication, credentials, agents, and evidence. Confirm this identity requires that scope.'
+          : 'The user cannot sign in again until an administrator enables the account.'}
+      </div>
+      <div className="mt-6 flex justify-end gap-3">
+        <Button onClick={() => setPendingChange(null)} disabled={updating}>Cancel</Button>
+        <Button variant="danger" disabled={!pendingChange || updating} onClick={() => void applyPendingChange()}>
+          {updating ? 'Applying change' : pendingChange?.kind === 'role' ? 'Change role' : 'Disable user'}
+        </Button>
+      </div>
+    </Dialog>
   </div>
 }
