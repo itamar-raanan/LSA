@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { api } from '../api/client'
 import { TokensPage } from './TokensPage'
 
@@ -49,7 +50,7 @@ describe('TokensPage', () => {
   })
 
   it('shows token scope and confirms revocation', async () => {
-    render(<TokensPage />)
+    render(<MemoryRouter><TokensPage /></MemoryRouter>)
     expect(await screen.findByText('Debian production scanner')).toBeInTheDocument()
     expect(screen.getByText('edge-prod-07')).toBeInTheDocument()
 

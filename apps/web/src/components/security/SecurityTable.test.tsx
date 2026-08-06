@@ -43,6 +43,7 @@ describe('SecurityTable', () => {
     fireEvent.click(alphaSelection)
     expect(alphaSelection).toBeChecked()
     expect(alphaSelection.closest('tr')).toHaveClass('selected-row')
+    expect(screen.getByRole('status')).toHaveTextContent('1 Selected')
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search table' }), { target: { value: 'gamma' } })
     expect(within(table).getByText('Gamma Host')).toBeInTheDocument()
@@ -52,5 +53,26 @@ describe('SecurityTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(within(table).getByText('Gamma Host')).toBeInTheDocument()
     expect(screen.getByText('Showing 3–3 Of 3')).toBeInTheDocument()
+  })
+
+  it('delegates page changes when a server-paginated result set is supplied', () => {
+    const onPageChange = vi.fn()
+    render(<SecurityTable rows={[rows[0]]} columns={columns} searchText={(row) => row.name} serverPagination={{ page: 1, pageSize: 5, totalRows: 12, onPageChange }} ariaLabel="Server Assets" />)
+
+    expect(screen.getByText('Showing 6–6 Of 12')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(onPageChange).toHaveBeenCalledWith(2)
+  })
+
+  it('exposes lower-priority fields through responsive row details', () => {
+    const responsiveColumns: SecurityColumn<TestRow>[] = [
+      { ...columns[0], priority: 'primary' },
+      { ...columns[1], priority: 'detail' },
+    ]
+    render(<SecurityTable rows={[rows[0]]} columns={responsiveColumns} searchText={(row) => row.name} ariaLabel="Responsive Assets" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Additional Details For Row 1' }))
+    expect(screen.getByRole('button', { name: 'Collapse Additional Details For Row 1' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('row', { name: 'State Offline' })).toBeInTheDocument()
   })
 })
