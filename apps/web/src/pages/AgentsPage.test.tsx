@@ -33,6 +33,7 @@ vi.mock('../api/client', () => ({
     agentPolicyVersions: vi.fn().mockResolvedValue([
       { version: 1, default_mode: 'audit', control_modes: {}, settings: { schedule_minutes: 60 }, created_by_name: 'Security Administrator', created_at: '2026-01-01T00:00:00Z' },
     ]),
+    updateAgentPolicy: vi.fn().mockResolvedValue({ id: 'policy-1', version: 2 }),
     restoreAgentPolicy: vi.fn(),
     runAgentAudits: vi.fn(),
     bulkAssignAgentGroup: vi.fn(),
@@ -118,5 +119,38 @@ describe('Agents', () => {
     expect(api.revokeAgent).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Revoke agent' }))
     await waitFor(() => expect(api.revokeAgent).toHaveBeenCalledWith('agent-1'))
+  })
+
+  it('reviews policy differences before publishing an immutable version', async () => {
+    render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
+
+    const groupNavigation = await screen.findByRole('navigation', { name: 'Fleet groups' })
+    fireEvent.click(within(groupNavigation).getByRole('button', { name: /Default Linux Fleet/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Policy' }))
+
+    const reviewButton = screen.getByRole('button', { name: 'Review Changes' })
+    expect(reviewButton).toBeDisabled()
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Schedule minutes' }), { target: { value: '30' } })
+    expect(reviewButton).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: /filesystem/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mode for CIS-DEBIAN13-1.1.1' }), { target: { value: 'manual' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Review Changes' }))
+
+    expect(screen.getByRole('heading', { name: 'Confirm Version 2' })).toBeInTheDocument()
+    expect(screen.getByText(/Review the differences below before publishing an immutable policy version for Default Linux Fleet/)).toBeInTheDocument()
+    expect(screen.getByText('2 Changes')).toBeInTheDocument()
+    expect(screen.getByText('60 Minutes')).toBeInTheDocument()
+    expect(screen.getByText('30 Minutes')).toBeInTheDocument()
+    expect(screen.getByText('Disable unused filesystem')).toBeInTheDocument()
+    expect(screen.getByText('manual')).toBeInTheDocument()
+    expect(api.updateAgentPolicy).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish Version 2' }))
+    await waitFor(() => expect(api.updateAgentPolicy).toHaveBeenCalledWith('policy-1', {
+      description: '',
+      default_mode: 'audit',
+      control_modes: { 'CIS-DEBIAN13-1.1.1': 'manual' },
+      settings: { schedule_minutes: 30, profile: 'level2_server' },
+    }))
   })
 })
