@@ -2,6 +2,7 @@ import { Gear, Package } from '@phosphor-icons/react'
 import { Boxes, RefreshCw, Server, ShieldAlert, Shapes, Upload } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { ApplicationInvestigationPanel } from '../components/ApplicationInvestigationPanel'
@@ -31,8 +32,11 @@ function stateLabel(item: ApplicationEstateItem) {
 
 export function ApplicationsPage() {
   const { user } = useAuth()
-  const [query, setQuery] = useState('')
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedSearch = searchParams.get('search') ?? ''
+  const requestedApplication = searchParams.get('application')
+  const [query, setQuery] = useState(requestedSearch)
+  const [search, setSearch] = useState(requestedSearch)
   const [kind, setKind] = useState<ApplicationKind>('')
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all')
   const [selected, setSelected] = useState<ApplicationEstateItem | null>(null)
@@ -49,12 +53,44 @@ export function ApplicationsPage() {
     [selected?.name, selected?.kind, selected?.source],
   )
   const refreshIntelligence = intelligence.refresh
-  const closeInvestigation = useCallback(() => setSelected(null), [])
+  const closeInvestigation = useCallback(() => {
+    setSelected(null)
+    const next = new URLSearchParams(searchParams)
+    next.delete('application')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  const openInvestigation = useCallback((application: ApplicationEstateItem) => {
+    setSelected(application)
+    const next = new URLSearchParams(searchParams)
+    next.set('application', applicationKey(application))
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  function updateQuery(value: string) {
+    setQuery(value)
+    setSelected(null)
+    const next = new URLSearchParams(searchParams)
+    if (value.trim()) next.set('search', value)
+    else next.delete('search')
+    next.delete('application')
+    setSearchParams(next, { replace: true })
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(query.trim()), 250)
     return () => window.clearTimeout(timer)
   }, [query])
+
+  useEffect(() => {
+    if (requestedSearch !== query) setQuery(requestedSearch)
+  }, [query, requestedSearch])
+
+  useEffect(() => {
+    if (!requestedApplication || !estate.data?.applications.length) return
+    const application = estate.data.applications.find((item) => applicationKey(item) === requestedApplication)
+    if (application) setSelected(application)
+  }, [estate.data?.applications, requestedApplication])
 
   useEffect(() => {
     const status = intelligence.data?.last_sync?.status
@@ -74,7 +110,7 @@ export function ApplicationsPage() {
       header: 'Application',
       cell: (item) => {
         const active = selected ? applicationKey(selected) === applicationKey(item) : false
-        return <button className="application-name-button" onClick={() => setSelected(item)} aria-pressed={active}><span className="application-kind-icon">{item.kind === 'package' ? <Package size={15} /> : <Gear size={15} />}</span><span><strong>{item.name}</strong><small>{item.publisher ?? item.description ?? 'Publisher Not Reported'}</small></span></button>
+        return <button className="application-name-button" onClick={() => openInvestigation(item)} aria-pressed={active}><span className="application-kind-icon">{item.kind === 'package' ? <Package size={15} /> : <Gear size={15} />}</span><span><strong>{item.name}</strong><small>{item.publisher ?? item.description ?? 'Publisher Not Reported'}</small></span></button>
       },
       sortValue: (item) => item.name,
       exportValue: (item) => item.name,
@@ -104,7 +140,7 @@ export function ApplicationsPage() {
     { id: 'type', header: 'Type', cell: (item) => <span className="capitalize">{item.kind}</span>, sortValue: (item) => item.kind, exportValue: (item) => item.kind },
     { id: 'source', header: 'Source', cell: (item) => <span className="font-mono text-xs capitalize">{item.source}</span>, sortValue: (item) => item.source, exportValue: (item) => item.source },
     { id: 'observed', header: 'Last Observed', cell: (item) => <span className="font-mono text-xs">{new Date(item.last_seen_at).toLocaleDateString()}</span>, sortValue: (item) => item.last_seen_at, exportValue: (item) => item.last_seen_at },
-  ], [metrics?.reporting_hosts, selected])
+  ], [metrics?.reporting_hosts, openInvestigation, selected])
 
   async function queueRefresh() {
     setOperation({ busy: true, message: null, error: null })
@@ -164,7 +200,7 @@ export function ApplicationsPage() {
           columns={columns}
           ariaLabel="Application Inventory"
           query={query}
-          onQueryChange={setQuery}
+          onQueryChange={updateQuery}
           searchText={(item) => `${item.name} ${item.publisher ?? ''} ${item.description ?? ''} ${item.kind} ${item.source}`}
           rowLabel={(item) => item.name}
           searchPlaceholder="Search Application, Version, Or Publisher"
