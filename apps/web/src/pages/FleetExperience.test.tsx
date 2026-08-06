@@ -25,6 +25,10 @@ const apiMock = vi.hoisted(() => ({
 vi.mock('../api/client', () => ({ api: apiMock, ApiError: class ApiError extends Error {} }))
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'admin', role: 'admin' } }) }))
 
+function renderFindings(initialEntry = '/findings') {
+  return render(<MemoryRouter initialEntries={[initialEntry]}><FindingsPage /></MemoryRouter>)
+}
+
 describe('Fleet console experience', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -56,7 +60,7 @@ describe('Fleet console experience', () => {
   })
 
   it('shows all 12 categories before revealing category findings', async () => {
-    render(<FindingsPage />)
+    renderFindings()
     expect(await screen.findByRole('button', { name: /Mandatory Access/i })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { pressed: false })).toHaveLength(12)
     expect(screen.queryByText('Disable root login')).not.toBeInTheDocument()
@@ -65,7 +69,7 @@ describe('Fleet console experience', () => {
   })
 
   it('presents remediation as a current-to-required operator guide', async () => {
-    render(<FindingsPage />)
+    renderFindings()
     fireEvent.click(await screen.findByRole('button', { name: /SSH/ }))
     fireEvent.click(screen.getByRole('button', { name: /Disable root login/ }))
     expect(screen.getByRole('complementary', { name: 'Disable root login details' })).toBeInTheDocument()
@@ -80,6 +84,16 @@ describe('Fleet console experience', () => {
     expect(screen.queryByRole('complementary', { name: 'Disable root login details' })).not.toBeInTheDocument()
   })
 
+  it('restores finding and host investigation context from dashboard links', async () => {
+    const findingView = renderFindings('/findings?category=ssh&finding=finding-1')
+    expect(await screen.findByRole('complementary', { name: 'Disable root login details' })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'SSH Findings' })).toBeInTheDocument()
+    findingView.unmount()
+
+    render(<MemoryRouter initialEntries={['/hosts?host=host-1']}><HostsPage /></MemoryRouter>)
+    expect(await screen.findByRole('complementary', { name: 'web-01 details' })).toBeInTheDocument()
+  })
+
   it('searches and filters a category queue without hiding the category catalog', async () => {
     apiMock.findings.mockResolvedValueOnce([finding, {
       ...finding,
@@ -90,7 +104,7 @@ describe('Fleet console experience', () => {
       lifecycle: 'persistent',
       actual: 'aes128-cbc enabled',
     }])
-    render(<FindingsPage />)
+    renderFindings()
 
     fireEvent.click(await screen.findByRole('button', { name: /SSH/ }))
     expect(screen.getByRole('table', { name: 'SSH Findings' })).toBeInTheDocument()

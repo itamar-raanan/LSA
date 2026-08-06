@@ -1,5 +1,6 @@
 import { ArrowRight, FolderOpen, ShieldWarning } from '@phosphor-icons/react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { FindingDetailPanel } from '../components/FindingDetailPanel'
 import { PageHeader } from '../components/PageHeader'
@@ -27,9 +28,12 @@ const categoryCatalog = [
 const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
 
 export function FindingsPage() {
-  const [severity, setSeverity] = useState<Severity | 'all'>('all')
-  const [lifecycle, setLifecycle] = useState('all')
-  const [category, setCategory] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedSeverity = searchParams.get('severity')
+  const initialSeverity = severityOrder.includes(requestedSeverity as Severity) ? requestedSeverity as Severity : 'all'
+  const [severity, setSeverity] = useState<Severity | 'all'>(initialSeverity)
+  const [lifecycle, setLifecycle] = useState(searchParams.get('lifecycle') ?? 'all')
+  const [category, setCategory] = useState<string | null>(searchParams.get('category'))
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
   const { data, error, loading, reload } = useApi(() => api.findings(), [])
   const findings = useMemo(() => data ?? [], [data])
@@ -47,21 +51,58 @@ export function FindingsPage() {
   const affectedHosts = new Set(findings.map((finding) => finding.host_id)).size
   const criticalCount = findings.filter((finding) => finding.severity === 'critical').length
 
+  useEffect(() => {
+    const nextSeverity = severityOrder.includes(requestedSeverity as Severity) ? requestedSeverity as Severity : 'all'
+    setSeverity(nextSeverity)
+    setLifecycle(searchParams.get('lifecycle') ?? 'all')
+    setCategory(searchParams.get('category'))
+  }, [requestedSeverity, searchParams])
+
+  useEffect(() => {
+    const findingId = searchParams.get('finding')
+    if (!findingId) {
+      setSelectedFinding(null)
+      return
+    }
+    const requestedFinding = findings.find((finding) => finding.id === findingId)
+    if (requestedFinding && selectedFinding?.id !== requestedFinding.id) setSelectedFinding(requestedFinding)
+  }, [findings, searchParams, selectedFinding?.id])
+
+  function updateParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(searchParams)
+    for (const [key, value] of Object.entries(updates)) {
+      if (!value || value === 'all') next.delete(key)
+      else next.set(key, value)
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  function openFinding(finding: Finding) {
+    setSelectedFinding(finding)
+    setCategory(finding.category)
+    updateParams({ category: finding.category, finding: finding.id })
+  }
+
+  function closeFinding() {
+    setSelectedFinding(null)
+    updateParams({ finding: null })
+  }
+
   const columns: SecurityColumn<Finding>[] = [
     { id: 'severity', header: 'Severity', sortValue: (finding) => severityOrder.indexOf(finding.severity), exportValue: (finding) => finding.severity, cell: (finding) => <SeverityBadge severity={finding.severity} /> },
-    { id: 'finding', header: 'Finding', hideable: false, sortValue: (finding) => finding.title, exportValue: (finding) => finding.title, cell: (finding) => <button className="finding-table-link" onClick={() => setSelectedFinding(finding)}><strong>{finding.title}</strong><small>{finding.control_id} · {finding.module}</small></button> },
+    { id: 'finding', header: 'Finding', hideable: false, sortValue: (finding) => finding.title, exportValue: (finding) => finding.title, cell: (finding) => <button className="finding-table-link" onClick={() => openFinding(finding)}><strong>{finding.title}</strong><small>{finding.control_id} · {finding.module}</small></button> },
     { id: 'host', header: 'Affected Host', sortValue: (finding) => finding.hostname, exportValue: (finding) => finding.hostname, cell: (finding) => <span className="table-primary">{finding.hostname}<small>Host Record</small></span> },
     { id: 'lifecycle', header: 'Lifecycle', sortValue: (finding) => finding.lifecycle, exportValue: (finding) => finding.lifecycle, cell: (finding) => <span className={`status-pill ${finding.lifecycle === 'new' ? 'status-pill-warning' : 'status-pill-stale'}`}>{finding.lifecycle}</span> },
     { id: 'observed', header: 'Observed State', sortValue: (finding) => finding.actual ?? '', exportValue: (finding) => finding.actual, cell: (finding) => <span className="finding-observed-state">{finding.actual || 'No Concrete Value Reported'}</span> },
     { id: 'impact', header: 'Change Impact', sortValue: (finding) => Number(finding.reboot_required) * 2 + Number(finding.service_restart), exportValue: (finding) => finding.reboot_required ? 'Reboot required' : finding.service_restart ? 'Service restart' : 'No restart reported', cell: (finding) => <span className="table-primary">{finding.reboot_required ? 'Reboot Required' : finding.service_restart ? 'Service Restart' : 'No Restart'}<small>{finding.remediation_commands.length} Apply Steps</small></span> },
-    { id: 'action', header: '', hideable: false, cell: (finding) => <button className="button-secondary min-h-8 whitespace-nowrap px-3" onClick={() => setSelectedFinding(finding)}>Investigate <ArrowRight size={14} /></button> },
+    { id: 'action', header: '', hideable: false, cell: (finding) => <button className="button-secondary min-h-8 whitespace-nowrap px-3" onClick={() => openFinding(finding)}>Investigate <ArrowRight size={14} /></button> },
   ]
 
   function selectCategory(nextCategory: string) {
     setCategory(nextCategory)
-    setSeverity('all')
     setLifecycle('all')
     setSelectedFinding(null)
+    updateParams({ category: nextCategory, lifecycle: null, finding: null })
   }
 
   return <div className="page-reveal">
@@ -113,12 +154,12 @@ export function FindingsPage() {
               emptyTitle="No Findings Match This View"
               emptyDetail="Adjust the severity, lifecycle, or search terms. The category remains part of the scanner catalog."
               embedded
-              toolbarActions={<><select className="select-input min-h-9" aria-label="Filter by severity" value={severity} onChange={(event) => setSeverity(event.target.value as Severity | 'all')}><option value="all">All Severities</option>{severityOrder.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select><select className="select-input min-h-9" aria-label="Filter by lifecycle" value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="all">All Lifecycles</option>{lifecycleOptions.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></>}
+              toolbarActions={<><select className="select-input min-h-9" aria-label="Filter by severity" value={severity} onChange={(event) => { const value = event.target.value as Severity | 'all'; setSeverity(value); updateParams({ severity: value, finding: null }) }}><option value="all">All Severities</option>{severityOrder.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select><select className="select-input min-h-9" aria-label="Filter by lifecycle" value={lifecycle} onChange={(event) => { const value = event.target.value; setLifecycle(value); updateParams({ lifecycle: value, finding: null }) }}><option value="all">All Lifecycles</option>{lifecycleOptions.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></>}
             />
           </>}
         </div>
       </div>
     </section>}
-    {selectedFinding && <FindingDetailPanel finding={selectedFinding} close={() => setSelectedFinding(null)} />}
+    {selectedFinding && <FindingDetailPanel finding={selectedFinding} close={closeFinding} />}
   </div>
 }
