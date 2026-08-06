@@ -12,6 +12,7 @@ import { SecurityMetricCard } from '../components/security/SecurityMetricCard'
 import { SecurityTable, type SecurityColumn } from '../components/security/SecurityTable'
 import { Button } from '../components/ui/Button'
 import { useApi } from '../hooks/useApi'
+import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
 import { cn } from '../lib/utils'
 import type { ApplicationEstateItem } from '../types'
 
@@ -35,10 +36,13 @@ export function ApplicationsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedSearch = searchParams.get('search') ?? ''
   const requestedApplication = searchParams.get('application')
+  const requestedKind = searchParams.get('kind')
+  const requestedRisk = searchParams.get('risk')
+  const tableState = useSecurityTableUrlState({ clearOnSearch: ['application'] })
   const [query, setQuery] = useState(requestedSearch)
   const [search, setSearch] = useState(requestedSearch)
-  const [kind, setKind] = useState<ApplicationKind>('')
-  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all')
+  const [kind, setKind] = useState<ApplicationKind>(requestedKind === 'package' || requestedKind === 'service' ? requestedKind : '')
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>(requestedRisk === 'vulnerable' || requestedRisk === 'kev' ? requestedRisk : 'all')
   const [selected, setSelected] = useState<ApplicationEstateItem | null>(null)
   const [operation, setOperation] = useState<{ busy: boolean; message: string | null; error: string | null }>({ busy: false, message: null, error: null })
   const snapshotInput = useRef<HTMLInputElement>(null)
@@ -74,6 +78,19 @@ export function ApplicationsPage() {
     if (value.trim()) next.set('search', value)
     else next.delete('search')
     next.delete('application')
+    next.delete('page')
+    setSearchParams(next, { replace: true })
+  }
+
+  function updateFilter(key: 'kind' | 'risk', value: string) {
+    if (key === 'kind') setKind(value as ApplicationKind)
+    else setRiskFilter(value as RiskFilter)
+    setSelected(null)
+    const next = new URLSearchParams(searchParams)
+    if (!value || value === 'all') next.delete(key)
+    else next.set(key, value)
+    next.delete('application')
+    next.delete('page')
     setSearchParams(next, { replace: true })
   }
 
@@ -85,6 +102,11 @@ export function ApplicationsPage() {
   useEffect(() => {
     if (requestedSearch !== query) setQuery(requestedSearch)
   }, [query, requestedSearch])
+
+  useEffect(() => {
+    setKind(requestedKind === 'package' || requestedKind === 'service' ? requestedKind : '')
+    setRiskFilter(requestedRisk === 'vulnerable' || requestedRisk === 'kev' ? requestedRisk : 'all')
+  }, [requestedKind, requestedRisk])
 
   useEffect(() => {
     if (!requestedApplication || !estate.data?.applications.length) return
@@ -115,6 +137,7 @@ export function ApplicationsPage() {
       sortValue: (item) => item.name,
       exportValue: (item) => item.name,
       hideable: false,
+      priority: 'primary',
     },
     {
       id: 'coverage',
@@ -122,6 +145,7 @@ export function ApplicationsPage() {
       cell: (item) => <><span className="table-primary">{item.host_count} Host{item.host_count === 1 ? '' : 's'}</span><span className="table-subtitle">{Math.round((item.host_count / Math.max(metrics?.reporting_hosts ?? 1, 1)) * 100)}% Of Reporting Fleet</span></>,
       sortValue: (item) => item.host_count,
       exportValue: (item) => item.host_count,
+      priority: 'secondary',
     },
     {
       id: 'risk',
@@ -129,6 +153,7 @@ export function ApplicationsPage() {
       cell: (item) => item.known_exploited_count ? <><span className="kev-badge">Known Exploited</span><span className="table-subtitle">{item.vulnerability_count} Advisories</span></> : item.vulnerability_count ? <><span className="severity-badge severity-high">Review</span><span className="table-subtitle">{item.vulnerability_count} Advisories</span></> : <span className="table-subtitle">No Matches</span>,
       sortValue: (item) => item.known_exploited_count * 1000 + item.vulnerability_count,
       exportValue: (item) => item.known_exploited_count ? 'Known Exploited' : item.vulnerability_count ? `${item.vulnerability_count} Advisories` : 'No Matches',
+      priority: 'secondary',
     },
     {
       id: 'state',
@@ -136,10 +161,11 @@ export function ApplicationsPage() {
       cell: (item) => <><span className="table-primary">{stateLabel(item)}</span><span className="table-subtitle">First Seen {new Date(item.first_seen_at).toLocaleDateString()}</span></>,
       sortValue: (item) => item.version_count || item.running_host_count || item.enabled_host_count,
       exportValue: stateLabel,
+      priority: 'detail',
     },
-    { id: 'type', header: 'Type', cell: (item) => <span className="capitalize">{item.kind}</span>, sortValue: (item) => item.kind, exportValue: (item) => item.kind },
-    { id: 'source', header: 'Source', cell: (item) => <span className="font-mono text-xs capitalize">{item.source}</span>, sortValue: (item) => item.source, exportValue: (item) => item.source },
-    { id: 'observed', header: 'Last Observed', cell: (item) => <span className="font-mono text-xs">{new Date(item.last_seen_at).toLocaleDateString()}</span>, sortValue: (item) => item.last_seen_at, exportValue: (item) => item.last_seen_at },
+    { id: 'type', header: 'Type', priority: 'detail', cell: (item) => <span className="capitalize">{item.kind}</span>, sortValue: (item) => item.kind, exportValue: (item) => item.kind },
+    { id: 'source', header: 'Source', priority: 'detail', cell: (item) => <span className="font-mono text-xs capitalize">{item.source}</span>, sortValue: (item) => item.source, exportValue: (item) => item.source },
+    { id: 'observed', header: 'Last Observed', priority: 'detail', cell: (item) => <span className="font-mono text-xs">{new Date(item.last_seen_at).toLocaleDateString()}</span>, sortValue: (item) => item.last_seen_at, exportValue: (item) => item.last_seen_at },
   ], [metrics?.reporting_hosts, openInvestigation, selected])
 
   async function queueRefresh() {
@@ -201,6 +227,10 @@ export function ApplicationsPage() {
           ariaLabel="Application Inventory"
           query={query}
           onQueryChange={updateQuery}
+          sort={tableState.sort}
+          onSortChange={tableState.setSort}
+          page={tableState.page}
+          onPageChange={tableState.setPage}
           searchText={(item) => `${item.name} ${item.publisher ?? ''} ${item.description ?? ''} ${item.kind} ${item.source}`}
           rowLabel={(item) => item.name}
           searchPlaceholder="Search Application, Version, Or Publisher"
@@ -210,8 +240,8 @@ export function ApplicationsPage() {
           emptyTitle="No Applications Found"
           emptyDetail={query || kind || riskFilter !== 'all' ? 'Change the search or filters to see more inventory.' : 'Application inventory appears after an agent or offline report submits package and service data.'}
           toolbarActions={<>
-            <label className="table-filter-field"><span className="sr-only">Filter Application Type</span><select aria-label="Filter Application Type" value={kind} onChange={(event) => { setKind(event.target.value as ApplicationKind); setSelected(null) }}><option value="">All Types</option><option value="package">Packages</option><option value="service">Services</option></select></label>
-            <label className="table-filter-field"><span className="sr-only">Filter Application Risk</span><select aria-label="Filter Application Risk" value={riskFilter} onChange={(event) => { setRiskFilter(event.target.value as RiskFilter); setSelected(null) }}><option value="all">All Risk</option><option value="vulnerable">Vulnerable</option><option value="kev">Known Exploited</option></select></label>
+            <label className="table-filter-field"><span className="sr-only">Filter Application Type</span><select aria-label="Filter Application Type" value={kind} onChange={(event) => updateFilter('kind', event.target.value)}><option value="">All Types</option><option value="package">Packages</option><option value="service">Services</option></select></label>
+            <label className="table-filter-field"><span className="sr-only">Filter Application Risk</span><select aria-label="Filter Application Risk" value={riskFilter} onChange={(event) => updateFilter('risk', event.target.value)}><option value="all">All Risk</option><option value="vulnerable">Vulnerable</option><option value="kev">Known Exploited</option></select></label>
           </>}
         />
       </section>

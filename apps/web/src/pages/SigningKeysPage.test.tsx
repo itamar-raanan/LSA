@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { api } from '../api/client'
 import { SigningKeysPage } from './SigningKeysPage'
 
@@ -38,7 +39,7 @@ describe('SigningKeysPage', () => {
   })
 
   it('shows trust scope and confirms revocation', async () => {
-    render(<SigningKeysPage />)
+    render(<MemoryRouter><SigningKeysPage /></MemoryRouter>)
     expect(await screen.findByText('Debian production signer')).toBeInTheDocument()
     expect(screen.getByText('edge-prod-07')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Revoke Debian production signer' }))

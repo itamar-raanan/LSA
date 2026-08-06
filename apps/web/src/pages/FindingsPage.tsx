@@ -8,6 +8,7 @@ import { type SecurityColumn, SecurityTable } from '../components/security/Secur
 import { SeverityBadge } from '../components/SeverityBadge'
 import { ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
+import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
 import type { Finding, Severity } from '../types'
 
 const categoryCatalog = [
@@ -35,6 +36,7 @@ export function FindingsPage() {
   const [lifecycle, setLifecycle] = useState(searchParams.get('lifecycle') ?? 'all')
   const [category, setCategory] = useState<string | null>(searchParams.get('category'))
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
+  const tableState = useSecurityTableUrlState({ clearOnSearch: ['finding'] })
   const { data, error, loading, reload } = useApi(() => api.findings(), [])
   const findings = useMemo(() => data ?? [], [data])
   const categories = useMemo(() => {
@@ -74,6 +76,7 @@ export function FindingsPage() {
       if (!value || value === 'all') next.delete(key)
       else next.set(key, value)
     }
+    if (['category', 'severity', 'lifecycle'].some((key) => key in updates)) next.delete('page')
     setSearchParams(next, { replace: true })
   }
 
@@ -89,13 +92,13 @@ export function FindingsPage() {
   }
 
   const columns: SecurityColumn<Finding>[] = [
-    { id: 'severity', header: 'Severity', sortValue: (finding) => severityOrder.indexOf(finding.severity), exportValue: (finding) => finding.severity, cell: (finding) => <SeverityBadge severity={finding.severity} /> },
-    { id: 'finding', header: 'Finding', hideable: false, sortValue: (finding) => finding.title, exportValue: (finding) => finding.title, cell: (finding) => <button className="finding-table-link" onClick={() => openFinding(finding)}><strong>{finding.title}</strong><small>{finding.control_id} · {finding.module}</small></button> },
-    { id: 'host', header: 'Affected Host', sortValue: (finding) => finding.hostname, exportValue: (finding) => finding.hostname, cell: (finding) => <span className="table-primary">{finding.hostname}<small>Host Record</small></span> },
-    { id: 'lifecycle', header: 'Lifecycle', sortValue: (finding) => finding.lifecycle, exportValue: (finding) => finding.lifecycle, cell: (finding) => <span className={`status-pill ${finding.lifecycle === 'new' ? 'status-pill-warning' : 'status-pill-stale'}`}>{finding.lifecycle}</span> },
-    { id: 'observed', header: 'Observed State', sortValue: (finding) => finding.actual ?? '', exportValue: (finding) => finding.actual, cell: (finding) => <span className="finding-observed-state">{finding.actual || 'No Concrete Value Reported'}</span> },
-    { id: 'impact', header: 'Change Impact', sortValue: (finding) => Number(finding.reboot_required) * 2 + Number(finding.service_restart), exportValue: (finding) => finding.reboot_required ? 'Reboot required' : finding.service_restart ? 'Service restart' : 'No restart reported', cell: (finding) => <span className="table-primary">{finding.reboot_required ? 'Reboot Required' : finding.service_restart ? 'Service Restart' : 'No Restart'}<small>{finding.remediation_commands.length} Apply Steps</small></span> },
-    { id: 'action', header: '', hideable: false, cell: (finding) => <button className="button-secondary min-h-8 whitespace-nowrap px-3" onClick={() => openFinding(finding)}>Investigate <ArrowRight size={14} /></button> },
+    { id: 'severity', header: 'Severity', priority: 'secondary', sortValue: (finding) => severityOrder.indexOf(finding.severity), exportValue: (finding) => finding.severity, cell: (finding) => <SeverityBadge severity={finding.severity} /> },
+    { id: 'finding', header: 'Finding', priority: 'primary', hideable: false, sortValue: (finding) => finding.title, exportValue: (finding) => finding.title, cell: (finding) => <button className="finding-table-link" onClick={() => openFinding(finding)}><strong>{finding.title}</strong><small>{finding.control_id} · {finding.module}</small></button> },
+    { id: 'host', header: 'Affected Host', priority: 'secondary', sortValue: (finding) => finding.hostname, exportValue: (finding) => finding.hostname, cell: (finding) => <span className="table-primary">{finding.hostname}<small>Host Record</small></span> },
+    { id: 'lifecycle', header: 'Lifecycle', priority: 'detail', sortValue: (finding) => finding.lifecycle, exportValue: (finding) => finding.lifecycle, cell: (finding) => <span className={`status-pill ${finding.lifecycle === 'new' ? 'status-pill-warning' : 'status-pill-stale'}`}>{finding.lifecycle}</span> },
+    { id: 'observed', header: 'Observed State', priority: 'detail', sortValue: (finding) => finding.actual ?? '', exportValue: (finding) => finding.actual, cell: (finding) => <span className="finding-observed-state">{finding.actual || 'No Concrete Value Reported'}</span> },
+    { id: 'impact', header: 'Change Impact', priority: 'detail', sortValue: (finding) => Number(finding.reboot_required) * 2 + Number(finding.service_restart), exportValue: (finding) => finding.reboot_required ? 'Reboot required' : finding.service_restart ? 'Service restart' : 'No restart reported', cell: (finding) => <span className="table-primary">{finding.reboot_required ? 'Reboot Required' : finding.service_restart ? 'Service Restart' : 'No Restart'}<small>{finding.remediation_commands.length} Apply Steps</small></span> },
+    { id: 'action', header: '', priority: 'detail', hideable: false, cell: (finding) => <button className="button-secondary min-h-8 whitespace-nowrap px-3" onClick={() => openFinding(finding)}>Investigate <ArrowRight size={14} /></button> },
   ]
 
   function selectCategory(nextCategory: string) {
@@ -151,6 +154,12 @@ export function FindingsPage() {
               searchPlaceholder="Search Finding, Control, Host, Or Observed State"
               filename={`lsa-${selectedCategory.id}-findings.csv`}
               pageSize={10}
+              query={tableState.query}
+              onQueryChange={(value) => { setSelectedFinding(null); tableState.setQuery(value) }}
+              sort={tableState.sort}
+              onSortChange={tableState.setSort}
+              page={tableState.page}
+              onPageChange={tableState.setPage}
               emptyTitle="No Findings Match This View"
               emptyDetail="Adjust the severity, lifecycle, or search terms. The category remains part of the scanner catalog."
               embedded
