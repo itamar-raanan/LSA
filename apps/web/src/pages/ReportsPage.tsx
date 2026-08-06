@@ -1,11 +1,14 @@
-import { CheckCircle, FileZip, ShieldCheck, UploadSimple, WarningCircle } from '@phosphor-icons/react'
+import { ArrowRight, CheckCircle, FileZip, Key, ShieldCheck, UploadSimple, WarningCircle } from '@phosphor-icons/react'
 import { useRef, useState, type DragEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { useAuth } from '../auth/useAuth'
 import { PageHeader } from '../components/PageHeader'
 
 type UploadStatus = 'idle' | 'ready' | 'uploading' | 'success' | 'error'
 
 export function ReportsPage() {
+  const { user } = useAuth()
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [token, setToken] = useState('')
@@ -39,7 +42,12 @@ export function ReportsPage() {
 
   return (
     <div className="page-reveal">
-      <PageHeader eyebrow="Evidence intake" title="Import reports" detail="Upload a portable bundle created by the customer-controlled LSA scanner. The platform validates it before changing fleet state." />
+      <PageHeader eyebrow="Offline Workflow" title="Evidence Intake" detail="Upload a portable bundle created by the customer-controlled LSA scanner. The platform validates identity, integrity, and scope before changing fleet state." />
+      <section className="evidence-prerequisite">
+        <span><Key size={17} /></span>
+        <div><strong>An Ingestion Token Is Required</strong><p>The token authenticates this submission and limits which host identity the bundle may update.</p></div>
+        {user?.role === 'admin' ? <Link to="/settings/credentials?view=tokens&action=create" className="button-secondary">Create Ingestion Token <ArrowRight size={14} /></Link> : <small>Ask An Administrator To Issue A Token</small>}
+      </section>
       <section className="grid gap-4 xl:grid-cols-[1.15fr_0.65fr]">
         <div className="panel p-6 md:p-8">
           <div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl border border-stone-800 bg-[#eee8dd] text-[#4f6f5c]"><UploadSimple size={20} weight="duotone" /></div><div><h2 className="text-sm font-semibold text-stone-100">Offline report bundle</h2><p className="mt-1 text-xs text-stone-600">Maximum upload size: 25 MB</p></div></div>

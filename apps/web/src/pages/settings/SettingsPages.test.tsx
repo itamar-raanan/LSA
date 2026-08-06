@@ -4,6 +4,7 @@ import { beforeEach, vi } from 'vitest'
 import { api } from '../../api/client'
 import { AuthenticationSettingsPage } from './AuthenticationSettingsPage'
 import { CertificatesSettingsPage } from './CertificatesSettingsPage'
+import { CredentialsTrustPage } from './CredentialsTrustPage'
 import { SettingsLayout } from './SettingsLayout'
 import { UsersSettingsPage } from './UsersSettingsPage'
 
@@ -19,17 +20,21 @@ vi.mock('../../api/client', () => ({
     updateUserStatus: vi.fn().mockResolvedValue(undefined),
     users: vi.fn().mockResolvedValue([{ id: 'user-1', email: 'admin@lsa.local', name: 'Security Administrator', role: 'admin', is_active: true, auth_source: 'local', provider_name: null, last_login_at: null, created_at: '2026-01-01T00:00:00Z' }]),
     tlsCertificate: vi.fn().mockResolvedValue({ id: 'cert-1', fingerprint: 'ab'.repeat(32), subject: 'CN=localhost', issuer: 'CN=localhost', hostnames: ['localhost'], not_valid_before: '2026-01-01T00:00:00Z', not_valid_after: '2027-01-01T00:00:00Z', is_active: true, created_at: '2026-01-01T00:00:00Z' }),
+    tokens: vi.fn().mockResolvedValue([]),
+    signingKeys: vi.fn().mockResolvedValue([]),
+    hosts: vi.fn().mockResolvedValue([]),
   },
 }))
 
-function renderSettings() {
+function renderSettings(initialEntry = '/settings') {
   return render(
-    <MemoryRouter initialEntries={['/settings']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="users" replace />} />
           <Route path="users" element={<UsersSettingsPage />} />
           <Route path="authentication" element={<AuthenticationSettingsPage />} />
+          <Route path="credentials" element={<CredentialsTrustPage />} />
           <Route path="certificates" element={<CertificatesSettingsPage />} />
         </Route>
       </Routes>
@@ -81,6 +86,25 @@ describe('Settings', () => {
     expect(screen.getByRole('heading', { name: 'TLS certificates' })).toBeInTheDocument()
     expect(await screen.findByText('Active certificate')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Install certificate' })).toBeEnabled()
+  })
+
+  it('consolidates ingestion tokens and signing keys into one trust workspace', async () => {
+    renderSettings()
+    const navigation = settingsNavigation()
+    expect(navigation.getByRole('link', { name: /Credentials & Trust/ })).toBeInTheDocument()
+    expect(navigation.queryByRole('link', { name: /^Tokens/ })).not.toBeInTheDocument()
+    expect(navigation.queryByRole('link', { name: /^Signing keys/ })).not.toBeInTheDocument()
+
+    fireEvent.click(navigation.getByRole('link', { name: /Credentials & Trust/ }))
+    expect(await screen.findByRole('heading', { name: 'Credentials & Trust' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Ingestion Tokens' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Signing Keys/ }))
+    expect(await screen.findByRole('heading', { name: 'Signing Keys' })).toBeInTheDocument()
+  })
+
+  it('opens token creation from an Evidence Intake prerequisite link', async () => {
+    renderSettings('/settings/credentials?view=tokens&action=create')
+    expect(await screen.findByRole('dialog', { name: 'Issue ingestion token' })).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before deleting an authentication provider', async () => {

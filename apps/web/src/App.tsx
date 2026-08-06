@@ -8,15 +8,14 @@ import { LoginPage } from './pages/LoginPage'
 const FindingsPage = lazy(() => import('./pages/FindingsPage').then((module) => ({ default: module.FindingsPage })))
 const HostDetailPage = lazy(() => import('./pages/HostDetailPage').then((module) => ({ default: module.HostDetailPage })))
 const HostsPage = lazy(() => import('./pages/HostsPage').then((module) => ({ default: module.HostsPage })))
-const ReportsPage = lazy(() => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
+const EvidenceIntakePage = lazy(() => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
 const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((module) => ({ default: module.ApplicationsPage })))
 const AuthenticationSettingsPage = lazy(() => import('./pages/settings/AuthenticationSettingsPage').then((module) => ({ default: module.AuthenticationSettingsPage })))
 const CertificatesSettingsPage = lazy(() => import('./pages/settings/CertificatesSettingsPage').then((module) => ({ default: module.CertificatesSettingsPage })))
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout').then((module) => ({ default: module.SettingsLayout })))
 const UsersSettingsPage = lazy(() => import('./pages/settings/UsersSettingsPage').then((module) => ({ default: module.UsersSettingsPage })))
 const AgentsSettingsPage = lazy(() => import('./pages/settings/AgentsSettingsPage').then((module) => ({ default: module.AgentsSettingsPage })))
-const SigningKeysPage = lazy(() => import('./pages/SigningKeysPage').then((module) => ({ default: module.SigningKeysPage })))
-const TokensPage = lazy(() => import('./pages/TokensPage').then((module) => ({ default: module.TokensPage })))
+const CredentialsTrustPage = lazy(() => import('./pages/settings/CredentialsTrustPage').then((module) => ({ default: module.CredentialsTrustPage })))
 
 function ProtectedShell() {
   const { user } = useAuth()
@@ -33,7 +32,8 @@ export default function App() {
         <Route path="hosts/:hostId" element={<HostDetailPage />} />
         <Route path="applications" element={<ApplicationsPage />} />
         <Route path="findings" element={<FindingsPage />} />
-        <Route path="reports" element={<ReportsPage />} />
+        <Route path="evidence" element={<EvidenceIntakePage />} />
+        <Route path="reports" element={<Navigate to="/evidence" replace />} />
         <Route path="agents" element={<AgentsSettingsPage />} />
         <Route path="policies" element={<Navigate to="/agents" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
@@ -41,12 +41,13 @@ export default function App() {
           <Route path="users" element={<UsersSettingsPage />} />
           <Route path="agents" element={<Navigate to="/agents" replace />} />
           <Route path="authentication" element={<AuthenticationSettingsPage />} />
-          <Route path="tokens" element={<TokensPage />} />
-          <Route path="signing-keys" element={<SigningKeysPage />} />
+          <Route path="credentials" element={<CredentialsTrustPage />} />
+          <Route path="tokens" element={<Navigate to="/settings/credentials?view=tokens" replace />} />
+          <Route path="signing-keys" element={<Navigate to="/settings/credentials?view=signing-keys" replace />} />
           <Route path="certificates" element={<CertificatesSettingsPage />} />
         </Route>
-        <Route path="tokens" element={<Navigate to="/settings/tokens" replace />} />
-        <Route path="signing-keys" element={<Navigate to="/settings/signing-keys" replace />} />
+        <Route path="tokens" element={<Navigate to="/settings/credentials?view=tokens" replace />} />
+        <Route path="signing-keys" element={<Navigate to="/settings/credentials?view=signing-keys" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

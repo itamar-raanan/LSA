@@ -1,5 +1,5 @@
 import { Plus, ShieldCheck, Trash } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { CreateTokenPanel } from '../components/CreateTokenPanel'
 import { PageHeader } from '../components/PageHeader'
@@ -18,7 +18,7 @@ function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleString() : 'Never'
 }
 
-export function TokensPage() {
+export function TokensPage({ embedded = false, autoCreate = false }: { embedded?: boolean; autoCreate?: boolean } = {}) {
   const { user } = useAuth()
   const [creating, setCreating] = useState(false)
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -28,6 +28,10 @@ export function TokensPage() {
     const [tokens, hosts] = await Promise.all([api.tokens(), api.hosts()])
     return { tokens, hosts }
   }, [])
+
+  useEffect(() => {
+    if (autoCreate) setCreating(true)
+  }, [autoCreate])
 
   async function revoke(tokenId: string) {
     setRevoking(tokenId)
@@ -48,19 +52,20 @@ export function TokensPage() {
   const activeCount = tokens.filter((token) => tokenState(token) === 'active').length
   const usedCount = tokens.filter((token) => token.last_used_at).length
   const hostnames = new Map((data?.hosts ?? []).map((host) => [host.id, host.hostname]))
+  const createAction = <button className="button-primary" onClick={() => setCreating(true)}><Plus size={16} /> Issue Token</button>
 
   return (
-    <div className="page-reveal">
-      <PageHeader eyebrow="Credential governance" title="Ingestion tokens" detail="Issue narrowly scoped scanner credentials, inspect their activity, and revoke access without changing host identities." action={<button className="button-primary" onClick={() => setCreating(true)}><Plus size={16} /> Issue token</button>} />
+    <div className={embedded ? 'credential-workspace' : 'page-reveal'}>
+      {embedded ? <header className="credential-workspace-heading"><div><p className="section-label">Submission Authentication</p><h2>Ingestion Tokens</h2><p>Issue narrowly scoped credentials, inspect their activity, and revoke submission access.</p></div>{createAction}</header> : <PageHeader eyebrow="Credential Governance" title="Ingestion Tokens" detail="Issue narrowly scoped scanner credentials, inspect their activity, and revoke access without changing host identities." action={createAction} />}
       {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : (
         <>
-          <section className="mb-4 grid overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb] sm:grid-cols-[1.2fr_1fr_1fr]">
+          <section className="credential-summary sm:grid-cols-[1.2fr_1fr_1fr]">
             <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Credential posture</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Secrets are displayed once and stored as one-way hashes.</p></div>
             <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-100">{activeCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Active tokens</p></div>
             <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-100">{usedCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Used credentials</p></div>
           </section>
           {actionError && <p className="mb-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{actionError}</p>}
-          {!tokens.length ? <EmptyState title="No scanner credentials" detail="Issue a host-scoped token before configuring the first scanner controller." /> : (
+          {!tokens.length ? <EmptyState title="No Scanner Credentials" detail="Issue a host-scoped token before configuring the first scanner controller." action={createAction} /> : (
             <section className="panel overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="data-table min-w-[920px]">

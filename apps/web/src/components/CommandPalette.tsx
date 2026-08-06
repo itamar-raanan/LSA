@@ -9,7 +9,8 @@ const commands = [
   { label: 'Application inventory', detail: 'Correlate packages, services, versions, and hosts', path: '/applications', icon: Boxes, keywords: 'applications packages services software versions' },
   { label: 'Agents & groups', detail: 'Manage agents, enrollment, and fleet groups', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints enrollment' },
   { label: 'Security findings', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'findings risk vulnerabilities' },
-  { label: 'Import report', detail: 'Upload an offline evidence bundle', path: '/reports', icon: FileUp, keywords: 'offline upload report' },
+  { label: 'Evidence Intake', detail: 'Upload an offline evidence bundle', path: '/evidence', icon: FileUp, keywords: 'offline upload report evidence intake' },
+  { label: 'Administration · Credentials & Trust', detail: 'Manage ingestion tokens and signing keys', path: '/settings/credentials', icon: ShieldCheck, keywords: 'administration tokens signing keys credentials trust' },
   { label: 'Administration · TLS certificates', detail: 'Review the console HTTPS identity', path: '/settings/certificates', icon: ShieldCheck, keywords: 'administration tls https certificate' },
   { label: 'Administration', detail: 'Identity, trust, users, and access', path: '/settings', icon: Settings, keywords: 'settings admin users tokens' },
 ]
