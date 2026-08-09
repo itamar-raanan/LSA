@@ -3,7 +3,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CommandPalette } from './CommandPalette'
 
-const apiMock = vi.hoisted(() => ({ hosts: vi.fn(), applicationEstate: vi.fn(), findings: vi.fn() }))
+const apiMock = vi.hoisted(() => ({ hostPage: vi.fn(), applicationEstatePage: vi.fn(), findingPage: vi.fn() }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
 vi.mock('../auth/useAuth', () => ({ useAuth: () => ({ user: { id: 'user-1', role: 'analyst' } }) }))
@@ -15,9 +15,9 @@ function LocationState() {
 describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    apiMock.hosts.mockResolvedValue([{ id: 'host-1', hostname: 'web-01', operating_system: 'Debian', os_version: '13', ip_addresses: ['10.0.0.10'] }])
-    apiMock.applicationEstate.mockResolvedValue({ metrics: {}, applications: [] })
-    apiMock.findings.mockResolvedValue([])
+    apiMock.hostPage.mockResolvedValue({ rows: [{ id: 'host-1', hostname: 'web-01', operating_system: 'Debian', os_version: '13', ip_addresses: ['10.0.0.10'] }], total: 1, page: 0, pageSize: 4 })
+    apiMock.applicationEstatePage.mockResolvedValue({ data: { metrics: {}, applications: [] }, total: 0, page: 0, pageSize: 4 })
+    apiMock.findingPage.mockResolvedValue({ rows: [], total: 0, page: 0, pageSize: 5 })
   })
 
   it('supports arrow-key navigation and Enter without advertising admin destinations', () => {
@@ -36,6 +36,7 @@ describe('CommandPalette', () => {
     expect(await screen.findByRole('option', { name: /web-01/ })).toBeInTheDocument()
     fireEvent.keyDown(search, { key: 'Enter' })
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/hosts?host=host-1'))
-    expect(apiMock.hosts).toHaveBeenCalledWith('web-01')
+    expect(apiMock.hostPage).toHaveBeenCalledWith({ search: 'web-01', page: 0, pageSize: 4, sort: 'asset', direction: 'asc' })
+    expect(apiMock.findingPage).toHaveBeenCalledWith({ search: 'web-01', page: 0, pageSize: 5, sort: 'severity', direction: 'asc' })
   })
 })

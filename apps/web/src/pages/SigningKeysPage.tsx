@@ -9,16 +9,13 @@ import { StatusBadge } from '../components/security/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
+import { formatDateTime as formatDate } from '../lib/dateTime'
 import type { SigningKey } from '../types'
 
 function keyState(key: SigningKey): 'active' | 'expired' | 'revoked' {
   if (key.revoked_at) return 'revoked'
   if (key.expires_at && new Date(key.expires_at).getTime() <= Date.now()) return 'expired'
   return 'active'
-}
-
-function formatDate(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : 'Never'
 }
 
 function fingerprint(value: string): string {
@@ -69,7 +66,7 @@ export function SigningKeysPage({ embedded = false }: { embedded?: boolean } = {
   return (
     <div className={embedded ? 'credential-workspace' : 'page-reveal'}>
       {embedded ? <header className="credential-workspace-heading"><div><p className="section-label">Evidence Provenance</p><h2>Signing Keys</h2><p>Register scanner public keys, constrain their scope, and verify evidence origin.</p></div>{createAction}</header> : <PageHeader eyebrow="Trust Governance" title="Signing Keys" detail="Register scanner public keys, constrain their host scope, and verify that report evidence came from a trusted controller." action={createAction} />}
-      {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : (
+      {loading ? <LoadingState variant="table" /> : error ? <ErrorState message={error} retry={reload} /> : (
         <>
           <section className="credential-summary sm:grid-cols-[1.2fr_1fr_1fr]">
             <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Evidence trust</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Ed25519 signatures bind each report manifest to a registered controller key.</p></div>

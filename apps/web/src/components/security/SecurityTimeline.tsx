@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { Clock3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { formatCompactDateTime } from '../../lib/dateTime'
 import { cn } from '../../lib/utils'
 
 export interface TimelineEvent {
@@ -20,7 +21,7 @@ export function SecurityTimeline({ events, empty = 'No recent activity.' }: { ev
     const content = <>
       <span className={cn('timeline-icon', `timeline-${event.tone ?? 'neutral'}`)}><Icon size={14} /></span>
       <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">{event.title}</p><p className="mt-1 truncate text-[11px] text-slate-500">{event.detail}</p></div>
-      <time className="shrink-0 font-mono text-[9px] text-slate-600">{event.timestamp ? new Date(event.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending'}</time>
+      <time className="shrink-0 font-mono text-[9px] text-slate-600" dateTime={event.timestamp ?? undefined}>{formatCompactDateTime(event.timestamp)}</time>
     </>
     return <li key={event.id}>{event.to ? <Link to={event.to} className="timeline-event">{content}</Link> : <div className="timeline-event">{content}</div>}</li>
   })}</ol>

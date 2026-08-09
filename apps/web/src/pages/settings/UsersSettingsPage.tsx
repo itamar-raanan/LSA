@@ -1,5 +1,6 @@
 import { Check, Minus, Plus, ShieldCheck, UsersThree, X } from '@phosphor-icons/react'
 import { FormEvent, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/PageHeader'
@@ -10,6 +11,7 @@ import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { useApi } from '../../hooks/useApi'
 import { useSecurityTableUrlState } from '../../hooks/useSecurityTableUrlState'
+import { formatDateTime } from '../../lib/dateTime'
 import type { ManagedUser } from '../../types'
 
 const permissions = [
@@ -41,7 +43,7 @@ export function UsersSettingsPage() {
     { id: 'source', header: 'Identity Source', priority: 'detail', sortValue: (managed) => managed.provider_name ?? managed.auth_source, exportValue: (managed) => managed.provider_name ?? managed.auth_source, cell: (managed) => <span className="table-primary">{managed.provider_name ?? (managed.auth_source === 'local' ? 'Emergency local' : managed.auth_source)}<small>{managed.auth_source}</small></span> },
     { id: 'role', header: 'Role', priority: 'secondary', sortValue: (managed) => managed.role, exportValue: (managed) => managed.role, cell: (managed) => <select aria-label={`Role For ${managed.name}`} className="select-input min-h-9" value={managed.role} disabled={managed.id === user?.id} onChange={(event) => requestRoleChange(managed, event.target.value)}><option value="admin">Administrator</option><option value="analyst">Analyst</option><option value="auditor">Auditor</option></select> },
     { id: 'status', header: 'Status', priority: 'secondary', sortValue: (managed) => managed.is_active ? 'Active' : 'Disabled', exportValue: (managed) => managed.is_active ? 'Active' : 'Disabled', cell: (managed) => <StatusBadge label={managed.is_active ? 'Active' : 'Disabled'} tone={managed.is_active ? 'online' : 'offline'} /> },
-    { id: 'login', header: 'Last Login', priority: 'detail', sortValue: (managed) => managed.last_login_at ?? '', exportValue: (managed) => managed.last_login_at, cell: (managed) => managed.last_login_at ? new Date(managed.last_login_at).toLocaleString() : 'Never' },
+    { id: 'login', header: 'Last Login', priority: 'detail', sortValue: (managed) => managed.last_login_at ?? '', exportValue: (managed) => managed.last_login_at, cell: (managed) => formatDateTime(managed.last_login_at) },
     { id: 'actions', header: 'Actions', priority: 'detail', hideable: false, cell: (managed) => <Button size="sm" disabled={managed.id === user?.id} onClick={() => managed.is_active ? setPendingChange({ kind: 'status', managed, active: false }) : void api.updateUserStatus(managed.id, true).then(reload)}>{managed.is_active ? 'Disable' : 'Enable'}</Button> },
   ]
 
@@ -87,7 +89,7 @@ export function UsersSettingsPage() {
   }
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Identity governance" title="Users, roles & permissions" detail="Pre-provision users or allow just-in-time creation after successful organization authentication." action={<button className="button-primary" onClick={() => setAdding(true)} disabled={!providers?.length}><Plus size={16} /> Add user</button>} />
+    <PageHeader eyebrow="Identity governance" title="Users, roles & permissions" detail="Pre-provision users or allow just-in-time creation after successful organization authentication." action={users?.length ? <button className="button-primary" onClick={() => setAdding(true)} disabled={!providers?.length}><Plus size={16} /> Add user</button> : undefined} />
     {adding && <section className="panel mb-6 overflow-hidden">
       <div className="flex items-start justify-between gap-4 border-b border-stone-800 px-6 py-5"><div><p className="section-label">External identity</p><h2 className="mt-2 text-base font-semibold text-stone-100">Pre-provision user</h2><p className="mt-2 text-xs leading-5 text-stone-600">LSA stores the identity link and role; authentication remains with your selected provider.</p></div><button className="icon-button" aria-label="Close add user form" onClick={() => setAdding(false)}><X size={16} /></button></div>
       <form className="grid gap-4 px-6 py-6 md:grid-cols-2" onSubmit={(event) => void createUser(event)}>
@@ -101,7 +103,7 @@ export function UsersSettingsPage() {
       </form>
     </section>}
     {!providers?.length && !loading && <div className="mb-6 rounded-xl border border-amber-900/40 bg-amber-950/10 px-4 py-3 text-xs text-amber-300">Configure an identity provider before pre-provisioning users.</div>}
-    {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !users?.length ? <EmptyState title="No users" detail="Enable an identity provider and complete the first organization sign-in." /> : <section className="panel overflow-hidden">
+    {loading ? <LoadingState variant="settings" /> : error ? <ErrorState message={error} retry={reload} /> : !users?.length ? <EmptyState title="No users" detail="Enable an identity provider and complete the first organization sign-in." action={providers?.length ? <button className="button-primary" onClick={() => setAdding(true)}><Plus size={15} />Add First User</button> : <Link className="button-primary" to="/settings/authentication">Configure Authentication</Link>} /> : <section className="panel overflow-hidden">
       <SecurityTable rows={users} columns={columns} query={tableState.query} onQueryChange={tableState.setQuery} sort={tableState.sort} onSortChange={tableState.setSort} page={tableState.page} onPageChange={tableState.setPage} searchText={(managed) => `${managed.name} ${managed.email} ${managed.provider_name ?? ''} ${managed.auth_source} ${managed.role} ${managed.is_active ? 'active' : 'disabled'}`} rowLabel={(managed) => managed.name} searchPlaceholder="Search User, Provider, Role, Or Status" filename="lsa-users.csv" ariaLabel="Users" embedded />
       <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><UsersThree size={17} className="mt-0.5 shrink-0" />Disabling a user immediately revokes every active browser session. User identities remain linked to their provider subject.</div>
     </section>}

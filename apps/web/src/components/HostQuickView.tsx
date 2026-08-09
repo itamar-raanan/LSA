@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
+import { formatDateTime } from '../lib/dateTime'
 import type { Host } from '../types'
 
 function formatUptime(value: unknown) {
@@ -63,7 +64,7 @@ export function HostQuickView({ host, close, deleted }: { host: Host; close: () 
       <div className="mt-5 space-y-4 text-xs text-stone-400">
         <div className="flex gap-3"><Server className="mt-0.5 shrink-0 text-sky-500" size={16} /><div><p className="text-stone-200">{host.operating_system} {host.os_version}</p><p className="mt-1 font-mono text-[10px] text-stone-600">Kernel {host.kernel} · {host.architecture}</p></div></div>
         <div className="flex gap-3"><Cpu className="mt-0.5 shrink-0 text-[#4f6f5c]" size={16} /><div><p className="text-stone-200">{String(info.cpu_model ?? 'CPU not reported')}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.cpu_cores ?? '—')} vCPU · {info.memory_mb ? `${Math.round(Number(info.memory_mb) / 1024)} GB memory` : 'memory not reported'}</p></div></div>
-        <div className="flex gap-3"><Clock3 className="mt-0.5 shrink-0 text-sky-500" size={16} /><div><p className="text-stone-200">Uptime {formatUptime(info.uptime_seconds)}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.timezone ?? 'Timezone not reported')} · {host.last_scan_at ? `scanned ${new Date(host.last_scan_at).toLocaleString()}` : 'never scanned'}</p></div></div>
+        <div className="flex gap-3"><Clock3 className="mt-0.5 shrink-0 text-sky-500" size={16} /><div><p className="text-stone-200">Uptime {formatUptime(info.uptime_seconds)}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.timezone ?? 'Timezone not reported')} · {host.last_scan_at ? `scanned ${formatDateTime(host.last_scan_at)}` : 'never scanned'}</p></div></div>
       </div>
       <div className="mt-5 border-t border-stone-800 pt-5"><p className="detail-label">Platform</p><p className="mt-2 text-xs text-stone-300">{String(info.system_vendor ?? 'Unknown vendor')} · {String(info.product_name ?? 'Unknown model')}</p><p className="mt-1 font-mono text-[10px] text-stone-600">{String(info.virtualization_type ?? 'unknown')} / {String(info.virtualization_role ?? 'unknown')}</p></div>
       <div className="mt-5 border-t border-stone-800 pt-5"><p className="detail-label">Applications</p><p className="mt-2 text-xs text-stone-300">{host.application_count ?? 0} installed packages and services</p><p className="mt-1 font-mono text-[10px] text-stone-600">Open the full record to search the latest inventory.</p></div>

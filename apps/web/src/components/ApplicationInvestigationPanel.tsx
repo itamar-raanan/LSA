@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
+import { formatDate } from '../lib/dateTime'
 import type { ApplicationEstateItem, ApplicationHostCorrelation, ApplicationVulnerability } from '../types'
 import { ErrorState } from './StatePanel'
 
@@ -68,7 +69,7 @@ export function ApplicationInvestigationPanel({
   return createPortal(<motion.aside {...motionProps} className="application-investigation-panel" aria-label={`${application.name} investigation`}>
     <header className="application-investigation-header">
       <span className="application-kind-icon">{application.kind === 'package' ? <Package size={18} /> : <Gear size={18} />}</span>
-      <div className="min-w-0 flex-1"><p className="section-label">Application Investigation</p><h2>{application.name}</h2><p>{application.kind} · {application.source} · Last Observed {new Date(application.last_seen_at).toLocaleDateString()}</p></div>
+      <div className="min-w-0 flex-1"><p className="section-label">Application Investigation</p><h2>{application.name}</h2><p>{application.kind} · {application.source} · Last Observed {formatDate(application.last_seen_at)}</p></div>
       <button ref={closeButton} className="icon-button shrink-0" aria-label="Close application investigation" title="Close" onClick={close}><X size={17} /></button>
     </header>
 
@@ -95,7 +96,7 @@ export function ApplicationInvestigationPanel({
             <div><dt>Affected Versions</dt><dd>{selectedVulnerability.affected_versions.join(', ') || 'Not Reported'}</dd></div>
             <div><dt>Fixed Versions</dt><dd>{selectedVulnerability.fixed_versions.join(', ') || 'Vendor Guidance Required'}</dd></div>
             <div><dt>Required Action</dt><dd>{selectedVulnerability.kev_required_action || 'Apply the vendor-supported security update after validation.'}</dd></div>
-            <div><dt>KEV Due Date</dt><dd>{selectedVulnerability.kev_due_date ? new Date(selectedVulnerability.kev_due_date).toLocaleDateString() : 'Not In CISA KEV'}</dd></div>
+            <div><dt>KEV Due Date</dt><dd>{formatDate(selectedVulnerability.kev_due_date, 'Not In CISA KEV')}</dd></div>
           </dl>
           {selectedVulnerability.references.find((reference) => reference.url)?.url && <a href={selectedVulnerability.references.find((reference) => reference.url)?.url} target="_blank" rel="noreferrer">Open Advisory <ArrowSquareOut size={13} /></a>}
         </article>}

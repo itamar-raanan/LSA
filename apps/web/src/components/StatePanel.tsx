@@ -1,25 +1,27 @@
 import { ArrowClockwise, Database, WarningCircle } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 
-export function LoadingState() {
+type LoadingVariant = 'dashboard' | 'table' | 'detail' | 'settings'
+
+export function LoadingState({ variant = 'dashboard' }: { variant?: LoadingVariant }) {
   return (
-    <div className="grid gap-4" aria-label="Loading data" aria-busy="true">
-      <div className="grid grid-cols-3 gap-3"><div className="skeleton h-20 rounded-2xl" /><div className="skeleton h-20 rounded-2xl" /><div className="skeleton h-20 rounded-2xl" /></div>
-      <div className="grid gap-4 md:grid-cols-[1.45fr_0.75fr]">
-        <div className="skeleton h-72 rounded-[20px]" />
-        <div className="skeleton h-72 rounded-[20px]" />
-      </div>
+    <div className={`loading-state loading-state-${variant}`} aria-label="Loading data" aria-busy="true" role="status">
+      <span className="sr-only">Loading Current Console Data</span>
+      {variant === 'dashboard' && <><div className="loading-metric-row">{[0, 1, 2, 3].map((item) => <div key={item} className="skeleton loading-metric" />)}</div><div className="loading-dashboard-panels"><div className="skeleton" /><div className="skeleton" /></div></>}
+      {variant === 'table' && <div className="loading-table"><div className="skeleton loading-table-toolbar" />{[0, 1, 2, 3, 4, 5].map((item) => <div key={item} className="loading-table-row"><span className="skeleton" /><span className="skeleton" /><span className="skeleton" /></div>)}</div>}
+      {variant === 'detail' && <><div className="skeleton loading-detail-heading" /><div className="loading-detail-grid"><div className="skeleton" /><div className="skeleton" /></div><div className="skeleton loading-detail-body" /></>}
+      {variant === 'settings' && <div className="loading-settings"><div className="skeleton" /><div className="loading-settings-content"><div className="skeleton" />{[0, 1, 2].map((item) => <div key={item} className="skeleton" />)}</div></div>}
     </div>
   )
 }
 
 export function ErrorState({ message, retry }: { message: string; retry: () => void }) {
   return (
-    <div className="state-panel border-rose-900/40 bg-rose-950/10" role="alert">
-      <WarningCircle size={25} weight="duotone" className="text-rose-400" />
+    <div className="state-panel state-panel-error" role="alert">
+      <WarningCircle size={25} weight="duotone" />
       <div className="min-w-0 flex-1">
-        <h2 className="text-sm font-semibold text-stone-100">Data could not be loaded</h2>
-        <p className="mt-1 text-sm leading-6 text-stone-400">{message}</p>
+        <h2>Data Could Not Be Loaded</h2>
+        <p>{message}</p>
       </div>
       <button className="button-secondary" onClick={retry}>
         <ArrowClockwise size={16} /> Retry
@@ -30,13 +32,13 @@ export function ErrorState({ message, retry }: { message: string; retry: () => v
 
 export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
   return (
-    <div className="panel flex min-h-72 flex-col items-center justify-center overflow-hidden px-6 py-16 text-center">
-      <div className="mb-5 grid size-12 place-items-center rounded-[14px] border border-[#b8c5ba] bg-[#edf1eb] text-[#4f6f5c]">
+    <div className="panel empty-state">
+      <div className="empty-state-icon">
         <Database size={22} weight="duotone" />
       </div>
-      <h2 className="text-base font-semibold text-stone-100">{title}</h2>
-      <p className="mt-2 max-w-md text-sm leading-6 text-stone-500">{detail}</p>
-      {action && <div className="mt-5">{action}</div>}
+      <h2>{title}</h2>
+      <p>{detail}</p>
+      {action && <div className="empty-state-action">{action}</div>}
     </div>
   )
 }

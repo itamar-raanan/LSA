@@ -10,6 +10,7 @@ import { StatusBadge } from '../components/security/StatusBadge'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
+import { formatDateTime } from '../lib/dateTime'
 import { withInvestigationReturn } from '../lib/investigationContext'
 import type { Finding, Host, Severity } from '../types'
 
@@ -37,9 +38,9 @@ export function DashboardPage() {
     return { dashboard, recentHosts: recentHosts.rows, findings: [...criticalFindings.rows, ...highFindings.rows] }
   }, [])
 
-  if (loading) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Loading the current fleet posture and exposure queue." /><LoadingState /></>
+  if (loading) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Loading the current fleet posture and exposure queue." /><LoadingState variant="dashboard" /></>
   if (error) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Current fleet posture and exposure queue." /><ErrorState message={error} retry={reload} /></>
-  if (!data || data.dashboard.total_hosts === 0) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Current fleet posture and exposure queue." /><EmptyState title="No Telemetry Available" detail="Enroll a Linux endpoint or import an offline report to establish the first fleet baseline." /></>
+  if (!data || data.dashboard.total_hosts === 0) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Current fleet posture and exposure queue." /><EmptyState title="No Telemetry Available" detail="Enroll a Linux endpoint or import an offline report to establish the first fleet baseline." action={<Link to="/evidence" className="button-primary">Import Offline Evidence <ArrowRight size={14} /></Link>} /></>
 
   const { dashboard, recentHosts: hosts, findings } = data
   const priorityFindings = findings
@@ -73,7 +74,7 @@ export function DashboardPage() {
     <PageHeader eyebrow="Security Operations" title="Security Overview" detail="See what requires attention, investigate the affected systems, and confirm whether fleet posture is improving." />
 
     <section className="dashboard-data-context" aria-label="Dashboard Data Context">
-      <div><Activity size={15} /><span><strong>Latest Accepted Posture</strong>{latestReportAt ? `Updated ${new Date(latestReportAt).toLocaleString()}` : 'No Endpoint Report Time Available'}</span></div>
+      <div><Activity size={15} /><span><strong>Latest Accepted Posture</strong>{latestReportAt ? `Updated ${formatDateTime(latestReportAt)}` : 'No Endpoint Report Time Available'}</span></div>
       <div><Database size={15} /><span><strong>Evidence Source</strong>Server Summaries From Locally Retained Reports</span></div>
     </section>
 

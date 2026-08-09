@@ -67,6 +67,8 @@ Acceptance criteria:
 
 ## Phase 5 — Administration and polish (low)
 
+Implementation status: complete. Credentials and Trust consolidates ingestion tokens and signing keys, Reports is now Evidence Intake, and administrators receive direct first-run actions from empty workspaces. Global search supports full keyboard operation and bounded server-side entity search across assets, applications, and findings. Shared date formatting, page-specific loading structures, warm-theme recovery states, responsive behavior, and the routed 404 experience complete the final console polish pass.
+
 - Consolidate Tokens and Signing Keys under Credentials & Trust.
 - Rename Reports to Evidence Intake and add a route to token creation for administrators.
 - Add action-bearing empty states, consistent timestamps, and page-specific skeletons.

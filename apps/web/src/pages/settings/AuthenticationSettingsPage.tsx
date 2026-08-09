@@ -60,7 +60,7 @@ export function AuthenticationSettingsPage() {
   }
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Access control" title="Authentication" detail="Connect organization identity providers and map asserted groups to least-privilege console roles." action={<button className="button-primary" onClick={() => setAdding(!adding)}><Plus size={16} /> Add provider</button>} />
+    <PageHeader eyebrow="Access control" title="Authentication" detail="Connect organization identity providers and map asserted groups to least-privilege console roles." action={providers?.length ? <button className="button-primary" onClick={() => setAdding(!adding)}><Plus size={16} /> Add provider</button> : undefined} />
     <section className="panel overflow-hidden">
       <div className="grid gap-4 px-6 py-6 sm:grid-cols-[44px_1fr_auto] sm:items-center md:px-7">
         <span className="grid size-11 place-items-center rounded-xl border border-amber-900/50 bg-amber-950/20 text-amber-300"><LockKey size={21} weight="duotone" /></span>
@@ -84,7 +84,7 @@ export function AuthenticationSettingsPage() {
     </form>}
     {actionError && <p className="mt-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{actionError}</p>}
     <div className="mt-5">
-      {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !providers?.length ? <EmptyState title="No identity providers" detail="Add Entra ID, Okta, Google Workspace, ADFS, generic OpenID Connect, or RADIUS." /> : <div className="divide-y divide-stone-800 overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb]">{providers.map((provider) => <section key={provider.id} className="grid gap-5 px-6 py-6 md:grid-cols-[44px_1fr_auto] md:items-center md:px-7">
+      {loading ? <LoadingState variant="settings" /> : error ? <ErrorState message={error} retry={reload} /> : !providers?.length ? <EmptyState title="No identity providers" detail="Add Entra ID, Okta, Google Workspace, ADFS, generic OpenID Connect, or RADIUS." action={<button className="button-primary" onClick={() => setAdding(true)}><Plus size={15} />Add Provider</button>} /> : <div className="divide-y divide-stone-800 overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb]">{providers.map((provider) => <section key={provider.id} className="grid gap-5 px-6 py-6 md:grid-cols-[44px_1fr_auto] md:items-center md:px-7">
         <span className="grid size-11 place-items-center rounded-xl border border-stone-800 bg-[#f7f3eb] text-stone-500">{provider.provider_type === 'radius' ? <Network size={21} /> : <Buildings size={21} />}</span>
         <div><p className="text-sm font-medium text-stone-200">{provider.name}</p><p className="mt-2 text-xs text-stone-600">{providerLabels[provider.provider_type]} · {provider.issuer_url ?? String(provider.config.host ?? '')}</p><p className="mt-2 font-mono text-[9px] capitalize tracking-wider text-stone-700">Secret {provider.secret_configured ? 'configured' : 'missing'} · default role auditor</p></div>
         <div className="flex items-center gap-2"><button className="button-secondary min-h-9 px-3" onClick={() => void setEnabled(provider, !provider.is_enabled)}><CheckCircle size={15} />{provider.is_enabled ? 'Disable' : 'Enable'}</button><Button variant="ghost" size="icon" aria-label={`Delete ${provider.name}`} onClick={() => setDeleting(provider)}><Trash size={15} /></Button></div>
