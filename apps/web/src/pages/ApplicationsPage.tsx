@@ -15,6 +15,7 @@ import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
 import { cn } from '../lib/utils'
 import { withInvestigationReturn } from '../lib/investigationContext'
+import { formatDate } from '../lib/dateTime'
 import type { ApplicationEstateItem } from '../types'
 
 type ApplicationKind = '' | ApplicationEstateItem['kind']
@@ -188,14 +189,14 @@ export function ApplicationsPage() {
     {
       id: 'state',
       header: 'Versions And State',
-      cell: (item) => <><span className="table-primary">{stateLabel(item)}</span><span className="table-subtitle">First Seen {new Date(item.first_seen_at).toLocaleDateString()}</span></>,
+      cell: (item) => <><span className="table-primary">{stateLabel(item)}</span><span className="table-subtitle">First Seen {formatDate(item.first_seen_at)}</span></>,
       sortValue: (item) => item.version_count || item.running_host_count || item.enabled_host_count,
       exportValue: stateLabel,
       priority: 'detail',
     },
     { id: 'type', header: 'Type', priority: 'detail', cell: (item) => <span className="capitalize">{item.kind}</span>, sortValue: (item) => item.kind, exportValue: (item) => item.kind },
     { id: 'source', header: 'Source', priority: 'detail', cell: (item) => <span className="font-mono text-xs capitalize">{item.source}</span>, sortValue: (item) => item.source, exportValue: (item) => item.source },
-    { id: 'observed', header: 'Last Observed', priority: 'detail', cell: (item) => <span className="font-mono text-xs">{new Date(item.last_seen_at).toLocaleDateString()}</span>, sortValue: (item) => item.last_seen_at, exportValue: (item) => item.last_seen_at },
+    { id: 'observed', header: 'Last Observed', priority: 'detail', cell: (item) => <span className="font-mono text-xs">{formatDate(item.last_seen_at)}</span>, sortValue: (item) => item.last_seen_at, exportValue: (item) => item.last_seen_at },
   ], [metrics?.reporting_hosts, openInvestigation, selected])
 
   async function queueRefresh() {
@@ -242,7 +243,7 @@ export function ApplicationsPage() {
       <div><strong>{operation.error ? 'Intelligence Update Failed' : intelligenceState === 'failed' ? 'Last Refresh Failed' : intelligenceState === 'refreshing' ? 'Intelligence Refresh In Progress' : intelligenceState === 'stale' ? 'Vulnerability Intelligence Is Stale' : intelligenceState === 'never' ? 'Vulnerability Intelligence Not Synchronized' : 'Vulnerability Intelligence Updated'}</strong><p>{operation.error ?? operation.message ?? syncStatus?.error ?? (intelligenceState === 'stale' ? 'Queue a refresh or import a current offline snapshot before making remediation decisions.' : intelligenceState === 'never' ? 'Queue the first online refresh or import an offline snapshot to begin package correlation.' : 'The synchronization worker will process the queued request.')}</p></div>
     </section>}
 
-    {estate.loading && !estate.data ? <LoadingState /> : estate.error ? <ErrorState message={estate.error} retry={estate.reload} /> : !estate.data ? null : <>
+    {estate.loading && !estate.data ? <LoadingState variant="table" /> : estate.error ? <ErrorState message={estate.error} retry={estate.reload} /> : !estate.data ? null : <>
       <section className="metric-grid application-metric-grid mb-4">
         <SecurityMetricCard title="Unique Applications" value={metrics?.unique_applications ?? 0} detail={`${metrics?.package_count ?? 0} Packages · ${metrics?.service_count ?? 0} Services`} icon={Shapes} />
         <SecurityMetricCard title="Vulnerable Hosts" value={risk?.affected_hosts ?? 0} detail={`${risk?.affected_applications ?? 0} Affected Installations`} tone={risk?.affected_hosts ? 'medium' : 'success'} icon={Server} />

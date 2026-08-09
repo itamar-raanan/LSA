@@ -9,16 +9,13 @@ import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useAuth } from '../auth/useAuth'
 import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
+import { formatDateTime as formatDate } from '../lib/dateTime'
 import type { IngestionToken } from '../types'
 
 function tokenState(token: IngestionToken): 'active' | 'expired' | 'revoked' {
   if (token.revoked_at) return 'revoked'
   if (token.expires_at && new Date(token.expires_at).getTime() <= Date.now()) return 'expired'
   return 'active'
-}
-
-function formatDate(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : 'Never'
 }
 
 export function TokensPage({ embedded = false, autoCreate = false }: { embedded?: boolean; autoCreate?: boolean } = {}) {
@@ -69,7 +66,7 @@ export function TokensPage({ embedded = false, autoCreate = false }: { embedded?
   return (
     <div className={embedded ? 'credential-workspace' : 'page-reveal'}>
       {embedded ? <header className="credential-workspace-heading"><div><p className="section-label">Submission Authentication</p><h2>Ingestion Tokens</h2><p>Issue narrowly scoped credentials, inspect their activity, and revoke submission access.</p></div>{createAction}</header> : <PageHeader eyebrow="Credential Governance" title="Ingestion Tokens" detail="Issue narrowly scoped scanner credentials, inspect their activity, and revoke access without changing host identities." action={createAction} />}
-      {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : (
+      {loading ? <LoadingState variant="table" /> : error ? <ErrorState message={error} retry={reload} /> : (
         <>
           <section className="credential-summary sm:grid-cols-[1.2fr_1fr_1fr]">
             <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Credential posture</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Secrets are displayed once and stored as one-way hashes.</p></div>

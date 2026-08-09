@@ -21,6 +21,7 @@ import { ErrorState, LoadingState } from '../../components/StatePanel'
 import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { useApi } from '../../hooks/useApi'
+import { formatDateTime } from '../../lib/dateTime'
 import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, LinuxAgent, PolicyMode } from '../../types'
 
 const modes: PolicyMode[] = ['audit', 'manual', 'remediate', 'disabled']
@@ -59,10 +60,10 @@ function AgentTable({ agents, groups, packageVersion, submit, selected, setSelec
   const columns: SecurityColumn<LinuxAgent>[] = [
     { id: 'host', header: 'Host', priority: 'primary', hideable: false, sortValue: (agent) => agent.hostname, exportValue: (agent) => agent.hostname, cell: (agent) => <span className="table-primary">{agent.hostname}<small>Agent {agent.agent_version} · {packageVersion && agent.agent_version !== packageVersion ? `Upgrade ${packageVersion} Available` : agent.capabilities.join(', ') || 'No Capabilities'}</small></span> },
     { id: 'connection', header: 'Connection', priority: 'secondary', sortValue: (agent) => agentStatus(agent), exportValue: (agent) => agentStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">Outbound Agent Heartbeat</span></> },
-    { id: 'report', header: 'Report Freshness', priority: 'secondary', sortValue: (agent) => reportStatus(agent), exportValue: (agent) => reportStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${reportStatus(agent) === 'fresh' ? 'online' : reportStatus(agent)}`}>{reportStatus(agent)}</span><span className="table-subtitle">{agent.last_scan_at ? new Date(agent.last_scan_at).toLocaleString() : 'No Accepted Report'}</span></> },
+    { id: 'report', header: 'Report Freshness', priority: 'secondary', sortValue: (agent) => reportStatus(agent), exportValue: (agent) => reportStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${reportStatus(agent) === 'fresh' ? 'online' : reportStatus(agent)}`}>{reportStatus(agent)}</span><span className="table-subtitle">{formatDateTime(agent.last_scan_at, 'No Accepted Report')}</span></> },
     { id: 'group', header: 'Group', priority: 'detail', sortValue: (agent) => agent.group_name, exportValue: (agent) => agent.group_name, cell: (agent) => <select aria-label={`Group for ${agent.hostname}`} className="select-input min-h-9" value={agent.group_id} disabled={!!agent.revoked_at} onChange={(event) => void submit(() => api.assignAgentGroup(agent.id, event.target.value))}>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select> },
     { id: 'policy', header: 'Policy', priority: 'detail', sortValue: (agent) => agent.policy_name, exportValue: (agent) => `${agent.policy_name} v${agent.policy_version}`, cell: (agent) => <span className="table-primary">{agent.policy_name}<small>Expected V{agent.policy_version} · Reported V{agent.last_policy_version ?? '—'}</small></span> },
-    { id: 'heartbeat', header: 'Last Heartbeat', priority: 'detail', sortValue: (agent) => agent.last_seen_at ?? '', exportValue: (agent) => agent.last_seen_at, cell: (agent) => <span className="table-primary">{agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : 'Never'}<small>{agent.latest_task_status ? `Latest Audit ${agent.latest_task_status}` : 'No Requested Audit'}</small></span> },
+    { id: 'heartbeat', header: 'Last Heartbeat', priority: 'detail', sortValue: (agent) => agent.last_seen_at ?? '', exportValue: (agent) => agent.last_seen_at, cell: (agent) => <span className="table-primary">{formatDateTime(agent.last_seen_at)}<small>{agent.latest_task_status ? `Latest Audit ${agent.latest_task_status}` : 'No Requested Audit'}</small></span> },
     { id: 'actions', header: 'Actions', priority: 'detail', hideable: false, cell: (agent) => <button className="icon-button ml-auto" aria-label={`Revoke ${agent.hostname}`} title="Revoke agent" disabled={!!agent.revoked_at} onClick={() => setRevoking(agent)}><Prohibit size={15} /></button> },
   ]
 
@@ -333,7 +334,7 @@ export function AgentsSettingsPage() {
     }), () => setPolicyStage('configure'))
   }
 
-  if (loading) return <LoadingState />
+  if (loading) return <LoadingState variant="settings" />
   if (error || !data) return <ErrorState message={error ?? 'Unable to load agents'} retry={reload} />
 
   const scopedAgents = data.agents.filter(agent => selectedGroupId === 'all' || agent.group_id === selectedGroupId)
@@ -528,7 +529,7 @@ export function AgentsSettingsPage() {
                 <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
                   <div className="flex items-end justify-between gap-4"><div><p className="section-label">Version history</p><p className="mt-2 text-xs text-stone-500">Every publication is immutable. Restoring publishes a new version from the selected snapshot.</p></div><span className="font-mono text-[10px] text-stone-600">{policyVersions.length} versions</span></div>
                   {historyError ? <p className="mt-4 text-xs text-rose-300">{historyError}</p> : <div className="mt-4 divide-y divide-stone-800 border-y border-stone-800">{policyVersions.map(version => <div key={version.version} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
-                    <div className="min-w-0 flex-1"><strong className="text-xs text-stone-300">Version {version.version}{version.version === assignedPolicy.version ? ' · current' : ''}</strong><span className="table-subtitle">{version.default_mode} default · {Object.keys(version.control_modes).length} overrides · {version.created_by_name ?? 'system'} · {new Date(version.created_at).toLocaleString()}</span></div>
+                    <div className="min-w-0 flex-1"><strong className="text-xs text-stone-300">Version {version.version}{version.version === assignedPolicy.version ? ' · current' : ''}</strong><span className="table-subtitle">{version.default_mode} default · {Object.keys(version.control_modes).length} overrides · {version.created_by_name ?? 'system'} · {formatDateTime(version.created_at)}</span></div>
                     {version.version !== assignedPolicy.version && <button className="button-secondary min-h-9 shrink-0" disabled={saving || assignedPolicy.assigned_groups > 1} onClick={() => void submit(() => api.restoreAgentPolicy(assignedPolicy.id, version.version))}>Restore as v{assignedPolicy.version + 1}</button>}
                   </div>)}</div>}
                 </div>

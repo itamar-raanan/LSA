@@ -134,7 +134,7 @@ export function FindingsPage() {
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Risk Queue" title="Security Findings" detail="Select a control category, prioritize its unresolved findings, and open an operator-ready remediation guide without losing your place in the queue." />
-    {facets.loading && !facets.data ? <LoadingState /> : facets.error || error ? <ErrorState message={facets.error ?? error ?? 'Unable To Load Findings'} retry={() => { void facets.reload(); void reload() }} /> : <section className="panel overflow-hidden" aria-label="Findings workspace">
+    {facets.loading && !facets.data ? <LoadingState variant="table" /> : facets.error || error ? <ErrorState message={facets.error ?? error ?? 'Unable To Load Findings'} retry={() => { void facets.reload(); void reload() }} /> : <section className="panel overflow-hidden" aria-label="Findings workspace">
       <div className="findings-summary-strip">
         <div><span className="detail-label">Open Findings</span><strong>{facets.data?.total ?? 0}</strong></div>
         <div><span className="detail-label">Critical</span><strong className={facets.data?.critical ? 'text-rose-500' : ''}>{facets.data?.critical ?? 0}</strong></div>

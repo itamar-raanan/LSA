@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Boxes, FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { Boxes, CornerDownLeft, FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -71,13 +71,16 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       setLoading(true)
       setSearchError('')
       try {
-        const [hosts, applications, findings] = await Promise.all([api.hosts(needle), api.applicationEstate(needle), api.findings()])
+        const [hosts, applications, findings] = await Promise.all([
+          api.hostPage({ search: needle, page: 0, pageSize: 4, sort: 'asset', direction: 'asc' }),
+          api.applicationEstatePage({ search: needle, page: 0, pageSize: 4, sort: 'application', direction: 'asc' }),
+          api.findingPage({ search: needle, page: 0, pageSize: 5, sort: 'severity', direction: 'asc' }),
+        ])
         if (sequence !== requestSequence.current) return
-        const matchingFindings = findings.filter((finding) => `${finding.title} ${finding.control_id} ${finding.hostname} ${finding.category}`.toLowerCase().includes(needle))
         setEntities([
-          ...hosts.slice(0, 4).map((host): CommandResult => ({ id: `host:${host.id}`, label: host.hostname, detail: `${host.operating_system} ${host.os_version} · ${host.ip_addresses[0] ?? 'No Address Reported'}`, path: `/hosts?host=${encodeURIComponent(host.id)}`, icon: Server, group: 'Assets' })),
-          ...applications.applications.slice(0, 4).map((application): CommandResult => ({ id: `application:${application.kind}:${application.source}:${application.name}`, label: application.name, detail: `${application.kind} · ${application.host_count} Host${application.host_count === 1 ? '' : 's'} · ${application.vulnerability_count} Advisories`, path: `/applications?search=${encodeURIComponent(application.name)}&application=${encodeURIComponent(`${application.kind}:${application.source}:${application.name}`)}`, icon: Boxes, group: 'Applications' })),
-          ...matchingFindings.slice(0, 5).map((finding): CommandResult => ({ id: `finding:${finding.id}`, label: finding.title, detail: `${finding.hostname} · ${finding.control_id} · ${finding.severity}`, path: `/findings?category=${encodeURIComponent(finding.category)}&finding=${encodeURIComponent(finding.id)}`, icon: ShieldAlert, group: 'Findings' })),
+          ...hosts.rows.map((host): CommandResult => ({ id: `host:${host.id}`, label: host.hostname, detail: `${host.operating_system} ${host.os_version} · ${host.ip_addresses[0] ?? 'No Address Reported'}`, path: `/hosts?host=${encodeURIComponent(host.id)}`, icon: Server, group: 'Assets' })),
+          ...applications.data.applications.map((application): CommandResult => ({ id: `application:${application.kind}:${application.source}:${application.name}`, label: application.name, detail: `${application.kind} · ${application.host_count} Host${application.host_count === 1 ? '' : 's'} · ${application.vulnerability_count} Advisories`, path: `/applications?search=${encodeURIComponent(application.name)}&application=${encodeURIComponent(`${application.kind}:${application.source}:${application.name}`)}`, icon: Boxes, group: 'Applications' })),
+          ...findings.rows.map((finding): CommandResult => ({ id: `finding:${finding.id}`, label: finding.title, detail: `${finding.hostname} · ${finding.control_id} · ${finding.severity}`, path: `/findings?category=${encodeURIComponent(finding.category)}&finding=${encodeURIComponent(finding.id)}`, icon: ShieldAlert, group: 'Findings' })),
         ])
       } catch (reason) {
         if (sequence !== requestSequence.current) return
@@ -135,7 +138,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               const index = results.indexOf(result)
               const active = index === activeIndex
               const itemId = `command-${result.id.replaceAll(':', '-')}`
-              return <button id={itemId} key={result.id} ref={(node) => { if (node) itemRefs.current.set(result.id, node); else itemRefs.current.delete(result.id) }} role="option" aria-selected={active} className={active ? 'command-item command-item-active' : 'command-item'} onMouseMove={() => setActiveIndex(index)} onClick={() => select(result)}><span className="command-item-icon"><Icon size={16} /></span><span className="min-w-0 flex-1 text-left"><strong>{result.label}</strong><small>{result.detail}</small></span><span className="command-enter">↵</span></button>
+              return <button id={itemId} key={result.id} ref={(node) => { if (node) itemRefs.current.set(result.id, node); else itemRefs.current.delete(result.id) }} role="option" aria-selected={active} className={active ? 'command-item command-item-active' : 'command-item'} onMouseMove={() => setActiveIndex(index)} onClick={() => select(result)}><span className="command-item-icon"><Icon size={16} /></span><span className="min-w-0 flex-1 text-left"><strong>{result.label}</strong><small>{result.detail}</small></span><CornerDownLeft className="command-enter" size={14} aria-hidden="true" /></button>
             })}</section>
           })}
           {loading && <div className="command-search-state"><span className="command-search-spinner" />Searching Console Entities</div>}

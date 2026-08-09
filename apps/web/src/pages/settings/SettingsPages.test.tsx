@@ -67,7 +67,7 @@ describe('Settings', () => {
 
     expect(screen.getByRole('heading', { name: 'Authentication' })).toBeInTheDocument()
     expect(await screen.findByText('No identity providers')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Add provider/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add Provider' })).toBeInTheDocument()
   })
 
   it('shows JIT users and the enforced role model', async () => {

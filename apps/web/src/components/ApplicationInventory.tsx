@@ -2,6 +2,7 @@ import { Gear, MagnifyingGlass, Package } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { useApi } from '../hooks/useApi'
+import { formatDate } from '../lib/dateTime'
 import type { ApplicationInventoryItem } from '../types'
 
 type InventoryKind = 'all' | ApplicationInventoryItem['kind']
@@ -48,7 +49,7 @@ export function ApplicationInventory({ hostId }: { hostId: string }) {
           <td className="font-mono text-xs">{item.version ?? '—'}{item.architecture && <span className="table-subtitle">{item.architecture}</span>}</td>
           <td><span className={item.running ? 'text-[#4f6f5c]' : 'text-stone-400'}>{state(item)}</span>{item.kind === 'service' && <span className="table-subtitle">{item.enabled ? 'enabled at boot' : 'not enabled at boot'}</span>}</td>
           <td className="font-mono text-xs capitalize text-stone-500">{item.source}</td>
-          <td className="font-mono text-xs text-stone-500">{new Date(item.last_seen_at).toLocaleDateString()}</td>
+          <td className="font-mono text-xs text-stone-500">{formatDate(item.last_seen_at)}</td>
         </tr>)}</tbody>
       </table>
       {visibleApplications.length < applications.length && <div className="flex items-center justify-between border-t border-stone-800 px-6 py-4"><p className="font-mono text-[10px] text-stone-600">Showing {visibleApplications.length} of {applications.length}</p><button className="button-secondary min-h-9 px-3" onClick={() => setVisibleCount((value) => value + 100)}>Show 100 more</button></div>}

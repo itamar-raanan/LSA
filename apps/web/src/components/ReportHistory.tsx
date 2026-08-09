@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api/client'
 import { useApi } from '../hooks/useApi'
+import { formatDate, formatDateTime } from '../lib/dateTime'
 import type { ReportComparison } from '../types'
 import { ErrorState } from './StatePanel'
 
@@ -56,7 +57,7 @@ export function ReportHistory({ hostId }: { hostId: string }) {
       <div className="divide-y divide-stone-800 border-t border-stone-800">
         {data.slice(0, 8).map((report, index) => (
           <div key={report.id} className="grid items-center gap-4 px-6 py-4 sm:grid-cols-[1fr_auto_auto] md:px-8">
-            <div><div className="flex flex-wrap items-center gap-3"><p className="text-sm text-stone-300">{new Date(report.generated_at).toLocaleString()}</p>{report.signature_verified && <span className="inline-flex items-center gap-1.5 font-mono text-[9px] capitalize tracking-wider text-[#4f6f5c]"><SealCheck size={13} weight="fill" /> Signed evidence</span>}{report.artifact_available && <span className="font-mono text-[9px] capitalize tracking-wider text-sky-300">Vaulted · {formatBytes(report.artifact_size_bytes)}</span>}</div><p className="mt-1 font-mono text-[9px] capitalize tracking-wider text-stone-600">{report.profile} · scanner {report.scanner_version}{report.artifact_retention_until ? ` · retained until ${new Date(report.artifact_retention_until).toLocaleDateString()}` : ''}</p></div>
+            <div><div className="flex flex-wrap items-center gap-3"><p className="text-sm text-stone-300">{formatDateTime(report.generated_at)}</p>{report.signature_verified && <span className="inline-flex items-center gap-1.5 font-mono text-[9px] capitalize tracking-wider text-[#4f6f5c]"><SealCheck size={13} weight="fill" /> Signed evidence</span>}{report.artifact_available && <span className="font-mono text-[9px] capitalize tracking-wider text-sky-300">Vaulted · {formatBytes(report.artifact_size_bytes)}</span>}</div><p className="mt-1 font-mono text-[9px] capitalize tracking-wider text-stone-600">{report.profile} · scanner {report.scanner_version}{report.artifact_retention_until ? ` · retained until ${formatDate(report.artifact_retention_until)}` : ''}</p></div>
             <div className="flex gap-6"><div><span className="font-mono text-sm text-stone-200">{report.security_score.toFixed(1)}</span><p className="text-[9px] capitalize tracking-wider text-stone-700">Security</p></div><div><span className="font-mono text-sm text-stone-200">{report.compliance_score.toFixed(1)}</span><p className="text-[9px] capitalize tracking-wider text-stone-700">Compliance</p></div></div>
             <div className="flex justify-end gap-2">{report.artifact_available && <button className="button-secondary min-h-9 px-3" disabled={downloading === report.id} onClick={() => void download(report.id)}><DownloadSimple size={14} />{downloading === report.id ? 'Verifying' : 'Evidence'}</button>}<button className="button-secondary min-h-9 px-3" disabled={comparing === report.id} onClick={() => void compare(report.id)}><ArrowsCounterClockwise size={14} />{index === data.length - 1 ? 'Baseline' : 'Compare'}</button></div>
           </div>
