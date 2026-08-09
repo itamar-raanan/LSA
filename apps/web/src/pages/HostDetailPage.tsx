@@ -1,7 +1,7 @@
 import { ArrowLeft, CaretDown, HardDrive, Network, ShieldCheck } from '@phosphor-icons/react'
 import { ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
 import { ApplicationInventory } from '../components/ApplicationInventory'
@@ -10,9 +10,12 @@ import { SeverityBadge } from '../components/SeverityBadge'
 import { ReportHistory } from '../components/ReportHistory'
 import { ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
+import { investigationReturn } from '../lib/investigationContext'
 
 export function HostDetailPage() {
   const { hostId = '' } = useParams()
+  const location = useLocation()
+  const returnContext = investigationReturn(new URLSearchParams(location.search).get('return_to'))
   const [expandedFinding, setExpandedFinding] = useState<string | null>(null)
   const hostState = useApi(() => api.host(hostId), [hostId])
   const findingState = useApi(() => api.findings({ host_id: hostId }), [hostId])
@@ -22,7 +25,7 @@ export function HostDetailPage() {
   const host = hostState.data
   return (
     <div className="page-reveal">
-      <Link to="/hosts" className="mb-7 inline-flex items-center gap-2 text-xs text-stone-500 hover:text-stone-200"><ArrowLeft size={15} /> Back to hosts</Link>
+      <Link to={returnContext?.to ?? '/hosts'} className="mb-7 inline-flex items-center gap-2 text-xs text-stone-500 hover:text-stone-700"><ArrowLeft size={15} /> {returnContext ? `Return To ${returnContext.label}` : 'Back To Assets'}</Link>
       <PageHeader eyebrow={`${host.os_family} ${host.os_version}`} title={host.hostname} detail={host.fqdn ?? 'No fully qualified domain name reported'} action={<span className="rounded-full border border-[#b8c5ba] bg-[#edf1eb] px-3 py-1.5 font-mono text-[10px] capitalize tracking-wider text-[#4f6f5c]">Reporting</span>} />
       <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <div className="panel p-6 md:p-8">

@@ -2,11 +2,12 @@ import { ArrowSquareOut, X } from '@phosphor-icons/react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import type { Finding } from '../types'
 import { RemediationGuide } from './RemediationGuide'
 import { SeverityBadge } from './SeverityBadge'
 
-export function FindingDetailPanel({ finding, close }: { finding: Finding; close: () => void }) {
+export function FindingDetailPanel({ finding, close, hostHref }: { finding: Finding; close: () => void; hostHref: string }) {
   const reduceMotion = useReducedMotion()
   const closeButton = useRef<HTMLButtonElement>(null)
   const motionProps = reduceMotion ? {} : {
@@ -40,7 +41,7 @@ export function FindingDetailPanel({ finding, close }: { finding: Finding; close
     <div className="finding-detail-body"><RemediationGuide finding={finding} /></div>
     <footer className="finding-detail-footer">
       <span>Review and apply changes through your approved change process.</span>
-      <a className="button-secondary min-h-9 shrink-0" href={`/hosts/${finding.host_id}`}>Open Host Record <ArrowSquareOut size={15} /></a>
+      <Link className="button-secondary min-h-9 shrink-0" to={hostHref}>Open Host Record <ArrowSquareOut size={15} /></Link>
     </footer>
   </motion.aside>, document.body)
 }

@@ -37,7 +37,7 @@ describe('ApplicationsPage', () => {
   const auth = { user: { id: 'user-1', email: 'admin@example.test', name: 'Admin', role: 'admin' as const }, login: vi.fn(), radiusLogin: vi.fn(), acceptSession: vi.fn(), logout: vi.fn() }
 
   it('summarizes software and correlates versions with affected hosts', async () => {
-    render(<AuthContext.Provider value={auth}><MemoryRouter><ApplicationsPage /></MemoryRouter></AuthContext.Provider>)
+    render(<AuthContext.Provider value={auth}><MemoryRouter initialEntries={['/applications?risk=kev&page=2']}><ApplicationsPage /></MemoryRouter></AuthContext.Provider>)
 
     expect(await screen.findByRole('heading', { name: 'Applications' })).toBeInTheDocument()
     expect(screen.getByText('Unique Applications')).toBeInTheDocument()
@@ -54,8 +54,9 @@ describe('ApplicationsPage', () => {
     expect(screen.getByText('3.0.15-1')).toBeInTheDocument()
     expect(screen.getByText('CVE-2026-1234')).toBeInTheDocument()
     expect(screen.getAllByText('Known Exploited', { selector: '.kev-badge' })).toHaveLength(2)
-    expect(screen.getByRole('link', { name: /web-01/ })).toHaveAttribute('href', '/hosts/host-1')
-    expect(screen.getByRole('link', { name: /db-02/ })).toHaveAttribute('href', '/hosts/host-2')
+    expect(screen.getByRole('link', { name: /web-01/ })).toHaveAttribute('href', expect.stringContaining('/hosts/host-1?return_to='))
+    expect(decodeURIComponent(screen.getByRole('link', { name: /web-01/ }).getAttribute('href') ?? '')).toContain('/applications?risk=kev&page=2&application=package%3Adpkg%3Aopenssl')
+    expect(screen.getByRole('link', { name: /db-02/ })).toHaveAttribute('href', expect.stringContaining('/hosts/host-2?return_to='))
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /CVE-2026-1234/ })) })
     expect(screen.getByRole('link', { name: /web-01/ })).toBeInTheDocument()

@@ -2,7 +2,7 @@ import { Gear, Package } from '@phosphor-icons/react'
 import { Boxes, RefreshCw, Server, ShieldAlert, Shapes, Upload } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { ApplicationInvestigationPanel } from '../components/ApplicationInvestigationPanel'
@@ -14,6 +14,7 @@ import { Button } from '../components/ui/Button'
 import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
 import { cn } from '../lib/utils'
+import { withInvestigationReturn } from '../lib/investigationContext'
 import type { ApplicationEstateItem } from '../types'
 
 type ApplicationKind = '' | ApplicationEstateItem['kind']
@@ -34,6 +35,7 @@ function stateLabel(item: ApplicationEstateItem) {
 export function ApplicationsPage() {
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const requestedSearch = searchParams.get('search') ?? ''
   const requestedApplication = searchParams.get('application')
   const requestedKind = searchParams.get('kind')
@@ -285,6 +287,7 @@ export function ApplicationsPage() {
       vulnerabilitiesLoading={vulnerabilities.loading}
       vulnerabilitiesError={vulnerabilities.error}
       retryVulnerabilities={vulnerabilities.reload}
+      hostHref={(hostId) => withInvestigationReturn(`/hosts/${hostId}`, location)}
       close={closeInvestigation}
     />}
   </div>

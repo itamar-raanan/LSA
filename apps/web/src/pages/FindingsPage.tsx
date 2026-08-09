@@ -1,6 +1,6 @@
 import { ArrowRight, FolderOpen, ShieldWarning } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { FindingDetailPanel } from '../components/FindingDetailPanel'
 import { PageHeader } from '../components/PageHeader'
@@ -9,6 +9,7 @@ import { SeverityBadge } from '../components/SeverityBadge'
 import { ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
+import { withInvestigationReturn } from '../lib/investigationContext'
 import type { Finding, Severity } from '../types'
 
 const categoryCatalog = [
@@ -30,6 +31,7 @@ const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
 
 export function FindingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const requestedSeverity = searchParams.get('severity')
   const initialSeverity = severityOrder.includes(requestedSeverity as Severity) ? requestedSeverity as Severity : 'all'
   const [severity, setSeverity] = useState<Severity | 'all'>(initialSeverity)
@@ -192,6 +194,6 @@ export function FindingsPage() {
         </div>
       </div>
     </section>}
-    {selectedFinding && <FindingDetailPanel finding={selectedFinding} close={closeFinding} />}
+    {selectedFinding && <FindingDetailPanel finding={selectedFinding} close={closeFinding} hostHref={withInvestigationReturn(`/hosts/${selectedFinding.host_id}`, location)} />}
   </div>
 }
