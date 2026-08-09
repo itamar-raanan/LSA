@@ -224,6 +224,13 @@ class HostResponse(BaseModel):
     finding_counts: dict[str, int]
 
 
+class HostListFacets(BaseModel):
+    total: int
+    critical: int
+    healthy: int
+    stale: int
+
+
 class ApplicationResponse(BaseModel):
     id: str
     host_id: str
@@ -426,6 +433,20 @@ class FindingResponse(BaseModel):
     verification_commands: list[str]
     reboot_required: bool
     service_restart: bool
+
+
+class FindingCategoryFacet(BaseModel):
+    category: str
+    count: int
+    critical: int
+    lifecycles: list[str]
+
+
+class FindingListFacets(BaseModel):
+    total: int
+    critical: int
+    affected_hosts: int
+    categories: list[FindingCategoryFacet]
 
 
 class DashboardResponse(BaseModel):

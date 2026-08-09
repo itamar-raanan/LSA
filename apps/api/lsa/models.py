@@ -157,6 +157,9 @@ class Host(Base):
     __tablename__ = "hosts"
     __table_args__ = (
         Index("ix_hosts_tenant_machine", "tenant_id", "machine_id_hash", unique=True),
+        Index("ix_hosts_tenant_active_hostname", "tenant_id", "deleted_at", "hostname"),
+        Index("ix_hosts_tenant_active_score", "tenant_id", "deleted_at", "security_score"),
+        Index("ix_hosts_tenant_active_scan", "tenant_id", "deleted_at", "last_scan_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -186,6 +189,13 @@ class HostApplication(Base):
     __tablename__ = "host_applications"
     __table_args__ = (
         Index("ix_host_applications_host_active", "host_id", "removed_at"),
+        Index(
+            "ix_host_applications_tenant_active_kind_name",
+            "tenant_id",
+            "removed_at",
+            "kind",
+            "name",
+        ),
         UniqueConstraint("host_id", "inventory_key", name="uq_host_application_identity"),
     )
 
@@ -463,7 +473,11 @@ class Report(Base):
 
 class Finding(Base):
     __tablename__ = "findings"
-    __table_args__ = (Index("ix_findings_report_control", "report_id", "control_id", unique=True),)
+    __table_args__ = (
+        Index("ix_findings_report_control", "report_id", "control_id", unique=True),
+        Index("ix_findings_report_category_severity", "report_id", "category", "severity"),
+        Index("ix_findings_report_lifecycle", "report_id", "lifecycle"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)

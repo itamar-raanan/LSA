@@ -36,7 +36,7 @@ Acceptance criteria:
 
 ## Phase 3 — Data workspaces (medium)
 
-Implementation status: the shared table now supports controlled URL state, responsive priority columns with row disclosure, selection feedback, sticky headers, and an opt-in server-pagination contract. Assets, Applications, Findings, Agents, Users, Tokens, and Signing Keys use the shared behavior. Current collection APIs still return complete datasets; server pagination can be activated per workspace when an endpoint exposes page and total metadata.
+Implementation status: complete for the primary analyst workspaces. The shared table supports controlled URL state, responsive priority columns with row disclosure, selection feedback, sticky headers, and server pagination. Assets, Applications, and Findings now execute search, filters, sorting, and pagination in the database while preserving lightweight aggregate facets and deep-link investigation context. Existing unpaged API callers retain their original response shapes. Agents, Users, Tokens, and Signing Keys use the same table behavior with client-side datasets appropriate to their current scale.
 
 - Extend SecurityTable for filters, selection, bulk actions, sticky headers, and server pagination.
 - Adopt it for Applications, Findings, Tokens, Signing Keys, Users, and Agents.

@@ -32,6 +32,9 @@ import type {
   VulnerabilitySummary,
   VulnerabilitySyncRun,
   HostVulnerability,
+  HostListFacets,
+  FindingListFacets,
+  PagedResult,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -53,7 +56,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function fetchResponse(path: string, options: RequestInit = {}): Promise<Response> {
   const token = localStorage.getItem('lsa_session')
   const headers = new Headers(options.headers)
   if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
@@ -69,8 +72,32 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (response.status === 401 && token) clearInvalidSession()
     throw new ApiError(body.detail ?? 'Request failed', response.status)
   }
+  return response
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchResponse(path, options)
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
+}
+
+async function requestPage<T>(path: string, options: RequestInit = {}): Promise<PagedResult<T>> {
+  const response = await fetchResponse(path, options)
+  const rows = await response.json() as T[]
+  return {
+    rows,
+    total: Number.parseInt(response.headers.get('X-Total-Count') ?? String(rows.length), 10),
+    page: Math.max(0, Number.parseInt(response.headers.get('X-Page') ?? '1', 10) - 1),
+    pageSize: Number.parseInt(response.headers.get('X-Page-Size') ?? String(rows.length || 10), 10),
+  }
+}
+
+function queryPath(path: string, values: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams()
+  Object.entries(values).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, String(value))
+  })
+  return `${path}${params.size ? `?${params}` : ''}`
 }
 
 export const api = {
@@ -129,6 +156,19 @@ export const api = {
   hosts(search = ''): Promise<Host[]> {
     return request(`/hosts${search ? `?search=${encodeURIComponent(search)}` : ''}`)
   },
+  hostPage(options: { search?: string; risk?: string; page: number; pageSize: number; sort?: string; direction?: string }): Promise<PagedResult<Host>> {
+    return requestPage(queryPath('/hosts', {
+      search: options.search,
+      risk: options.risk,
+      page: options.page + 1,
+      page_size: options.pageSize,
+      sort: options.sort,
+      direction: options.direction,
+    }))
+  },
+  hostFacets(): Promise<HostListFacets> {
+    return request('/hosts/facets')
+  },
   host(id: string): Promise<Host> {
     return request(`/hosts/${id}`)
   },
@@ -140,6 +180,23 @@ export const api = {
     if (search) params.set('search', search)
     if (kind) params.set('kind', kind)
     return request(`/applications${params.size ? `?${params}` : ''}`)
+  },
+  async applicationEstatePage(options: { search?: string; kind?: string; risk?: string; page: number; pageSize: number; sort?: string; direction?: string }): Promise<{ data: ApplicationEstateResponse; total: number; page: number; pageSize: number }> {
+    const response = await fetchResponse(queryPath('/applications', {
+      search: options.search,
+      kind: options.kind,
+      risk: options.risk,
+      page: options.page + 1,
+      page_size: options.pageSize,
+      sort: options.sort,
+      direction: options.direction,
+    }))
+    return {
+      data: await response.json() as ApplicationEstateResponse,
+      total: Number.parseInt(response.headers.get('X-Total-Count') ?? '0', 10),
+      page: Math.max(0, Number.parseInt(response.headers.get('X-Page') ?? '1', 10) - 1),
+      pageSize: Number.parseInt(response.headers.get('X-Page-Size') ?? String(options.pageSize), 10),
+    }
   },
   applicationCorrelation(name: string, kind: string, source: string): Promise<ApplicationHostCorrelation[]> {
     const params = new URLSearchParams({ name, kind, source })
@@ -293,6 +350,25 @@ export const api = {
     const params = new URLSearchParams()
     Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
     return request(`/findings${params.size ? `?${params}` : ''}`)
+  },
+  findingPage(options: { search?: string; severity?: string; lifecycle?: string; host_id?: string; category?: string; page: number; pageSize: number; sort?: string; direction?: string }): Promise<PagedResult<Finding>> {
+    return requestPage(queryPath('/findings', {
+      search: options.search,
+      severity: options.severity,
+      lifecycle: options.lifecycle,
+      host_id: options.host_id,
+      category: options.category,
+      page: options.page + 1,
+      page_size: options.pageSize,
+      sort: options.sort,
+      direction: options.direction,
+    }))
+  },
+  findingFacets(): Promise<FindingListFacets> {
+    return request('/findings/facets')
+  },
+  finding(id: string): Promise<Finding> {
+    return request(`/findings/${encodeURIComponent(id)}`)
   },
   async uploadBundle(file: File, ingestionToken: string): Promise<Record<string, unknown>> {
     const body = new FormData()

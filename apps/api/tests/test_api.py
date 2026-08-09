@@ -543,6 +543,74 @@ def test_application_estate_summary_and_host_correlation(client):
     assert correlation.json()[1]["environment"] == "production"
 
 
+def test_data_workspaces_page_filter_sort_and_preserve_aggregate_facets(client):
+    first = report_payload()
+    second = report_payload()
+    second["host"]["hostname"] = "critical-db-02"
+    second["host"]["fqdn"] = "critical-db-02.example.test"
+    second["host"]["machine_id_hash"] = (
+        f"sha256:{hashlib.sha256(b'critical-db-02').hexdigest()}"
+    )
+    second["summary"]["security_score"] = 35
+    second["findings"][0]["severity"] = "critical"
+    second["findings"][0]["title"] = "Critical database hardening gap"
+    ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=first).status_code == 202
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
+    headers = {"Authorization": f"Bearer {login(client)}"}
+
+    hosts = client.get(
+        "/api/v1/hosts",
+        params={"page": 1, "page_size": 1, "sort": "asset", "direction": "desc"},
+        headers=headers,
+    )
+    assert hosts.status_code == 200, hosts.text
+    assert hosts.headers["X-Total-Count"] == "2"
+    assert hosts.headers["X-Page"] == "1"
+    assert len(hosts.json()) == 1
+    critical_hosts = client.get(
+        "/api/v1/hosts", params={"risk": "critical", "page": 1, "page_size": 10}, headers=headers
+    )
+    assert [item["hostname"] for item in critical_hosts.json()] == ["critical-db-02"]
+    host_facets = client.get("/api/v1/hosts/facets", headers=headers).json()
+    assert host_facets["total"] == 2
+    assert host_facets["critical"] == 1
+
+    category = first["findings"][0]["category"]
+    findings = client.get(
+        "/api/v1/findings",
+        params={
+            "category": category,
+            "search": "database",
+            "page": 1,
+            "page_size": 1,
+            "sort": "severity",
+        },
+        headers=headers,
+    )
+    assert findings.status_code == 200, findings.text
+    assert findings.headers["X-Total-Count"] == "1"
+    assert findings.json()[0]["severity"] == "critical"
+    finding_facets = client.get("/api/v1/findings/facets", headers=headers).json()
+    category_facet = next(item for item in finding_facets["categories"] if item["category"] == category)
+    assert finding_facets["total"] == 2
+    assert finding_facets["critical"] == 1
+    assert category_facet["count"] == 2
+    assert category_facet["critical"] == 1
+    detail = client.get(f"/api/v1/findings/{findings.json()[0]['id']}", headers=headers)
+    assert detail.status_code == 200
+
+    applications = client.get(
+        "/api/v1/applications",
+        params={"page": 1, "page_size": 1, "sort": "application", "direction": "asc"},
+        headers=headers,
+    )
+    assert applications.status_code == 200, applications.text
+    assert applications.headers["X-Total-Count"] == "2"
+    assert len(applications.json()["applications"]) == 1
+    assert applications.json()["metrics"]["unique_applications"] == 2
+
+
 def test_offline_vulnerability_snapshot_correlates_packages_and_kev(client):
     payload = report_payload()
     assert client.post(

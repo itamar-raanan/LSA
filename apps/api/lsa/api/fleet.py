@@ -1,9 +1,11 @@
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, func, or_, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import String, case, cast, func, not_, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from lsa.database import get_db
 from lsa.dependencies import current_user
@@ -14,6 +16,7 @@ from lsa.models import (
     HostApplication,
     HostApplicationVulnerability,
     Report,
+    Severity,
     User,
     Vulnerability,
 )
@@ -25,7 +28,10 @@ from lsa.schemas import (
     ApplicationHostCorrelation,
     DashboardResponse,
     FindingDelta,
+    FindingCategoryFacet,
+    FindingListFacets,
     FindingResponse,
+    HostListFacets,
     HostResponse,
     ReportComparison,
     ReportResponse,
@@ -35,22 +41,43 @@ from lsa.schemas import (
 router = APIRouter(tags=["fleet"])
 
 
+def set_pagination_headers(response: Response, total: int, page: int, page_size: int) -> None:
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Page"] = str(page)
+    response.headers["X-Page-Size"] = str(page_size)
+
+
+def page_window(page: int | None, page_size: int | None) -> tuple[int, int] | None:
+    if page is None and page_size is None:
+        return None
+    return page or 1, page_size or 10
+
+
+def sort_expression(
+    sort: str | None,
+    direction: str,
+    mapping: dict[str, ColumnElement[object]],
+    default: ColumnElement[object],
+) -> ColumnElement[object]:
+    expression = mapping.get(sort or "", default)
+    return expression.desc() if direction == "desc" else expression.asc()
+
+
 def latest_report_ids(db: Session, tenant_id: str) -> list[str]:
-    rows = db.execute(
-        select(Report.host_id, func.max(Report.generated_at))
-        .where(Report.tenant_id == tenant_id)
-        .group_by(Report.host_id)
-    ).all()
-    ids: list[str] = []
-    for host_id, generated_at in rows:
-        report_id = db.scalar(
-            select(Report.id).where(
-                Report.host_id == host_id, Report.generated_at == generated_at
-            ).limit(1)
+    ranked = (
+        select(
+            Report.id,
+            func.row_number()
+            .over(
+                partition_by=Report.host_id,
+                order_by=(Report.generated_at.desc(), Report.received_at.desc(), Report.id.desc()),
+            )
+            .label("report_rank"),
         )
-        if report_id:
-            ids.append(report_id)
-    return ids
+        .where(Report.tenant_id == tenant_id)
+        .subquery()
+    )
+    return list(db.scalars(select(ranked.c.id).where(ranked.c.report_rank == 1)).all())
 
 
 def serialize_host(db: Session, host: Host) -> HostResponse:
@@ -94,27 +121,144 @@ def serialize_host(db: Session, host: Host) -> HostResponse:
     )
 
 
+def serialize_finding(finding: Finding, hostname: str) -> FindingResponse:
+    return FindingResponse(
+        id=finding.id,
+        host_id=finding.host_id,
+        hostname=hostname,
+        report_id=finding.report_id,
+        control_id=finding.control_id,
+        module=finding.module,
+        category=finding.category,
+        title=finding.title,
+        severity=finding.severity.value,
+        status=finding.status.value,
+        lifecycle=finding.lifecycle,
+        expected=finding.expected,
+        actual=finding.actual,
+        remediation_summary=finding.remediation_summary,
+        remediation_commands=finding.remediation_commands or [],
+        verification_commands=finding.verification_commands or [],
+        reboot_required=finding.reboot_required,
+        service_restart=finding.service_restart,
+    )
+
+
 @router.get("/hosts", response_model=list[HostResponse])
 def list_hosts(
+    response: Response,
     search: str | None = None,
     os_family: str | None = None,
+    risk: Literal["critical", "healthy", "stale"] | None = None,
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=100),
+    sort: Literal["asset", "status", "os", "environment", "risk", "findings", "last_seen"]
+    | None = None,
+    direction: Literal["asc", "desc"] = "asc",
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> list[HostResponse]:
+    report_ids = latest_report_ids(db, user.tenant_id)
+    critical_host_ids = select(Finding.host_id).where(
+        Finding.report_id.in_(report_ids),
+        Finding.status.in_([FindingStatus.failed, FindingStatus.error]),
+        Finding.severity == Severity.critical,
+    )
+    exposure_count = (
+        select(func.count(Finding.id))
+        .where(
+            Finding.host_id == Host.id,
+            Finding.report_id.in_(report_ids),
+            Finding.status.in_([FindingStatus.failed, FindingStatus.error]),
+        )
+        .correlate(Host)
+        .scalar_subquery()
+    )
     query = select(Host).where(Host.tenant_id == user.tenant_id, Host.deleted_at.is_(None))
     if search:
-        query = query.where(Host.hostname.ilike(f"%{search}%"))
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Host.hostname.ilike(pattern),
+                Host.fqdn.ilike(pattern),
+                Host.operating_system.ilike(pattern),
+                Host.os_version.ilike(pattern),
+                cast(Host.ip_addresses, String).ilike(pattern),
+                cast(Host.tags, String).ilike(pattern),
+            )
+        )
     if os_family:
         query = query.where(Host.os_family == os_family)
-    hosts = db.scalars(query.order_by(Host.security_score.asc().nulls_last(), Host.hostname)).all()
+    if risk == "critical":
+        query = query.where(Host.id.in_(critical_host_ids))
+    elif risk == "healthy":
+        query = query.where(Host.security_score >= 80, not_(Host.id.in_(critical_host_ids)))
+    elif risk == "stale":
+        query = query.where(
+            or_(Host.last_scan_at.is_(None), Host.last_scan_at < datetime.now(UTC) - timedelta(days=7))
+        )
+    total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+    ordering = sort_expression(
+        sort,
+        direction,
+        {
+            "asset": Host.hostname,
+            "status": Host.last_scan_at,
+            "os": Host.operating_system,
+            "environment": Host.tags["environment"].as_string(),
+            "risk": Host.security_score,
+            "findings": exposure_count,
+            "last_seen": Host.last_scan_at,
+        },
+        Host.security_score,
+    )
+    query = query.order_by(ordering.nulls_last(), Host.hostname)
+    window = page_window(page, page_size)
+    if window:
+        resolved_page, resolved_size = window
+        query = query.offset((resolved_page - 1) * resolved_size).limit(resolved_size)
+        set_pagination_headers(response, total, resolved_page, resolved_size)
+    hosts = db.scalars(query).all()
     return [serialize_host(db, host) for host in hosts]
+
+
+@router.get("/hosts/facets", response_model=HostListFacets)
+def host_facets(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> HostListFacets:
+    report_ids = latest_report_ids(db, user.tenant_id)
+    critical_host_ids = select(Finding.host_id).where(
+        Finding.report_id.in_(report_ids),
+        Finding.status.in_([FindingStatus.failed, FindingStatus.error]),
+        Finding.severity == Severity.critical,
+    )
+    active = (Host.tenant_id == user.tenant_id, Host.deleted_at.is_(None))
+    stale = or_(Host.last_scan_at.is_(None), Host.last_scan_at < datetime.now(UTC) - timedelta(days=7))
+
+    def count_hosts(*filters: ColumnElement[bool]) -> int:
+        return db.scalar(select(func.count(Host.id)).where(*active, *filters)) or 0
+
+    return HostListFacets(
+        total=count_hosts(),
+        critical=count_hosts(Host.id.in_(critical_host_ids)),
+        healthy=count_hosts(Host.security_score >= 80, not_(Host.id.in_(critical_host_ids))),
+        stale=count_hosts(stale),
+    )
 
 
 @router.get("/applications", response_model=ApplicationEstateResponse)
 def list_estate_applications(
+    response: Response,
     search: str | None = None,
     kind: str | None = Query(default=None, pattern="^(package|service)$"),
+    risk: Literal["vulnerable", "kev"] | None = None,
     limit: int = Query(default=500, ge=1, le=2000),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=100),
+    sort: Literal["application", "coverage", "risk", "state", "type", "source", "observed"]
+    | None = None,
+    direction: Literal["asc", "desc"] = "asc",
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> ApplicationEstateResponse:
@@ -218,13 +362,48 @@ def list_estate_applications(
                 HostApplication.description.ilike(pattern),
             )
         )
+    if risk == "vulnerable":
+        query = query.where(func.coalesce(vulnerability_grouped.c.vulnerability_count, 0) > 0)
+    elif risk == "kev":
+        query = query.where(func.coalesce(vulnerability_grouped.c.known_exploited_count, 0) > 0)
     query = query.group_by(
         HostApplication.kind,
         HostApplication.name,
         HostApplication.source,
         vulnerability_grouped.c.vulnerability_count,
         vulnerability_grouped.c.known_exploited_count,
-    ).order_by(func.count(func.distinct(HostApplication.host_id)).desc(), HostApplication.name).limit(limit)
+    )
+    total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+    application_risk = (
+        func.coalesce(vulnerability_grouped.c.known_exploited_count, 0) * 1000
+        + func.coalesce(vulnerability_grouped.c.vulnerability_count, 0)
+    )
+    ordering = (
+        sort_expression(
+            sort,
+            direction,
+            {
+                "application": HostApplication.name,
+                "coverage": func.count(func.distinct(HostApplication.host_id)),
+                "risk": application_risk,
+                "state": func.count(func.distinct(HostApplication.version)),
+                "type": HostApplication.kind,
+                "source": HostApplication.source,
+                "observed": func.max(HostApplication.last_seen_at),
+            },
+            HostApplication.name,
+        )
+        if sort
+        else func.count(func.distinct(HostApplication.host_id)).desc()
+    )
+    query = query.order_by(ordering, HostApplication.name)
+    window = page_window(page, page_size)
+    if window:
+        resolved_page, resolved_size = window
+        query = query.offset((resolved_page - 1) * resolved_size).limit(resolved_size)
+        set_pagination_headers(response, total, resolved_page, resolved_size)
+    else:
+        query = query.limit(limit)
     applications = [
         ApplicationEstateItem(
             kind=row.kind,
@@ -469,11 +648,18 @@ def compare_report(
 
 @router.get("/findings", response_model=list[FindingResponse])
 def list_findings(
+    response: Response,
+    search: str | None = Query(default=None, max_length=500),
     severity: str | None = None,
     lifecycle: str | None = None,
     host_id: str | None = None,
     category: str | None = None,
     limit: int = Query(default=1000, ge=1, le=5000),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=100),
+    sort: Literal["severity", "finding", "host", "lifecycle", "observed", "impact"]
+    | None = None,
+    direction: Literal["asc", "desc"] = "asc",
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> list[FindingResponse]:
@@ -497,30 +683,127 @@ def list_findings(
         query = query.where(Finding.host_id == host_id)
     if category:
         query = query.where(Finding.category == category)
-    rows = db.execute(query.order_by(Finding.severity, Finding.control_id).limit(limit)).all()
-    return [
-        FindingResponse(
-            id=finding.id,
-            host_id=finding.host_id,
-            hostname=hostname,
-            report_id=finding.report_id,
-            control_id=finding.control_id,
-            module=finding.module,
-            category=finding.category,
-            title=finding.title,
-            severity=finding.severity.value,
-            status=finding.status.value,
-            lifecycle=finding.lifecycle,
-            expected=finding.expected,
-            actual=finding.actual,
-            remediation_summary=finding.remediation_summary,
-            remediation_commands=finding.remediation_commands or [],
-            verification_commands=finding.verification_commands or [],
-            reboot_required=finding.reboot_required,
-            service_restart=finding.service_restart,
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Finding.title.ilike(pattern),
+                Finding.control_id.ilike(pattern),
+                Finding.module.ilike(pattern),
+                Finding.actual.ilike(pattern),
+                Host.hostname.ilike(pattern),
+            )
         )
-        for finding, hostname in rows
-    ]
+    total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+    severity_rank = case(
+        (Finding.severity == Severity.critical, 0),
+        (Finding.severity == Severity.high, 1),
+        (Finding.severity == Severity.medium, 2),
+        (Finding.severity == Severity.low, 3),
+        else_=4,
+    )
+    impact_rank = case((Finding.reboot_required.is_(True), 2), (Finding.service_restart.is_(True), 1), else_=0)
+    ordering = sort_expression(
+        sort,
+        direction,
+        {
+            "severity": severity_rank,
+            "finding": Finding.title,
+            "host": Host.hostname,
+            "lifecycle": Finding.lifecycle,
+            "observed": Finding.actual,
+            "impact": impact_rank,
+        },
+        severity_rank,
+    )
+    query = query.order_by(ordering, Finding.control_id)
+    window = page_window(page, page_size)
+    if window:
+        resolved_page, resolved_size = window
+        query = query.offset((resolved_page - 1) * resolved_size).limit(resolved_size)
+        set_pagination_headers(response, total, resolved_page, resolved_size)
+    else:
+        query = query.limit(limit)
+    return [serialize_finding(finding, hostname) for finding, hostname in db.execute(query).all()]
+
+
+@router.get("/findings/facets", response_model=FindingListFacets)
+def finding_facets(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> FindingListFacets:
+    report_ids = latest_report_ids(db, user.tenant_id)
+    if not report_ids:
+        return FindingListFacets(total=0, critical=0, affected_hosts=0, categories=[])
+    filters = (
+        Finding.report_id.in_(report_ids),
+        Finding.status.in_([FindingStatus.failed, FindingStatus.error, FindingStatus.manual]),
+        Host.deleted_at.is_(None),
+    )
+    total, critical, affected_hosts = db.execute(
+        select(
+            func.count(Finding.id),
+            func.sum(case((Finding.severity == Severity.critical, 1), else_=0)),
+            func.count(func.distinct(Finding.host_id)),
+        )
+        .join(Host, Host.id == Finding.host_id)
+        .where(*filters)
+    ).one()
+    rows = db.execute(
+        select(Finding.category, Finding.severity, Finding.lifecycle, func.count(Finding.id))
+        .join(Host, Host.id == Finding.host_id)
+        .where(*filters)
+        .group_by(Finding.category, Finding.severity, Finding.lifecycle)
+        .order_by(Finding.category)
+    ).all()
+    categories: dict[str, dict[str, object]] = {}
+    for item_category, item_severity, item_lifecycle, count in rows:
+        facet = categories.setdefault(
+            item_category,
+            {"count": 0, "critical": 0, "lifecycles": set()},
+        )
+        facet["count"] = int(facet["count"]) + count
+        if item_severity == Severity.critical:
+            facet["critical"] = int(facet["critical"]) + count
+        lifecycles = facet["lifecycles"]
+        if isinstance(lifecycles, set):
+            lifecycles.add(item_lifecycle)
+    return FindingListFacets(
+        total=total or 0,
+        critical=critical or 0,
+        affected_hosts=affected_hosts or 0,
+        categories=[
+            FindingCategoryFacet(
+                category=item_category,
+                count=int(values["count"]),
+                critical=int(values["critical"]),
+                lifecycles=sorted(str(item) for item in values["lifecycles"]),
+            )
+            for item_category, values in categories.items()
+        ],
+    )
+
+
+@router.get("/findings/{finding_id}", response_model=FindingResponse)
+def get_finding(
+    finding_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> FindingResponse:
+    report_ids = latest_report_ids(db, user.tenant_id)
+    row = db.execute(
+        select(Finding, Host.hostname)
+        .join(Host, Host.id == Finding.host_id)
+        .where(
+            Finding.id == finding_id,
+            Finding.report_id.in_(report_ids),
+            Host.tenant_id == user.tenant_id,
+            Host.deleted_at.is_(None),
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    return serialize_finding(*row)
 
 
 @router.get("/dashboard", response_model=DashboardResponse)

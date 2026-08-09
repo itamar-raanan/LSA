@@ -46,7 +46,16 @@ export function ApplicationsPage() {
   const [selected, setSelected] = useState<ApplicationEstateItem | null>(null)
   const [operation, setOperation] = useState<{ busy: boolean; message: string | null; error: string | null }>({ busy: false, message: null, error: null })
   const snapshotInput = useRef<HTMLInputElement>(null)
-  const estate = useApi(() => api.applicationEstate(search, kind), [search, kind])
+  const ignoredApplication = useRef<string | null>(null)
+  const estate = useApi(() => api.applicationEstatePage({
+    search,
+    kind,
+    risk: riskFilter === 'all' ? undefined : riskFilter,
+    page: tableState.page,
+    pageSize: 10,
+    sort: tableState.sort?.id,
+    direction: tableState.sort?.direction,
+  }), [search, kind, riskFilter, tableState.page, tableState.sort?.id, tableState.sort?.direction])
   const intelligence = useApi(() => api.vulnerabilitySummary(), [])
   const correlation = useApi(
     () => selected ? api.applicationCorrelation(selected.name, selected.kind, selected.source) : Promise.resolve([]),
@@ -58,13 +67,15 @@ export function ApplicationsPage() {
   )
   const refreshIntelligence = intelligence.refresh
   const closeInvestigation = useCallback(() => {
+    ignoredApplication.current = requestedApplication
     setSelected(null)
     const next = new URLSearchParams(searchParams)
     next.delete('application')
     setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams])
+  }, [requestedApplication, searchParams, setSearchParams])
 
   const openInvestigation = useCallback((application: ApplicationEstateItem) => {
+    ignoredApplication.current = null
     setSelected(application)
     const next = new URLSearchParams(searchParams)
     next.set('application', applicationKey(application))
@@ -109,10 +120,28 @@ export function ApplicationsPage() {
   }, [requestedKind, requestedRisk])
 
   useEffect(() => {
-    if (!requestedApplication || !estate.data?.applications.length) return
-    const application = estate.data.applications.find((item) => applicationKey(item) === requestedApplication)
-    if (application) setSelected(application)
-  }, [estate.data?.applications, requestedApplication])
+    if (!requestedApplication) {
+      ignoredApplication.current = null
+      return
+    }
+    if (ignoredApplication.current === requestedApplication) return
+    const application = estate.data?.data.applications.find((item) => applicationKey(item) === requestedApplication)
+    if (application) {
+      setSelected(application)
+      return
+    }
+    if (selected && applicationKey(selected) === requestedApplication) return
+    const [requestedType, requestedSource, ...nameParts] = requestedApplication.split(':')
+    if ((requestedType !== 'package' && requestedType !== 'service') || !requestedSource || !nameParts.length) return
+    let active = true
+    void api.applicationEstatePage({ search: nameParts.join(':'), kind: requestedType, page: 0, pageSize: 100 })
+      .then((result) => {
+        const match = result.data.applications.find((item) => applicationKey(item) === requestedApplication)
+        if (active && match) setSelected(match)
+      })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [estate.data?.data.applications, requestedApplication, selected])
 
   useEffect(() => {
     const status = intelligence.data?.last_sync?.status
@@ -121,11 +150,10 @@ export function ApplicationsPage() {
     return () => window.clearInterval(timer)
   }, [intelligence.data?.last_sync?.status, refreshIntelligence])
 
-  const metrics = estate.data?.metrics
+  const metrics = estate.data?.data.metrics
   const risk = intelligence.data
-  const rows = useMemo<ApplicationRow[]>(() => (estate.data?.applications ?? [])
-    .filter((item) => riskFilter === 'all' || (riskFilter === 'vulnerable' ? item.vulnerability_count > 0 : item.known_exploited_count > 0))
-    .map((item) => ({ ...item, id: applicationKey(item) })), [estate.data?.applications, riskFilter])
+  const rows = useMemo<ApplicationRow[]>(() => (estate.data?.data.applications ?? [])
+    .map((item) => ({ ...item, id: applicationKey(item) })), [estate.data?.data.applications])
   const columns = useMemo<SecurityColumn<ApplicationRow>[]>(() => [
     {
       id: 'application',
@@ -229,8 +257,7 @@ export function ApplicationsPage() {
           onQueryChange={updateQuery}
           sort={tableState.sort}
           onSortChange={tableState.setSort}
-          page={tableState.page}
-          onPageChange={tableState.setPage}
+          serverPagination={{ page: estate.data.page, pageSize: estate.data.pageSize, totalRows: estate.data.total, onPageChange: tableState.setPage }}
           searchText={(item) => `${item.name} ${item.publisher ?? ''} ${item.description ?? ''} ${item.kind} ${item.source}`}
           rowLabel={(item) => item.name}
           searchPlaceholder="Search Application, Version, Or Publisher"
