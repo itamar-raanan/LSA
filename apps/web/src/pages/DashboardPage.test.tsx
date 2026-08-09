@@ -11,7 +11,7 @@ const finding = {
   id: 'finding-1', host_id: host.id, hostname: host.hostname, report_id: 'report-1', control_id: 'LSA-SSH-1', module: 'cis', category: 'ssh', title: 'Disable Root Login', severity: 'critical', status: 'fail', lifecycle: 'new', expected: 'PermitRootLogin no', actual: 'PermitRootLogin yes', remediation_summary: 'Disable direct root SSH access.', remediation_commands: [], verification_commands: [], reboot_required: false, service_restart: true,
 }
 
-const apiMock = vi.hoisted(() => ({ dashboard: vi.fn(), hosts: vi.fn(), findings: vi.fn() }))
+const apiMock = vi.hoisted(() => ({ dashboard: vi.fn(), hostPage: vi.fn(), findingPage: vi.fn() }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
 vi.mock('../components/security/DashboardChart', () => ({ default: () => <div data-testid="dashboard-chart" /> }))
@@ -31,8 +31,8 @@ describe('DashboardPage', () => {
       os_distribution: { Debian: 4 },
       highest_risk_hosts: [host],
     })
-    apiMock.hosts.mockResolvedValue([host])
-    apiMock.findings.mockResolvedValue([finding])
+    apiMock.hostPage.mockResolvedValue({ rows: [host], total: 1, page: 0, pageSize: 6 })
+    apiMock.findingPage.mockImplementation(({ severity }) => Promise.resolve({ rows: severity === 'critical' ? [finding] : [], total: severity === 'critical' ? 1 : 0, page: 0, pageSize: 7 }))
   })
 
   it('turns urgent posture into direct investigation paths', async () => {
@@ -45,7 +45,11 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('link', { name: 'Stale Reports: 1' })).toHaveAttribute('href', '/hosts?risk=stale')
     expect(screen.getByRole('link', { name: 'Compliance Score: 81.6%' })).toHaveAttribute('href', '/hosts')
     expect(screen.getByRole('link', { name: 'Disable Root Login' })).toHaveAttribute('href', '/findings?category=ssh&finding=finding-1')
-    expect(screen.getAllByRole('link', { name: /web-01/i })[0]).toHaveAttribute('href', '/hosts?host=host-1')
+    expect(screen.getAllByRole('link', { name: /web-01/i })[0]).toHaveAttribute('href', '/hosts/host-1?return_to=%2F')
+    expect(screen.getByRole('region', { name: 'Dashboard Data Context' })).toHaveTextContent('Latest Accepted Posture')
+    expect(apiMock.hostPage).toHaveBeenCalledWith({ page: 0, pageSize: 6, sort: 'last_seen', direction: 'desc' })
+    expect(apiMock.findingPage).toHaveBeenCalledTimes(2)
+    expect(apiMock.findingPage).toHaveBeenCalledWith({ severity: 'critical', page: 0, pageSize: 7, sort: 'lifecycle', direction: 'asc' })
     expect(await screen.findByTestId('dashboard-chart')).toBeInTheDocument()
   })
 })

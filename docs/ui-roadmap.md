@@ -51,6 +51,8 @@ Acceptance criteria:
 
 ## Phase 4 — Investigation workflows (medium)
 
+Implementation status: complete. The Overview now prioritizes urgent findings, affected assets, stale reports, and compliance using bounded server queries rather than complete fleet downloads. Dashboard, Finding, and Application drill-downs carry a validated local return target into Host Detail, so the exact queue, filters, search, sort, page, and selected record are restored. Investigation surfaces now identify posture freshness and the locally retained report or cached vulnerability-intelligence source.
+
 - Rework Overview around urgent findings, affected assets, stale agents, and compliance.
 - Make every dashboard metric open a pre-filtered destination.
 - Make Findings a priority queue with category facets and a dedicated detail inspector.

@@ -20,6 +20,7 @@ export function ApplicationInvestigationPanel({
   vulnerabilitiesLoading,
   vulnerabilitiesError,
   retryVulnerabilities,
+  hostHref,
   close,
 }: {
   application: ApplicationEstateItem
@@ -31,6 +32,7 @@ export function ApplicationInvestigationPanel({
   vulnerabilitiesLoading: boolean
   vulnerabilitiesError: string | null
   retryVulnerabilities: () => Promise<void>
+  hostHref: (hostId: string) => string
   close: () => void
 }) {
   const [selectedVulnerability, setSelectedVulnerability] = useState<ApplicationVulnerability | null>(null)
@@ -101,7 +103,7 @@ export function ApplicationInvestigationPanel({
 
       {hostsLoading ? <div className="skeleton m-5 h-52 rounded-lg" /> : hostsError ? <div className="p-5"><ErrorState message={hostsError} retry={retryHosts} /></div> : <>
         {versions.length > 0 && <section className="application-version-block"><div className="application-investigation-section-heading"><div><p className="detail-label">Version Distribution</p><p>{selectedVulnerability ? 'Hosts affected by the selected advisory.' : 'Versions observed across reporting hosts.'}</p></div>{selectedVulnerability && <button className="text-button" onClick={() => setSelectedVulnerability(null)}>Show All Hosts</button>}</div><div className="mt-4 grid gap-3">{versions.map(([version, count]) => <div key={version}><div className="flex items-center justify-between gap-3 text-xs"><span className="min-w-0 truncate font-mono">{version}</span><span className="font-mono text-stone-600">{count}</span></div><div className="application-version-track"><span style={{ width: `${(count / Math.max(visibleHosts.length, 1)) * 100}%` }} /></div></div>)}</div></section>}
-        <section className="application-host-list"><div className="application-investigation-section-heading"><div><p className="detail-label">{selectedVulnerability ? 'Affected Hosts' : 'Observed Hosts'}</p><p>Open a host record to review its complete software and finding context.</p></div><span>{visibleHosts.length}</span></div>{visibleHosts.length ? visibleHosts.map((host) => <Link key={host.application_id} to={`/hosts/${host.host_id}`} className="application-host-link"><span className="min-w-0"><strong>{host.hostname}</strong><small>{host.os_family} {host.os_version} · {host.environment ?? 'Environment Not Set'}</small><small className="font-mono">{host.version ?? host.status}{host.architecture ? ` · ${host.architecture}` : ''}</small></span><span className="application-host-score"><strong>{host.security_score?.toFixed(0) ?? '—'}</strong><small>Security</small></span></Link>) : <div className="application-vulnerability-empty"><ShieldWarning size={15} />No reporting hosts match the selected advisory.</div>}</section>
+        <section className="application-host-list"><div className="application-investigation-section-heading"><div><p className="detail-label">{selectedVulnerability ? 'Affected Hosts' : 'Observed Hosts'}</p><p>Open a host record to review its complete software and finding context.</p></div><span>{visibleHosts.length}</span></div>{visibleHosts.length ? visibleHosts.map((host) => <Link key={host.application_id} to={hostHref(host.host_id)} className="application-host-link"><span className="min-w-0"><strong>{host.hostname}</strong><small>{host.os_family} {host.os_version} · {host.environment ?? 'Environment Not Set'}</small><small className="font-mono">{host.version ?? host.status}{host.architecture ? ` · ${host.architecture}` : ''}</small></span><span className="application-host-score"><strong>{host.security_score?.toFixed(0) ?? '—'}</strong><small>Security</small></span></Link>) : <div className="application-vulnerability-empty"><ShieldWarning size={15} />No reporting hosts match the selected advisory.</div>}</section>
       </>}
     </div>
     <footer className="application-investigation-footer"><span>Cached OSV advisories enriched with CISA KEV intelligence.</span><button className="button-secondary min-h-9" onClick={close}>Return To Inventory</button></footer>

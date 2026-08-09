@@ -35,6 +35,7 @@ const apiMock = vi.hoisted(() => ({
   host: vi.fn(),
   applications: vi.fn(),
   reports: vi.fn(),
+  hostVulnerabilities: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock, ApiError: class ApiError extends Error {} }))
@@ -61,6 +62,7 @@ describe('Fleet console experience', () => {
       { id: 'app-2', host_id: host.id, kind: 'service', name: 'ssh.service', version: null, architecture: null, source: 'systemd', publisher: null, description: 'OpenSSH server', status: 'active', enabled: true, running: true, first_seen_at: '2026-08-01T12:00:00Z', last_seen_at: '2026-08-01T12:00:00Z', removed_at: null },
     ])
     apiMock.reports.mockResolvedValue([])
+    apiMock.hostVulnerabilities.mockResolvedValue([])
   })
 
   it('opens the bottom-right host card with scanner OS inventory', async () => {
@@ -100,6 +102,7 @@ describe('Fleet console experience', () => {
     expect(screen.getByText('Apply Step 1')).toBeInTheDocument()
     expect(screen.getByText('Verify Step 1')).toBeInTheDocument()
     expect(screen.getByText('A service restart is required and may interrupt active sessions.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Host Record' })).toHaveAttribute('href', '/hosts/host-1?return_to=%2Ffindings%3Fcategory%3Dssh%26finding%3Dfinding-1')
     fireEvent.click(screen.getByRole('button', { name: 'Close finding details' }))
     expect(screen.queryByRole('complementary', { name: 'Disable root login details' })).not.toBeInTheDocument()
   })
@@ -138,5 +141,10 @@ describe('Fleet console experience', () => {
     fireEvent.change(screen.getByPlaceholderText('Search name, version, publisher, or description'), { target: { value: 'openssl' } })
     expect(screen.getByText('openssl')).toBeInTheDocument()
     expect(screen.queryByText('ssh.service')).not.toBeInTheDocument()
+  })
+
+  it('returns from a host record to the exact findings queue', async () => {
+    render(<MemoryRouter initialEntries={['/hosts/host-1?return_to=%2Ffindings%3Fcategory%3Dssh%26severity%3Dcritical%26page%3D2']}><Routes><Route path="/hosts/:hostId" element={<HostDetailPage />} /></Routes></MemoryRouter>)
+    expect(await screen.findByRole('link', { name: 'Return To Security Findings' })).toHaveAttribute('href', '/findings?category=ssh&severity=critical&page=2')
   })
 })
