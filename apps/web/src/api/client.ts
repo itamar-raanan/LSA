@@ -35,6 +35,8 @@ import type {
   HostListFacets,
   FindingListFacets,
   PagedResult,
+  RemediationPlan,
+  RemediationPlanStatus,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -369,6 +371,21 @@ export const api = {
   },
   finding(id: string): Promise<Finding> {
     return request(`/findings/${encodeURIComponent(id)}`)
+  },
+  remediationPlans(filters: { status?: RemediationPlanStatus; host_id?: string } = {}): Promise<RemediationPlan[]> {
+    return request(queryPath('/remediation-plans', filters))
+  },
+  createRemediationPlan(findingId: string, rationale?: string): Promise<RemediationPlan> {
+    return request('/remediation-plans', { method: 'POST', body: JSON.stringify({ finding_id: findingId, rationale: rationale || undefined }) })
+  },
+  approveRemediationPlan(planId: string): Promise<RemediationPlan> {
+    return request(`/remediation-plans/${encodeURIComponent(planId)}/approve`, { method: 'POST' })
+  },
+  rejectRemediationPlan(planId: string, reason: string): Promise<RemediationPlan> {
+    return request(`/remediation-plans/${encodeURIComponent(planId)}/reject`, { method: 'POST', body: JSON.stringify({ reason }) })
+  },
+  cancelRemediationPlan(planId: string, reason: string): Promise<RemediationPlan> {
+    return request(`/remediation-plans/${encodeURIComponent(planId)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) })
   },
   async uploadBundle(file: File, ingestionToken: string): Promise<Record<string, unknown>> {
     const body = new FormData()

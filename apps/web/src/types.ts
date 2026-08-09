@@ -199,6 +199,50 @@ export interface Finding {
   service_restart: boolean
 }
 
+export type RemediationPlanStatus = 'pending_approval' | 'approved' | 'rejected' | 'canceled'
+
+export interface RemediationPlan {
+  id: string
+  finding_id: string
+  host_id: string
+  hostname: string
+  report_id: string
+  control_id: string
+  title: string
+  category: string
+  severity: Severity
+  current_state: string | null
+  required_state: string | null
+  remediation_summary: string
+  affected_paths: string[]
+  reboot_required: boolean
+  service_restart: boolean
+  rationale: string | null
+  status: RemediationPlanStatus
+  version: number
+  requested_by: string
+  requested_by_name: string
+  requested_at: string
+  approved_by: string | null
+  approved_by_name: string | null
+  approved_at: string | null
+  rejected_by: string | null
+  rejected_by_name: string | null
+  rejected_at: string | null
+  rejection_reason: string | null
+  canceled_by: string | null
+  canceled_by_name: string | null
+  canceled_at: string | null
+  cancellation_reason: string | null
+  source_is_current: boolean
+  finding_still_open: boolean
+  execution_enabled: false
+  execution_status: 'not_supported'
+  execution_reason: string
+  created_at: string
+  updated_at: string
+}
+
 export interface DashboardData {
   total_hosts: number
   healthy_hosts: number
