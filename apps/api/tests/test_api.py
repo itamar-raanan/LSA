@@ -13,10 +13,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from lsa.config import Settings, get_settings
 from lsa.database import SessionLocal
 from lsa.main import app
-from lsa.models import Report, Tenant
+from lsa.models import AuditEvent, Report, Tenant, User
 from lsa.models import IngestionToken
 from lsa.seed import DEMO_TOKEN, bootstrap
-from lsa.security import hash_ingestion_token
+from lsa.security import hash_ingestion_token, hash_password
 from sqlalchemy import select
 from scanner.scripts.build_bundle import build
 
@@ -463,6 +463,167 @@ def test_ingest_and_read_fleet(client):
     finding = client.get("/api/v1/findings", headers=headers).json()[0]
     assert finding["verification_commands"] == ["modprobe --showconfig | grep example"]
     assert finding["service_restart"] is True
+
+
+def test_remediation_plan_review_lifecycle_is_non_executable(client):
+    payload = report_payload()
+    assert client.post(
+        "/api/v1/ingest/reports",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        json=payload,
+    ).status_code == 202
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    finding = client.get("/api/v1/findings", headers=headers).json()[0]
+
+    created = client.post(
+        "/api/v1/remediation-plans",
+        headers=headers,
+        json={"finding_id": finding["id"], "rationale": "Prepare a reviewed maintenance change."},
+    )
+    assert created.status_code == 201, created.text
+    plan = created.json()
+    assert plan["status"] == "pending_approval"
+    assert plan["current_state"] == "module enabled"
+    assert plan["required_state"] == "module disabled"
+    assert plan["remediation_summary"].startswith("Disable the module")
+    assert plan["affected_paths"] == ["/etc/modprobe.d/example.conf"]
+    assert plan["source_is_current"] is True
+    assert plan["finding_still_open"] is True
+    assert plan["execution_enabled"] is False
+    assert plan["execution_status"] == "not_supported"
+    assert "cannot change hosts" in plan["execution_reason"]
+
+    duplicate = client.post(
+        "/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]}
+    )
+    assert duplicate.status_code == 409
+
+    filtered = client.get(
+        "/api/v1/remediation-plans",
+        params={"status": "pending_approval", "host_id": plan["host_id"]},
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    assert [item["id"] for item in filtered.json()] == [plan["id"]]
+
+    approved = client.post(f"/api/v1/remediation-plans/{plan['id']}/approve", headers=headers)
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["version"] == 2
+    assert approved.json()["approved_by_name"] == "Security Administrator"
+    assert approved.json()["execution_enabled"] is False
+    assert client.post(
+        f"/api/v1/remediation-plans/{plan['id']}/approve", headers=headers
+    ).status_code == 409
+
+    canceled = client.post(
+        f"/api/v1/remediation-plans/{plan['id']}/cancel",
+        headers=headers,
+        json={"reason": "Maintenance window changed."},
+    )
+    assert canceled.status_code == 200
+    assert canceled.json()["status"] == "canceled"
+    assert canceled.json()["version"] == 3
+    assert canceled.json()["cancellation_reason"] == "Maintenance window changed."
+
+    replacement = client.post(
+        "/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]}
+    )
+    assert replacement.status_code == 201
+    rejected = client.post(
+        f"/api/v1/remediation-plans/{replacement.json()['id']}/reject",
+        headers=headers,
+        json={"reason": "The proposed change needs application-owner review."},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["rejection_reason"].startswith("The proposed change")
+
+    with SessionLocal() as db:
+        actions = list(
+            db.scalars(
+                select(AuditEvent.action)
+                .where(AuditEvent.target_type == "remediation_plan")
+                .order_by(AuditEvent.created_at)
+            ).all()
+        )
+    assert actions == [
+        "remediation_plan.requested",
+        "remediation_plan.approved",
+        "remediation_plan.canceled",
+        "remediation_plan.requested",
+        "remediation_plan.rejected",
+    ]
+
+
+def test_remediation_plan_rejects_stale_approval_and_requires_admin_for_changes(client):
+    payload = report_payload()
+    ingest_headers = {"Authorization": f"Bearer {DEMO_TOKEN}"}
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=payload).status_code == 202
+    token = login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    finding = client.get("/api/v1/findings", headers=headers).json()[0]
+    created = client.post(
+        "/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]}
+    )
+    assert created.status_code == 201
+    plan_id = created.json()["id"]
+
+    newer = report_payload()
+    newer["host"]["host_id"] = payload["host"]["host_id"]
+    newer["host"]["machine_id_hash"] = payload["host"]["machine_id_hash"]
+    assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=newer).status_code == 202
+
+    stale = client.get(f"/api/v1/remediation-plans/{plan_id}", headers=headers)
+    assert stale.status_code == 200
+    assert stale.json()["source_is_current"] is False
+    assert stale.json()["finding_still_open"] is True
+    approval = client.post(f"/api/v1/remediation-plans/{plan_id}/approve", headers=headers)
+    assert approval.status_code == 409
+    assert "stale" in approval.json()["detail"].lower()
+
+    with SessionLocal() as db:
+        other_tenant = Tenant(name="Other Tenant", slug="other-tenant")
+        db.add(other_tenant)
+        db.flush()
+        db.add(
+            User(
+                tenant_id=other_tenant.id,
+                email="admin@other.test",
+                display_name="Other Administrator",
+                password_hash=hash_password("other-password"),
+                role="admin",
+            )
+        )
+        db.commit()
+    other_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@other.test", "password": "other-password"},
+    )
+    assert other_login.status_code == 200
+    other_headers = {"Authorization": f"Bearer {other_login.json()['access_token']}"}
+    assert client.get("/api/v1/remediation-plans", headers=other_headers).json() == []
+    assert client.get(
+        f"/api/v1/remediation-plans/{plan_id}", headers=other_headers
+    ).status_code == 404
+    assert client.post(
+        "/api/v1/remediation-plans",
+        headers=other_headers,
+        json={"finding_id": finding["id"]},
+    ).status_code == 404
+
+    with SessionLocal() as db:
+        admin = db.scalar(select(User).where(User.email == "admin@lsa.local"))
+        assert admin is not None
+        admin.role = "analyst"
+        db.commit()
+    assert client.get("/api/v1/remediation-plans", headers=headers).status_code == 200
+    forbidden = client.post(
+        f"/api/v1/remediation-plans/{plan_id}/cancel",
+        headers=headers,
+        json={"reason": "Analysts cannot mutate plans."},
+    )
+    assert forbidden.status_code == 403
 
 
 def test_application_inventory_tracks_versions_and_removals(client):
