@@ -435,6 +435,60 @@ class FindingResponse(BaseModel):
     service_restart: bool
 
 
+RemediationPlanStatusValue = Literal["pending_approval", "approved", "rejected", "canceled"]
+
+
+class RemediationPlanCreate(BaseModel):
+    finding_id: str = Field(min_length=1, max_length=36)
+    rationale: str | None = Field(default=None, max_length=2000)
+
+
+class RemediationPlanDecision(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class RemediationPlanResponse(BaseModel):
+    id: str
+    finding_id: str
+    host_id: str
+    hostname: str
+    report_id: str
+    control_id: str
+    title: str
+    category: str
+    severity: str
+    current_state: str | None
+    required_state: str | None
+    remediation_summary: str
+    affected_paths: list[str]
+    reboot_required: bool
+    service_restart: bool
+    rationale: str | None
+    status: RemediationPlanStatusValue
+    version: int
+    requested_by: str
+    requested_by_name: str
+    requested_at: datetime
+    approved_by: str | None
+    approved_by_name: str | None
+    approved_at: datetime | None
+    rejected_by: str | None
+    rejected_by_name: str | None
+    rejected_at: datetime | None
+    rejection_reason: str | None
+    canceled_by: str | None
+    canceled_by_name: str | None
+    canceled_at: datetime | None
+    cancellation_reason: str | None
+    source_is_current: bool
+    finding_still_open: bool
+    execution_enabled: Literal[False] = False
+    execution_status: Literal["not_supported"] = "not_supported"
+    execution_reason: str = "This release records review decisions only and cannot change hosts."
+    created_at: datetime
+    updated_at: datetime
+
+
 class FindingCategoryFacet(BaseModel):
     category: str
     count: int

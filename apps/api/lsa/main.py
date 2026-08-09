@@ -14,6 +14,7 @@ from lsa.api import (
     auth,
     fleet,
     ingest,
+    remediations,
     settings as settings_api,
     vulnerabilities,
 )
@@ -59,6 +60,7 @@ app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(artifacts.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
 app.include_router(vulnerabilities.router, prefix="/api/v1")
+app.include_router(remediations.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["operations"])

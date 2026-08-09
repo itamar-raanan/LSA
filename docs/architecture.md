@@ -37,6 +37,12 @@ The Hosts, Findings, and Applications collection endpoints support optional data
 
 Lightweight `/hosts/facets` and `/findings/facets` endpoints provide fleet risk totals and finding category aggregates independently of the current page. This keeps category rails, risk tabs, and headline metrics accurate without downloading every record. Management-to-API CORS explicitly exposes the pagination headers, and composite database indexes cover the tenant, active-state, category, severity, score, and observation fields used by analyst queues.
 
+## Remediation planning
+
+Remediation begins as a management-plane review record, not an agent instruction. An administrator can create a plan only from an open finding in a host's latest report. The plan snapshots what was observed, what the control expects, the human-readable guidance, affected file paths, and restart or reboot impact. Plans move through `pending_approval`, `approved`, `rejected`, or `canceled`; every transition records the actor, timestamp, reason where applicable, version, and audit event.
+
+Approval is intentionally non-executable. Every response states `execution_enabled: false` and `execution_status: not_supported`. The API refuses to approve a plan after a newer host report makes its source snapshot stale. No remediation plan is translated into an agent task, and the signed agent protocol remains limited to the allow-listed `audit` task. See [remediation planning](remediation-planning.md) for the state model and staged delivery boundary.
+
 ## Container topology
 
 The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API, PostgreSQL, and MinIO communicate only on an internal Docker network; neither data service has a published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.
@@ -71,6 +77,7 @@ The v0.6 scanner runs on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux
 - An enrolled agent persists the highest accepted policy version and rejects lower versions; restoring server policy creates a new higher version instead of rolling agents back.
 - Policy versions are immutable, and one effective group eliminates policy precedence ambiguity.
 - Remediation enforcement is hard-disabled in this release even when remediation intent is staged in a policy.
+- Remediation plan approval records a human decision only; it never creates an agent task or transmits executable content.
 - Scanner audit tasks may read privileged host state but cannot run package, service, account, permission, mount, firewall, kernel, or filesystem mutation commands; automated tests enforce this boundary.
 - Portable controls carry a unique semantic key, canonical finding category, and explicit benchmark-overlap metadata. Runtime and unit assertions reject duplicate IDs, duplicate semantics, unknown overlap references, and unmapped categories.
 - Ingestion token hashes—not raw tokens—are stored.

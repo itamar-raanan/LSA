@@ -137,6 +137,8 @@ Audit bundles retained by the agent under `/var/lib/lsa-agent/reports` consume a
 
 Every group has an effective policy. Policies can select controls by category and set their intended mode, allowing different fleets to have different audit scopes. Publishing a change creates an immutable version. The current safety lock permits audit execution only; write/remediation behavior remains disabled.
 
+Administrators can create and review non-executable remediation plans from current findings. Plans snapshot the observed state, expected state, guidance, affected paths, and operational impact, then record approval, rejection, or cancellation in the audit ledger. Approval does not create an agent task or change a host. See [remediation planning](docs/remediation-planning.md) for the state model and staged roadmap.
+
 Agents poll the platform rather than accepting inbound connections. Their signed heartbeats drive online, stale, and offline status. Each audit uses the shared scanner to report the same package and service inventory as offline mode. On-demand audits are persisted, allow-listed tasks consumed on the next poll—not remote shell commands.
 
 See [the agent guide](agent/README.md) for package installation, enrollment, transport behavior, and service operation, and [the report-format guide](docs/report-format.md) for normalized and signed report contracts.

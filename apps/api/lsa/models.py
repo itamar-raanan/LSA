@@ -502,6 +502,48 @@ class Finding(Base):
     report: Mapped[Report] = relationship(back_populates="findings")
 
 
+class RemediationPlan(Base):
+    __tablename__ = "remediation_plans"
+    __table_args__ = (
+        Index("ix_remediation_plans_tenant_status_created", "tenant_id", "status", "created_at"),
+        Index("ix_remediation_plans_host_control", "host_id", "control_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    finding_id: Mapped[str] = mapped_column(ForeignKey("findings.id"), index=True)
+    active_finding_id: Mapped[str | None] = mapped_column(
+        ForeignKey("findings.id"), nullable=True, unique=True
+    )
+    host_id: Mapped[str] = mapped_column(ForeignKey("hosts.id"), index=True)
+    report_id: Mapped[str] = mapped_column(ForeignKey("reports.id"), index=True)
+    control_id: Mapped[str] = mapped_column(String(160), index=True)
+    title: Mapped[str] = mapped_column(String(500))
+    category: Mapped[str] = mapped_column(String(80))
+    severity: Mapped[str] = mapped_column(String(20))
+    current_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    remediation_summary: Mapped[str] = mapped_column(Text)
+    affected_paths: Mapped[list[str]] = mapped_column(JSON, default=list)
+    reboot_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    service_restart: Mapped[bool] = mapped_column(Boolean, default=False)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending_approval", index=True)
+    version: Mapped[int] = mapped_column(default=1)
+    requested_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    approved_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    canceled_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 
