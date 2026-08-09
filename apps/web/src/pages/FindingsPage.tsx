@@ -37,21 +37,36 @@ export function FindingsPage() {
   const [category, setCategory] = useState<string | null>(searchParams.get('category'))
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
   const tableState = useSecurityTableUrlState({ clearOnSearch: ['finding'] })
-  const { data, error, loading, reload } = useApi(() => api.findings(), [])
-  const findings = useMemo(() => data ?? [], [data])
+  const [serverSearch, setServerSearch] = useState(tableState.query)
+  const facets = useApi(() => api.findingFacets(), [])
+  const { data, error, loading, reload } = useApi(
+    () => category ? api.findingPage({
+      search: serverSearch,
+      severity: severity === 'all' ? undefined : severity,
+      lifecycle: lifecycle === 'all' ? undefined : lifecycle,
+      category,
+      page: tableState.page,
+      pageSize: 10,
+      sort: tableState.sort?.id,
+      direction: tableState.sort?.direction,
+    }) : Promise.resolve({ rows: [], total: 0, page: 0, pageSize: 10 }),
+    [category, severity, lifecycle, serverSearch, tableState.page, tableState.sort?.id, tableState.sort?.direction],
+  )
+  const findings = useMemo(() => data?.rows ?? [], [data?.rows])
   const categories = useMemo(() => {
     const known = new Set(categoryCatalog.map((item) => item.id))
-    const discovered = [...new Set(findings.map((item) => item.category))]
-      .filter((item) => !known.has(item))
-      .map((item) => ({ id: item, name: item.replaceAll('_', ' '), detail: 'Scanner-reported control category' }))
+    const discovered = (facets.data?.categories ?? []).filter((item) => !known.has(item.category))
+      .map((item) => ({ id: item.category, name: item.category.replaceAll('_', ' '), detail: 'Scanner-reported control category' }))
     return [...categoryCatalog, ...discovered]
-  }, [findings])
+  }, [facets.data?.categories])
   const selectedCategory = categories.find((item) => item.id === category) ?? null
-  const categoryFindings = findings.filter((finding) => finding.category === category)
-  const lifecycleOptions = [...new Set(categoryFindings.map((finding) => finding.lifecycle))].sort()
-  const visible = categoryFindings.filter((finding) => (severity === 'all' || finding.severity === severity) && (lifecycle === 'all' || finding.lifecycle === lifecycle))
-  const affectedHosts = new Set(findings.map((finding) => finding.host_id)).size
-  const criticalCount = findings.filter((finding) => finding.severity === 'critical').length
+  const selectedFacet = facets.data?.categories.find((item) => item.category === category)
+  const lifecycleOptions = selectedFacet?.lifecycles ?? []
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setServerSearch(tableState.query.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [tableState.query])
 
   useEffect(() => {
     const nextSeverity = severityOrder.includes(requestedSeverity as Severity) ? requestedSeverity as Severity : 'all'
@@ -67,7 +82,14 @@ export function FindingsPage() {
       return
     }
     const requestedFinding = findings.find((finding) => finding.id === findingId)
-    if (requestedFinding && selectedFinding?.id !== requestedFinding.id) setSelectedFinding(requestedFinding)
+    if (requestedFinding) {
+      if (selectedFinding?.id !== requestedFinding.id) setSelectedFinding(requestedFinding)
+      return
+    }
+    if (selectedFinding?.id === findingId) return
+    let active = true
+    void api.finding(findingId).then((finding) => { if (active) setSelectedFinding(finding) }).catch(() => undefined)
+    return () => { active = false }
   }, [findings, searchParams, selectedFinding?.id])
 
   function updateParams(updates: Record<string, string | null>) {
@@ -110,11 +132,11 @@ export function FindingsPage() {
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Risk Queue" title="Security Findings" detail="Select a control category, prioritize its unresolved findings, and open an operator-ready remediation guide without losing your place in the queue." />
-    {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : <section className="panel overflow-hidden" aria-label="Findings workspace">
+    {facets.loading && !facets.data ? <LoadingState /> : facets.error || error ? <ErrorState message={facets.error ?? error ?? 'Unable To Load Findings'} retry={() => { void facets.reload(); void reload() }} /> : <section className="panel overflow-hidden" aria-label="Findings workspace">
       <div className="findings-summary-strip">
-        <div><span className="detail-label">Open Findings</span><strong>{findings.length}</strong></div>
-        <div><span className="detail-label">Critical</span><strong className={criticalCount ? 'text-rose-500' : ''}>{criticalCount}</strong></div>
-        <div><span className="detail-label">Affected Hosts</span><strong>{affectedHosts}</strong></div>
+        <div><span className="detail-label">Open Findings</span><strong>{facets.data?.total ?? 0}</strong></div>
+        <div><span className="detail-label">Critical</span><strong className={facets.data?.critical ? 'text-rose-500' : ''}>{facets.data?.critical ?? 0}</strong></div>
+        <div><span className="detail-label">Affected Hosts</span><strong>{facets.data?.affected_hosts ?? 0}</strong></div>
         <div><span className="detail-label">Control Categories</span><strong>{categories.length}</strong></div>
       </div>
 
@@ -123,12 +145,13 @@ export function FindingsPage() {
           <div className="findings-category-heading"><div><p className="section-label">Control Categories</p><p>Choose one category to inspect its queue.</p></div><FolderOpen size={18} /></div>
           <nav className="findings-category-list">
             {categories.map((item) => {
-              const categoryItems = findings.filter((finding) => finding.category === item.id)
-              const critical = categoryItems.filter((finding) => finding.severity === 'critical').length
+              const categoryFacet = facets.data?.categories.find((facet) => facet.category === item.id)
+              const count = categoryFacet?.count ?? 0
+              const critical = categoryFacet?.critical ?? 0
               const selected = category === item.id
               return <button key={item.id} className={`finding-category-item ${selected ? 'finding-category-item-active' : ''}`} aria-pressed={selected} onClick={() => selectCategory(item.id)}>
                 <span className="min-w-0 flex-1"><strong>{item.name}</strong><small>{item.detail}</small></span>
-                <span className="finding-category-count"><b>{categoryItems.length}</b>{critical > 0 && <em>{critical} Critical</em>}</span>
+                <span className="finding-category-count"><b>{count}</b>{critical > 0 && <em>{critical} Critical</em>}</span>
               </button>
             })}
           </nav>
@@ -142,11 +165,11 @@ export function FindingsPage() {
           </div> : <>
             <header className="findings-queue-header">
               <div><p className="section-label">{selectedCategory.name}</p><h2>{selectedCategory.name} Findings</h2><p>{selectedCategory.detail}. Showing findings from every host's latest accepted report.</p></div>
-              <span className="settings-state">{visible.length} Of {categoryFindings.length} Visible</span>
+              <span className="settings-state">{data?.total ?? 0} Matching</span>
             </header>
             <SecurityTable
               key={selectedCategory.id}
-              rows={visible}
+              rows={findings}
               columns={columns}
               ariaLabel={`${selectedCategory.name} Findings`}
               searchText={(finding) => `${finding.title} ${finding.control_id} ${finding.hostname} ${finding.module} ${finding.actual ?? ''}`}
@@ -158,13 +181,13 @@ export function FindingsPage() {
               onQueryChange={(value) => { setSelectedFinding(null); tableState.setQuery(value) }}
               sort={tableState.sort}
               onSortChange={tableState.setSort}
-              page={tableState.page}
-              onPageChange={tableState.setPage}
+              serverPagination={{ page: data?.page ?? tableState.page, pageSize: data?.pageSize ?? 10, totalRows: data?.total ?? 0, onPageChange: tableState.setPage }}
               emptyTitle="No Findings Match This View"
               emptyDetail="Adjust the severity, lifecycle, or search terms. The category remains part of the scanner catalog."
               embedded
               toolbarActions={<><select className="select-input min-h-9" aria-label="Filter by severity" value={severity} onChange={(event) => { const value = event.target.value as Severity | 'all'; setSeverity(value); updateParams({ severity: value, finding: null }) }}><option value="all">All Severities</option>{severityOrder.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select><select className="select-input min-h-9" aria-label="Filter by lifecycle" value={lifecycle} onChange={(event) => { const value = event.target.value; setLifecycle(value); updateParams({ lifecycle: value, finding: null }) }}><option value="all">All Lifecycles</option>{lifecycleOptions.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></>}
             />
+            {loading && <p className="px-5 py-2 text-xs text-stone-500" role="status">Updating Findings…</p>}
           </>}
         </div>
       </div>

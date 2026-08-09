@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FindingsPage } from './FindingsPage'
@@ -13,9 +13,24 @@ const finding = {
   id: 'finding-1', host_id: host.id, hostname: host.hostname, report_id: 'report-1', control_id: 'LSA-SSH-1', module: 'cis', category: 'ssh', title: 'Disable root login', severity: 'high', status: 'fail', lifecycle: 'new', expected: 'PermitRootLogin no', actual: 'PermitRootLogin yes in /etc/ssh/sshd_config', remediation_summary: 'Disable direct root SSH access after confirming sudo access for an administrative account.', remediation_commands: ["printf '%s\\n' 'PermitRootLogin no' > /etc/ssh/sshd_config.d/10-lsa-root-login.conf", 'systemctl reload ssh'], verification_commands: ['sshd -T | grep ^permitrootlogin'], reboot_required: false, service_restart: true,
 }
 
+const criticalFinding = {
+  ...finding,
+  id: 'finding-2',
+  control_id: 'LSA-SSH-2',
+  title: 'Disable weak SSH ciphers',
+  severity: 'critical',
+  lifecycle: 'persistent',
+  actual: 'aes128-cbc enabled',
+}
+
 const apiMock = vi.hoisted(() => ({
   hosts: vi.fn(),
+  hostPage: vi.fn(),
+  hostFacets: vi.fn(),
   findings: vi.fn(),
+  findingPage: vi.fn(),
+  findingFacets: vi.fn(),
+  finding: vi.fn(),
   deleteHost: vi.fn(),
   host: vi.fn(),
   applications: vi.fn(),
@@ -33,7 +48,12 @@ describe('Fleet console experience', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     apiMock.hosts.mockResolvedValue([host])
+    apiMock.hostPage.mockResolvedValue({ rows: [host], total: 1, page: 0, pageSize: 10 })
+    apiMock.hostFacets.mockResolvedValue({ total: 1, critical: 0, healthy: 1, stale: 0 })
     apiMock.findings.mockResolvedValue([finding])
+    apiMock.findingPage.mockResolvedValue({ rows: [finding], total: 1, page: 0, pageSize: 10 })
+    apiMock.findingFacets.mockResolvedValue({ total: 1, critical: 0, affected_hosts: 1, categories: [{ category: 'ssh', count: 1, critical: 0, lifecycles: ['new'] }] })
+    apiMock.finding.mockResolvedValue(finding)
     apiMock.deleteHost.mockResolvedValue(undefined)
     apiMock.host.mockResolvedValue({ ...host, application_count: 2 })
     apiMock.applications.mockResolvedValue([
@@ -65,13 +85,13 @@ describe('Fleet console experience', () => {
     expect(screen.getAllByRole('button', { pressed: false })).toHaveLength(12)
     expect(screen.queryByText('Disable root login')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /SSH/ }))
-    expect(screen.getByText('Disable root login')).toBeInTheDocument()
+    expect(await screen.findByText('Disable root login')).toBeInTheDocument()
   })
 
   it('presents remediation as a current-to-required operator guide', async () => {
     renderFindings()
     fireEvent.click(await screen.findByRole('button', { name: /SSH/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Disable root login/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Disable root login/ }))
     expect(screen.getByRole('complementary', { name: 'Disable root login details' })).toBeInTheDocument()
     expect(screen.getByText('Current State')).toBeInTheDocument()
     expect(screen.getByText('Required State')).toBeInTheDocument()
@@ -95,24 +115,17 @@ describe('Fleet console experience', () => {
   })
 
   it('searches and filters a category queue without hiding the category catalog', async () => {
-    apiMock.findings.mockResolvedValueOnce([finding, {
-      ...finding,
-      id: 'finding-2',
-      control_id: 'LSA-SSH-2',
-      title: 'Disable weak SSH ciphers',
-      severity: 'critical',
-      lifecycle: 'persistent',
-      actual: 'aes128-cbc enabled',
-    }])
+    apiMock.findingPage.mockImplementation((options) => Promise.resolve({ rows: options.severity === 'critical' ? [criticalFinding] : [finding, criticalFinding], total: options.severity === 'critical' ? 1 : 2, page: 0, pageSize: 10 }))
+    apiMock.findingFacets.mockResolvedValueOnce({ total: 2, critical: 1, affected_hosts: 1, categories: [{ category: 'ssh', count: 2, critical: 1, lifecycles: ['new', 'persistent'] }] })
     renderFindings()
 
     fireEvent.click(await screen.findByRole('button', { name: /SSH/ }))
-    expect(screen.getByRole('table', { name: 'SSH Findings' })).toBeInTheDocument()
-    expect(screen.getByText('Disable root login')).toBeInTheDocument()
+    expect(await screen.findByRole('table', { name: 'SSH Findings' })).toBeInTheDocument()
+    expect(await screen.findByText('Disable root login')).toBeInTheDocument()
     expect(screen.getByText('Disable weak SSH ciphers')).toBeInTheDocument()
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Filter by severity' }), { target: { value: 'critical' } })
-    expect(screen.queryByText('Disable root login')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Disable root login')).not.toBeInTheDocument())
     expect(screen.getByText('Disable weak SSH ciphers')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Accounts/ })).toBeInTheDocument()
   })

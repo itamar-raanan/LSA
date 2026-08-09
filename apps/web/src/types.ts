@@ -26,6 +26,34 @@ export interface Host {
   finding_counts: Record<Severity, number>
 }
 
+export interface HostListFacets {
+  total: number
+  critical: number
+  healthy: number
+  stale: number
+}
+
+export interface FindingCategoryFacet {
+  category: string
+  count: number
+  critical: number
+  lifecycles: string[]
+}
+
+export interface FindingListFacets {
+  total: number
+  critical: number
+  affected_hosts: number
+  categories: FindingCategoryFacet[]
+}
+
+export interface PagedResult<T> {
+  rows: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface ApplicationInventoryItem {
   id: string
   host_id: string

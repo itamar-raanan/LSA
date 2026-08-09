@@ -48,6 +48,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["DELETE", "GET", "PATCH", "POST", "PUT", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["X-Total-Count", "X-Page", "X-Page-Size"],
 )
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(settings_api.router, prefix="/api/v1")

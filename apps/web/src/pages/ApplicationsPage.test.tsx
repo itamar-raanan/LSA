@@ -4,19 +4,24 @@ import { vi } from 'vitest'
 import { AuthContext } from '../auth/context'
 import { ApplicationsPage } from './ApplicationsPage'
 
-const { applicationEstate } = vi.hoisted(() => ({ applicationEstate: vi.fn() }))
+const { applicationEstatePage } = vi.hoisted(() => ({ applicationEstatePage: vi.fn() }))
 
-applicationEstate.mockResolvedValue({
-  metrics: { unique_applications: 2, package_count: 1, service_count: 1, installation_count: 3, reporting_hosts: 2, version_drift_count: 1 },
-  applications: [
-    { kind: 'package', name: 'openssl', source: 'dpkg', publisher: 'Debian', description: 'TLS toolkit', host_count: 2, version_count: 2, running_host_count: 0, enabled_host_count: 0, vulnerability_count: 1, known_exploited_count: 1, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-08-01T00:00:00Z' },
-    { kind: 'service', name: 'ssh.service', source: 'systemd', publisher: null, description: 'OpenSSH daemon', host_count: 1, version_count: 0, running_host_count: 1, enabled_host_count: 1, vulnerability_count: 0, known_exploited_count: 0, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-08-01T00:00:00Z' },
-  ],
+applicationEstatePage.mockResolvedValue({
+  data: {
+    metrics: { unique_applications: 2, package_count: 1, service_count: 1, installation_count: 3, reporting_hosts: 2, version_drift_count: 1 },
+    applications: [
+      { kind: 'package', name: 'openssl', source: 'dpkg', publisher: 'Debian', description: 'TLS toolkit', host_count: 2, version_count: 2, running_host_count: 0, enabled_host_count: 0, vulnerability_count: 1, known_exploited_count: 1, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-08-01T00:00:00Z' },
+      { kind: 'service', name: 'ssh.service', source: 'systemd', publisher: null, description: 'OpenSSH daemon', host_count: 1, version_count: 0, running_host_count: 1, enabled_host_count: 1, vulnerability_count: 0, known_exploited_count: 0, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-08-01T00:00:00Z' },
+    ],
+  },
+  total: 2,
+  page: 0,
+  pageSize: 10,
 })
 
 vi.mock('../api/client', () => ({
   api: {
-    applicationEstate,
+    applicationEstatePage,
     applicationCorrelation: vi.fn().mockResolvedValue([
       { application_id: 'app-1', host_id: 'host-1', hostname: 'web-01', fqdn: 'web-01.example.test', os_family: 'debian', os_version: '13', environment: 'production', security_score: 84, compliance_score: 91, version: '3.0.14-1', architecture: 'amd64', status: 'installed', enabled: null, running: null, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-08-01T00:00:00Z' },
       { application_id: 'app-2', host_id: 'host-2', hostname: 'db-02', fqdn: 'db-02.example.test', os_family: 'debian', os_version: '13', environment: 'production', security_score: 72, compliance_score: 86, version: '3.0.15-1', architecture: 'amd64', status: 'installed', enabled: null, running: null, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-08-01T00:00:00Z' },
@@ -57,19 +62,28 @@ describe('ApplicationsPage', () => {
     expect(screen.queryByRole('link', { name: /db-02/ })).not.toBeInTheDocument()
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Close application investigation' })) })
-    expect(screen.queryByRole('complementary', { name: 'openssl investigation' })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'openssl investigation' })).not.toBeInTheDocument())
 
+    applicationEstatePage.mockResolvedValueOnce({
+      data: {
+        metrics: { unique_applications: 2, package_count: 1, service_count: 1, installation_count: 3, reporting_hosts: 2, version_drift_count: 1 },
+        applications: [{ kind: 'package', name: 'openssl', source: 'dpkg', publisher: 'Debian', description: 'TLS toolkit', host_count: 2, version_count: 2, running_host_count: 0, enabled_host_count: 0, vulnerability_count: 1, known_exploited_count: 1, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-08-01T00:00:00Z' }],
+      },
+      total: 1,
+      page: 0,
+      pageSize: 10,
+    })
     await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Filter Application Risk' }), { target: { value: 'kev' } }) })
+    await waitFor(() => expect(screen.queryByRole('button', { name: /ssh\.service/ })).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: /openssl/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /ssh\.service/ })).not.toBeInTheDocument()
   })
 
   it('restores search and investigation context from a console deep link', async () => {
-    applicationEstate.mockClear()
+    applicationEstatePage.mockClear()
     render(<AuthContext.Provider value={auth}><MemoryRouter initialEntries={['/applications?search=openssl&application=package%3Adpkg%3Aopenssl']}><ApplicationsPage /></MemoryRouter></AuthContext.Provider>)
 
     expect(await screen.findByRole('complementary', { name: 'openssl investigation' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Search table' })).toHaveValue('openssl')
-    await waitFor(() => expect(applicationEstate).toHaveBeenCalledWith('openssl', ''))
+    await waitFor(() => expect(applicationEstatePage).toHaveBeenCalledWith(expect.objectContaining({ search: 'openssl', kind: '', page: 0, pageSize: 10 })))
   })
 })

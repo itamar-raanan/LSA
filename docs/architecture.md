@@ -31,6 +31,12 @@ Each agent belongs to exactly one group. Each group points to one policy, and ev
 
 The canonical contract lives in `packages/contracts/report-v1.schema.json`. A report ID is immutable and globally unique. Host UUIDs are platform-generated; a hash of `/etc/machine-id` provides a secondary binding signal without exposing the raw machine identifier.
 
+## Data workspace API
+
+The Hosts, Findings, and Applications collection endpoints support optional database-side workspace parameters: `page`, `page_size`, `search`, `sort`, `direction`, and endpoint-specific filters. Paged requests keep the established JSON body shape and expose `X-Total-Count`, `X-Page`, and `X-Page-Size`; callers that omit pagination continue to receive the original complete or bounded collection response.
+
+Lightweight `/hosts/facets` and `/findings/facets` endpoints provide fleet risk totals and finding category aggregates independently of the current page. This keeps category rails, risk tabs, and headline metrics accurate without downloading every record. Management-to-API CORS explicitly exposes the pagination headers, and composite database indexes cover the tenant, active-state, category, severity, score, and observation fields used by analyst queues.
+
 ## Container topology
 
 The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API, PostgreSQL, and MinIO communicate only on an internal Docker network; neither data service has a published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.

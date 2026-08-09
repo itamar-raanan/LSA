@@ -29,7 +29,21 @@ export function HostsPage() {
   const [enrolling, setEnrolling] = useState(false)
   const [selected, setSelected] = useState<Host | null>(null)
   const tableState = useSecurityTableUrlState({ clearOnSearch: ['host'] })
-  const { data, error, loading, reload } = useApi(() => api.hosts(), [])
+  const [serverSearch, setServerSearch] = useState(tableState.query)
+  const facets = useApi(() => api.hostFacets(), [])
+  const { data, error, loading, reload } = useApi(() => api.hostPage({
+    search: serverSearch,
+    risk: risk === 'all' ? undefined : risk,
+    page: tableState.page,
+    pageSize: 10,
+    sort: tableState.sort?.id,
+    direction: tableState.sort?.direction,
+  }), [serverSearch, risk, tableState.page, tableState.sort?.id, tableState.sort?.direction])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setServerSearch(tableState.query.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [tableState.query])
 
   useEffect(() => {
     const nextRisk = requestedRisk === 'critical' || requestedRisk === 'healthy' || requestedRisk === 'stale' ? requestedRisk : 'all'
@@ -38,10 +52,17 @@ export function HostsPage() {
 
   useEffect(() => {
     const hostId = searchParams.get('host')
-    if (!hostId || !data?.length) return
-    const requestedHost = data.find((host) => host.id === hostId)
-    if (requestedHost && selected?.id !== requestedHost.id) setSelected(requestedHost)
-  }, [data, searchParams, selected?.id])
+    if (!hostId) return
+    const requestedHost = data?.rows.find((host) => host.id === hostId)
+    if (requestedHost) {
+      if (selected?.id !== requestedHost.id) setSelected(requestedHost)
+      return
+    }
+    if (selected?.id === hostId) return
+    let active = true
+    void api.host(hostId).then((host) => { if (active) setSelected(host) }).catch(() => undefined)
+    return () => { active = false }
+  }, [data?.rows, searchParams, selected?.id])
 
   function updateRisk(nextRisk: 'all' | 'critical' | 'healthy' | 'stale') {
     setRisk(nextRisk)
@@ -67,12 +88,7 @@ export function HostsPage() {
     next.delete('host')
     setSearchParams(next, { replace: true })
   }
-  const hosts = data?.filter((host) => {
-    if (risk === 'critical') return host.finding_counts.critical > 0
-    if (risk === 'healthy') return host.finding_counts.critical === 0 && (host.security_score ?? 0) >= 80
-    if (risk === 'stale') return hostStatus(host).tone !== 'online'
-    return true
-  }) ?? []
+  const hosts = data?.rows ?? []
 
   const columns: SecurityColumn<Host>[] = [
     { id: 'asset', header: 'Asset', priority: 'primary', hideable: false, sortValue: (host) => host.hostname, exportValue: (host) => host.hostname, cell: (host) => <button className="asset-identity" aria-label={host.hostname} onClick={() => openHost(host)}><span className="asset-icon"><Server size={16} /></span><span><strong>{host.hostname}</strong><small>{host.fqdn ?? host.ip_addresses[0] ?? 'No address reported'}</small></span></button> },
@@ -86,11 +102,12 @@ export function HostsPage() {
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Asset management" title="Linux assets" detail="Inventory, sensor health, exposure, and the latest accepted posture for every reporting endpoint." action={<Button variant="primary" onClick={() => setEnrolling(true)}><Plus size={15} />Enroll asset</Button>} />
-    {loading ? <LoadingState /> : error ? <ErrorState message={error} retry={reload} /> : !data?.length ? <EmptyState title="No assets registered" detail="An asset appears automatically when its first authenticated report or agent check-in is accepted." /> : <section className="soc-panel overflow-hidden">
-      <div className="asset-filter-row"><div className="filter-tabs" role="group" aria-label="Asset risk filter">{(['all', 'critical', 'healthy', 'stale'] as const).map((value) => <button key={value} className={risk === value ? 'active' : ''} onClick={() => updateRisk(value)}>{value === 'all' ? 'All Assets' : value === 'critical' ? 'Critical Exposure' : value === 'healthy' ? 'Healthy' : 'Stale Posture'}<span>{value === 'all' ? data.length : value === 'critical' ? data.filter((host) => host.finding_counts.critical > 0).length : value === 'healthy' ? data.filter((host) => host.finding_counts.critical === 0 && (host.security_score ?? 0) >= 80).length : data.filter((host) => hostStatus(host).tone !== 'online').length}</span></button>)}</div></div>
-      <SecurityTable rows={hosts} columns={columns} query={tableState.query} onQueryChange={(value) => { setSelected(null); tableState.setQuery(value) }} sort={tableState.sort} onSortChange={tableState.setSort} page={tableState.page} onPageChange={tableState.setPage} searchText={(host) => `${host.hostname} ${host.fqdn ?? ''} ${host.ip_addresses.join(' ')} ${host.operating_system} ${host.tags.environment ?? ''}`} searchPlaceholder="Search hostname, IP, OS, or environment" filename="lsa-assets.csv" emptyTitle="No assets match this view" embedded />
+    {(loading && !data) || (facets.loading && !facets.data) ? <LoadingState /> : error || facets.error ? <ErrorState message={error ?? facets.error ?? 'Unable To Load Assets'} retry={() => { void reload(); void facets.reload() }} /> : facets.data?.total === 0 ? <EmptyState title="No assets registered" detail="An asset appears automatically when its first authenticated report or agent check-in is accepted." /> : <section className="soc-panel overflow-hidden">
+      <div className="asset-filter-row"><div className="filter-tabs" role="group" aria-label="Asset risk filter">{(['all', 'critical', 'healthy', 'stale'] as const).map((value) => <button key={value} className={risk === value ? 'active' : ''} onClick={() => updateRisk(value)}>{value === 'all' ? 'All Assets' : value === 'critical' ? 'Critical Exposure' : value === 'healthy' ? 'Healthy' : 'Stale Posture'}<span>{value === 'all' ? facets.data?.total ?? 0 : value === 'critical' ? facets.data?.critical ?? 0 : value === 'healthy' ? facets.data?.healthy ?? 0 : facets.data?.stale ?? 0}</span></button>)}</div></div>
+      <SecurityTable rows={hosts} columns={columns} query={tableState.query} onQueryChange={(value) => { setSelected(null); tableState.setQuery(value) }} sort={tableState.sort} onSortChange={tableState.setSort} searchText={(host) => `${host.hostname} ${host.fqdn ?? ''} ${host.ip_addresses.join(' ')} ${host.operating_system} ${host.tags.environment ?? ''}`} searchPlaceholder="Search hostname, IP, OS, or environment" filename="lsa-assets.csv" emptyTitle="No assets match this view" embedded serverPagination={{ page: data?.page ?? tableState.page, pageSize: data?.pageSize ?? 10, totalRows: data?.total ?? 0, onPageChange: tableState.setPage }} />
+      {loading && <p className="px-5 py-2 text-xs text-stone-500" role="status">Updating Assets…</p>}
     </section>}
-    {enrolling && <EnrollHostPanel close={() => setEnrolling(false)} created={() => void reload()} />}
-    {selected && <HostQuickView key={selected.id} host={selected} close={closeHost} deleted={() => { closeHost(); void reload() }} />}
+    {enrolling && <EnrollHostPanel close={() => setEnrolling(false)} created={() => { void reload(); void facets.reload() }} />}
+    {selected && <HostQuickView key={selected.id} host={selected} close={closeHost} deleted={() => { closeHost(); void reload(); void facets.reload() }} />}
   </div>
 }

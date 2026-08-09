@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { CaretDown, CaretLeft, CaretRight, CaretUpDown, DownloadSimple, FunnelSimple, MagnifyingGlass, SlidersHorizontal } from '@phosphor-icons/react'
-import { Fragment, type ReactNode, useMemo, useState } from 'react'
+import { Fragment, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Button } from '../ui/Button'
 
 export interface SecurityColumn<T> {
@@ -110,6 +110,10 @@ export function SecurityTable<T extends { id: string }>({
   const displayedSelectable = displayed.filter(isRowSelectable)
   const pageSelected = displayedSelectable.length > 0 && displayedSelectable.every((row) => selectedRowIds?.has(row.id))
 
+  useEffect(() => {
+    if (serverPagination && page !== safePage) serverPagination.onPageChange(safePage)
+  }, [page, safePage, serverPagination])
+
   function updateQuery(value: string) {
     setInternalQuery(value)
     onQueryChange?.(value)
@@ -171,7 +175,7 @@ export function SecurityTable<T extends { id: string }>({
             {columns.filter((column) => column.hideable !== false).map((column) => <DropdownMenu.CheckboxItem key={column.id} checked={!hidden.has(column.id)} onCheckedChange={() => setHidden((current) => { const next = new Set(current); if (next.has(column.id)) next.delete(column.id); else next.add(column.id); return next })} className="soc-menu-item"><span className="soc-menu-check">{!hidden.has(column.id) ? '✓' : ''}</span>{column.header}</DropdownMenu.CheckboxItem>)}
           </DropdownMenu.Content></DropdownMenu.Portal>
         </DropdownMenu.Root>
-        <Button size="sm" onClick={exportCsv}><DownloadSimple size={14} />Export</Button>
+        <Button size="sm" onClick={exportCsv}><DownloadSimple size={14} />{serverPagination ? 'Export Page' : 'Export'}</Button>
       </div>
     </div>
     <div className="security-table-scroll"><table className="security-table" aria-label={ariaLabel}>
