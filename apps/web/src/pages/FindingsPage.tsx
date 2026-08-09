@@ -1,6 +1,6 @@
 import { ArrowRight, FolderOpen, ShieldWarning } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { FindingDetailPanel } from '../components/FindingDetailPanel'
 import { PageHeader } from '../components/PageHeader'
@@ -11,6 +11,7 @@ import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
 import { withInvestigationReturn } from '../lib/investigationContext'
 import type { Finding, Severity } from '../types'
+import { RemediationReviewPage } from './RemediationReviewPage'
 
 const categoryCatalog = [
   { id: 'accounts', name: 'Accounts', detail: 'Local identities and privileged UIDs' },
@@ -30,6 +31,11 @@ const categoryCatalog = [
 const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
 
 export function FindingsPage() {
+  const [searchParams] = useSearchParams()
+  return searchParams.get('view') === 'remediation' ? <RemediationReviewPage /> : <FindingsQueuePage />
+}
+
+function FindingsQueuePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const requestedSeverity = searchParams.get('severity')
@@ -134,6 +140,10 @@ export function FindingsPage() {
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Risk Queue" title="Security Findings" detail="Select a control category, prioritize its unresolved findings, and open an operator-ready remediation guide without losing your place in the queue." />
+    <nav className="findings-view-tabs" aria-label="Security Finding Workspaces">
+      <Link className="findings-view-tab findings-view-tab-active" to="/findings" aria-current="page">Findings Queue</Link>
+      <Link className="findings-view-tab" to="/findings?view=remediation">Remediation Review</Link>
+    </nav>
     {facets.loading && !facets.data ? <LoadingState variant="table" /> : facets.error || error ? <ErrorState message={facets.error ?? error ?? 'Unable To Load Findings'} retry={() => { void facets.reload(); void reload() }} /> : <section className="panel overflow-hidden" aria-label="Findings workspace">
       <div className="findings-summary-strip">
         <div><span className="detail-label">Open Findings</span><strong>{facets.data?.total ?? 0}</strong></div>

@@ -1,15 +1,21 @@
 import { ArrowSquareOut, X } from '@phosphor-icons/react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { api } from '../api/client'
+import { useAuth } from '../auth/useAuth'
 import type { Finding } from '../types'
 import { RemediationGuide } from './RemediationGuide'
 import { SeverityBadge } from './SeverityBadge'
 
 export function FindingDetailPanel({ finding, close, hostHref }: { finding: Finding; close: () => void; hostHref: string }) {
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const reduceMotion = useReducedMotion()
   const closeButton = useRef<HTMLButtonElement>(null)
+  const [planning, setPlanning] = useState(false)
+  const [planningError, setPlanningError] = useState('')
   const motionProps = reduceMotion ? {} : {
     initial: { opacity: 0, transform: 'translateX(18px)' },
     animate: { opacity: 1, transform: 'translateX(0)' },
@@ -23,6 +29,20 @@ export function FindingDetailPanel({ finding, close, hostHref }: { finding: Find
     window.addEventListener('keydown', handleKeyDown)
     return () => { window.removeEventListener('keydown', handleKeyDown); previousFocus?.focus() }
   }, [close])
+
+  async function requestReview() {
+    setPlanning(true)
+    setPlanningError('')
+    try {
+      const plan = await api.createRemediationPlan(finding.id)
+      close()
+      navigate(`/findings?view=remediation&plan=${encodeURIComponent(plan.id)}`)
+    } catch (reason) {
+      setPlanningError(reason instanceof Error ? reason.message : 'The Change Review Could Not Be Requested')
+    } finally {
+      setPlanning(false)
+    }
+  }
 
   return createPortal(<motion.aside {...motionProps} className="finding-detail-panel" aria-label={`${finding.title} details`}>
     <header className="finding-detail-header">
@@ -40,8 +60,11 @@ export function FindingDetailPanel({ finding, close, hostHref }: { finding: Find
     </div>
     <div className="finding-detail-body"><RemediationGuide finding={finding} /></div>
     <footer className="finding-detail-footer">
-      <span>Review and apply changes through your approved change process.</span>
-      <Link className="button-secondary min-h-9 shrink-0" to={hostHref}>Open Host Record <ArrowSquareOut size={15} /></Link>
+      <span>{planningError || 'Review And Apply Changes Through Your Approved Change Process.'}</span>
+      <div className="finding-detail-actions">
+        <Link className="button-secondary min-h-9 shrink-0" to={hostHref}>Open Host Record <ArrowSquareOut size={15} /></Link>
+        {user?.role === 'admin' && <button className="button-primary min-h-9 shrink-0" disabled={planning} onClick={() => void requestReview()}>{planning ? 'Requesting Review' : 'Request Change Review'}</button>}
+      </div>
     </footer>
   </motion.aside>, document.body)
 }
