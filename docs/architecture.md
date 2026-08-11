@@ -43,6 +43,8 @@ Remediation begins as a management-plane review record, not an agent instruction
 
 Approval is intentionally non-executable. Every response states `execution_enabled: false` and `execution_status: not_supported`. The API refuses to approve a plan after a newer host report makes its source snapshot stale. No remediation plan is translated into an agent task, and the signed agent protocol remains limited to the allow-listed `audit` task. See [remediation planning](remediation-planning.md) for the state model and staged delivery boundary.
 
+The management API also loads a versioned declarative remediation action catalog at startup. Catalog entries use a closed vocabulary of typed configuration, reload, validation, backup, and rollback operations; executable command or script payload fields are rejected. A supported plan snapshots its matching action ID, version, normalized document, and SHA-256 digest. Snapshot integrity is checked again at approval, but no action is sent through the agent gateway or converted into work.
+
 ## Container topology
 
 The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API, PostgreSQL, and MinIO communicate only on an internal Docker network; neither data service has a published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.

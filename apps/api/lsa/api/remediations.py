@@ -10,7 +10,17 @@ from lsa.api.admin import require_admin
 from lsa.database import get_db
 from lsa.dependencies import current_user
 from lsa.models import AuditEvent, Finding, FindingStatus, Host, RemediationPlan, Report, User, now_utc
-from lsa.schemas import RemediationPlanCreate, RemediationPlanDecision, RemediationPlanResponse
+from lsa.schemas import (
+    RemediationActionResponse,
+    RemediationPlanCreate,
+    RemediationPlanDecision,
+    RemediationPlanResponse,
+)
+from lsa.services.remediation_catalog import (
+    RemediationCatalogError,
+    match_remediation_action,
+    validate_action_snapshot,
+)
 
 
 router = APIRouter(prefix="/remediation-plans", tags=["remediation planning"])
@@ -68,6 +78,24 @@ def _user_name(db: Session, user_id: str | None) -> str | None:
     return user.display_name if user is not None else "Unknown user"
 
 
+def _stored_action(plan: RemediationPlan) -> RemediationActionResponse | None:
+    fields = (plan.action_id, plan.action_version, plan.action_digest, plan.action_snapshot)
+    if not any(value is not None for value in fields):
+        if plan.action_catalog_status == "matched":
+            raise RemediationCatalogError("Matched remediation plan has no action snapshot")
+        return None
+    if plan.action_catalog_status != "matched":
+        raise RemediationCatalogError("Remediation plan action snapshot is not marked as matched")
+    if any(value is None for value in fields):
+        raise RemediationCatalogError("Remediation plan contains an incomplete action snapshot")
+    action = validate_action_snapshot(plan.action_snapshot, plan.action_digest)
+    if action.action_id != plan.action_id or action.version != plan.action_version:
+        raise RemediationCatalogError("Remediation plan action identity does not match its snapshot")
+    if plan.control_id not in action.control_ids:
+        raise RemediationCatalogError("Remediation plan control does not match its action snapshot")
+    return action
+
+
 def _serialize(db: Session, plan: RemediationPlan) -> RemediationPlanResponse:
     host = db.get(Host, plan.host_id)
     latest_report_id = _latest_report_id(db, plan.tenant_id, plan.host_id)
@@ -79,6 +107,7 @@ def _serialize(db: Session, plan: RemediationPlan) -> RemediationPlanResponse:
             Finding.status.in_(OPEN_FINDING_STATUSES),
         )
     ) if latest_report_id is not None else None
+    action = _stored_action(plan)
     return RemediationPlanResponse(
         id=plan.id,
         finding_id=plan.finding_id,
@@ -114,6 +143,8 @@ def _serialize(db: Session, plan: RemediationPlan) -> RemediationPlanResponse:
         cancellation_reason=plan.cancellation_reason,
         source_is_current=plan.report_id == latest_report_id,
         finding_still_open=current_finding is not None,
+        action_catalog_status=plan.action_catalog_status,
+        action=action,
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )
@@ -166,7 +197,7 @@ def create_remediation_plan(
     db: Session = Depends(get_db),
 ) -> RemediationPlanResponse:
     require_admin(user)
-    finding, _ = _finding_for_plan(db, user, request.finding_id)
+    finding, host = _finding_for_plan(db, user, request.finding_id)
     duplicate = db.scalar(
         select(RemediationPlan).where(
             RemediationPlan.tenant_id == user.tenant_id,
@@ -176,6 +207,12 @@ def create_remediation_plan(
     )
     if duplicate is not None:
         raise HTTPException(status_code=409, detail="An active remediation plan already exists for this finding")
+    action_catalog_status, action = match_remediation_action(
+        finding.control_id,
+        host.os_family,
+        host.os_version,
+    )
+    action_snapshot = action.model_dump(mode="json") if action is not None else None
     plan = RemediationPlan(
         tenant_id=user.tenant_id,
         finding_id=finding.id,
@@ -190,6 +227,11 @@ def create_remediation_plan(
         required_state=finding.expected,
         remediation_summary=finding.remediation_summary or "Review the control guidance and document the intended configuration change.",
         affected_paths=_extract_paths(finding),
+        action_id=action.action_id if action is not None else None,
+        action_version=action.version if action is not None else None,
+        action_digest=action.digest if action is not None else None,
+        action_snapshot=action_snapshot,
+        action_catalog_status=action_catalog_status,
         reboot_required=finding.reboot_required,
         service_restart=finding.service_restart,
         rationale=request.rationale,
@@ -204,7 +246,19 @@ def create_remediation_plan(
             status_code=409,
             detail="An active remediation plan already exists for this finding",
         ) from exc
-    _audit(db, user, plan, "remediation_plan.requested", {"execution_enabled": False})
+    _audit(
+        db,
+        user,
+        plan,
+        "remediation_plan.requested",
+        {
+            "execution_enabled": False,
+            "action_catalog_status": action_catalog_status,
+            "action_id": action.action_id if action is not None else None,
+            "action_version": action.version if action is not None else None,
+            "action_digest": action.digest if action is not None else None,
+        },
+    )
     db.commit()
     return _serialize(db, plan)
 
@@ -230,6 +284,7 @@ def approve_remediation_plan(
         raise HTTPException(status_code=409, detail="Only a pending plan can be approved")
     if plan.report_id != _latest_report_id(db, user.tenant_id, plan.host_id):
         raise HTTPException(status_code=409, detail="The source finding is stale; create a plan from the latest report")
+    _stored_action(plan)
     plan.status = "approved"
     plan.approved_by = user.id
     plan.approved_at = now_utc()

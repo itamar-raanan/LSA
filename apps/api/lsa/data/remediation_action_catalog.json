@@ -1,0 +1,148 @@
+{
+  "catalog_schema_version": "1.0",
+  "actions": [
+    {
+      "action_id": "linux.ssh.permit-root-login.disabled",
+      "version": 1,
+      "status": "reviewed",
+      "control_ids": ["CIS-DEBIAN13-5.1.21", "LSA-HEALTH-SSH-002"],
+      "title": "Disable Direct Root SSH Login",
+      "description": "Set the effective OpenSSH PermitRootLogin value to no after alternate administrative access is confirmed.",
+      "supported_systems": [
+        {"family": "debian", "versions": ["12", "13"]},
+        {"family": "ubuntu", "versions": ["22.04", "24.04"]},
+        {"family": "redhat", "versions": ["8", "9"]},
+        {"family": "rocky", "versions": ["8", "9"]},
+        {"family": "almalinux", "versions": ["8", "9"]},
+        {"family": "oraclelinux", "versions": ["8", "9"]},
+        {"family": "centos", "versions": ["8", "9"]}
+      ],
+      "risk": "high",
+      "parameters": [
+        {"name": "desired_value", "type": "enum", "required": true, "default": "no", "allowed_values": ["no"], "description": "The only reviewed target value for PermitRootLogin."}
+      ],
+      "preconditions": [
+        {"kind": "package_present", "resource": "openssh_server", "expected": "present", "failure_mode": "stop", "description": "The OpenSSH server package must be installed."},
+        {"kind": "command_available", "resource": "sshd", "expected": "available", "failure_mode": "stop", "description": "The sshd configuration validator must be available."},
+        {"kind": "manual_confirmation", "resource": "alternate_administrative_access", "expected": "confirmed", "failure_mode": "stop", "description": "A tested sudo-capable account or approved recovery path must exist before this change."}
+      ],
+      "operations": [
+        {"kind": "config_setting", "resource": "openssh_server", "path": "/etc/ssh/sshd_config.d/90-lsa-hardening.conf", "format": "sshd_config", "key": "PermitRootLogin", "value_from": "desired_value", "backup_required": true},
+        {"kind": "service_reload", "resource": "openssh_server", "backup_required": false}
+      ],
+      "validation": [
+        {"kind": "effective_setting", "resource": "openssh_server", "key": "permitrootlogin", "expected": "no"}
+      ],
+      "rollback": [
+        {"kind": "restore_backup", "resource": "openssh_server", "path": "/etc/ssh/sshd_config.d/90-lsa-hardening.conf", "backup_required": false},
+        {"kind": "service_reload", "resource": "openssh_server", "backup_required": false}
+      ],
+      "impact": {"service_restart": true, "reboot_required": false, "availability": "brief_connection_risk", "notes": "Reloading OpenSSH should preserve established sessions, but invalid access assumptions can prevent new privileged logins."}
+    },
+    {
+      "action_id": "linux.ssh.permit-empty-passwords.disabled",
+      "version": 1,
+      "status": "reviewed",
+      "control_ids": ["CIS-DEBIAN13-5.1.20"],
+      "title": "Disable Empty-Password SSH Authentication",
+      "description": "Set the effective OpenSSH PermitEmptyPasswords value to no.",
+      "supported_systems": [
+        {"family": "debian", "versions": ["12", "13"]},
+        {"family": "ubuntu", "versions": ["22.04", "24.04"]},
+        {"family": "redhat", "versions": ["8", "9"]},
+        {"family": "rocky", "versions": ["8", "9"]},
+        {"family": "almalinux", "versions": ["8", "9"]}
+      ],
+      "risk": "medium",
+      "parameters": [
+        {"name": "desired_value", "type": "enum", "required": true, "default": "no", "allowed_values": ["no"], "description": "The only reviewed target value for PermitEmptyPasswords."}
+      ],
+      "preconditions": [
+        {"kind": "package_present", "resource": "openssh_server", "expected": "present", "failure_mode": "stop", "description": "The OpenSSH server package must be installed."},
+        {"kind": "command_available", "resource": "sshd", "expected": "available", "failure_mode": "stop", "description": "The sshd configuration validator must be available."}
+      ],
+      "operations": [
+        {"kind": "config_setting", "resource": "openssh_server", "path": "/etc/ssh/sshd_config.d/90-lsa-hardening.conf", "format": "sshd_config", "key": "PermitEmptyPasswords", "value_from": "desired_value", "backup_required": true},
+        {"kind": "service_reload", "resource": "openssh_server", "backup_required": false}
+      ],
+      "validation": [
+        {"kind": "effective_setting", "resource": "openssh_server", "key": "permitemptypasswords", "expected": "no"}
+      ],
+      "rollback": [
+        {"kind": "restore_backup", "resource": "openssh_server", "path": "/etc/ssh/sshd_config.d/90-lsa-hardening.conf", "backup_required": false},
+        {"kind": "service_reload", "resource": "openssh_server", "backup_required": false}
+      ],
+      "impact": {"service_restart": true, "reboot_required": false, "availability": "brief_connection_risk", "notes": "OpenSSH is reloaded after validation; accounts with empty passwords can no longer authenticate through SSH."}
+    },
+    {
+      "action_id": "linux.network.ipv4-forwarding.disabled",
+      "version": 1,
+      "status": "reviewed",
+      "control_ids": ["CIS-DEBIAN13-3.3.1.1", "LSA-HEALTH-NET-003"],
+      "title": "Disable IPv4 Packet Forwarding",
+      "description": "Persist and load net.ipv4.ip_forward=0 on hosts that are not approved routers.",
+      "supported_systems": [
+        {"family": "debian", "versions": ["12", "13"]},
+        {"family": "ubuntu", "versions": ["22.04", "24.04"]},
+        {"family": "redhat", "versions": ["8", "9"]},
+        {"family": "rocky", "versions": ["8", "9"]},
+        {"family": "almalinux", "versions": ["8", "9"]},
+        {"family": "oraclelinux", "versions": ["8", "9"]}
+      ],
+      "risk": "high",
+      "parameters": [
+        {"name": "desired_value", "type": "integer", "required": true, "default": 0, "allowed_values": [0], "minimum": 0, "maximum": 0, "description": "The reviewed forwarding value for non-router hosts."}
+      ],
+      "preconditions": [
+        {"kind": "host_role_not", "resource": "network_role", "expected": "router", "failure_mode": "stop", "description": "The host must not be assigned an approved router role."},
+        {"kind": "manual_confirmation", "resource": "network_owner_approval", "expected": "confirmed", "failure_mode": "stop", "description": "The service owner must confirm the host does not route traffic between network zones."}
+      ],
+      "operations": [
+        {"kind": "sysctl_setting", "resource": "kernel", "path": "/etc/sysctl.d/60-lsa-network.conf", "format": "sysctl", "key": "net.ipv4.ip_forward", "value_from": "desired_value", "backup_required": true},
+        {"kind": "sysctl_reload", "resource": "kernel", "backup_required": false}
+      ],
+      "validation": [
+        {"kind": "sysctl_value", "resource": "kernel", "key": "net.ipv4.ip_forward", "expected": 0}
+      ],
+      "rollback": [
+        {"kind": "restore_backup", "resource": "kernel", "path": "/etc/sysctl.d/60-lsa-network.conf", "backup_required": false},
+        {"kind": "sysctl_reload", "resource": "kernel", "backup_required": false}
+      ],
+      "impact": {"service_restart": false, "reboot_required": false, "availability": "role_dependent", "notes": "Disabling forwarding immediately interrupts traffic when the host is acting as a router or gateway."}
+    },
+    {
+      "action_id": "linux.kernel.setuid-core-dumps.disabled",
+      "version": 1,
+      "status": "reviewed",
+      "control_ids": ["CIS-DEBIAN13-1.5.4"],
+      "title": "Disable Setuid Core Dumps",
+      "description": "Persist and load fs.suid_dumpable=0 to prevent core dumps from privileged programs.",
+      "supported_systems": [
+        {"family": "debian", "versions": ["12", "13"]},
+        {"family": "ubuntu", "versions": ["22.04", "24.04"]},
+        {"family": "redhat", "versions": ["8", "9"]},
+        {"family": "rocky", "versions": ["8", "9"]},
+        {"family": "almalinux", "versions": ["8", "9"]}
+      ],
+      "risk": "medium",
+      "parameters": [
+        {"name": "desired_value", "type": "integer", "required": true, "default": 0, "allowed_values": [0], "minimum": 0, "maximum": 0, "description": "The reviewed setuid core-dump policy value."}
+      ],
+      "preconditions": [
+        {"kind": "command_available", "resource": "sysctl", "expected": "available", "failure_mode": "stop", "description": "The sysctl interface must be available."}
+      ],
+      "operations": [
+        {"kind": "sysctl_setting", "resource": "kernel", "path": "/etc/sysctl.d/60-lsa-process.conf", "format": "sysctl", "key": "fs.suid_dumpable", "value_from": "desired_value", "backup_required": true},
+        {"kind": "sysctl_reload", "resource": "kernel", "backup_required": false}
+      ],
+      "validation": [
+        {"kind": "sysctl_value", "resource": "kernel", "key": "fs.suid_dumpable", "expected": 0}
+      ],
+      "rollback": [
+        {"kind": "restore_backup", "resource": "kernel", "path": "/etc/sysctl.d/60-lsa-process.conf", "backup_required": false},
+        {"kind": "sysctl_reload", "resource": "kernel", "backup_required": false}
+      ],
+      "impact": {"service_restart": false, "reboot_required": false, "availability": "none", "notes": "The setting affects future core dumps from privileged processes and does not restart services."}
+    }
+  ]
+}

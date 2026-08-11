@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from lsa.config import Settings, get_settings
 from lsa.database import SessionLocal
 from lsa.main import app
-from lsa.models import AuditEvent, Report, Tenant, User
+from lsa.models import AuditEvent, RemediationPlan, Report, Tenant, User
 from lsa.models import IngestionToken
 from lsa.seed import DEMO_TOKEN, bootstrap
 from lsa.security import hash_ingestion_token, hash_password
@@ -624,6 +624,126 @@ def test_remediation_plan_rejects_stale_approval_and_requires_admin_for_changes(
         json={"reason": "Analysts cannot mutate plans."},
     )
     assert forbidden.status_code == 403
+
+
+def test_remediation_action_catalog_is_authenticated_filterable_and_non_executable(client):
+    assert client.get("/api/v1/remediation-actions").status_code == 401
+    headers = {"Authorization": f"Bearer {login(client)}"}
+
+    listed = client.get("/api/v1/remediation-actions", headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert len(listed.json()) == 4
+    assert all(action["execution_enabled"] is False for action in listed.json())
+    assert all(action["execution_status"] == "catalog_only" for action in listed.json())
+
+    filtered = client.get(
+        "/api/v1/remediation-actions",
+        params={
+            "control_id": "CIS-DEBIAN13-5.1.21",
+            "os_family": "debian",
+            "os_version": "13",
+        },
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    assert [action["action_id"] for action in filtered.json()] == [
+        "linux.ssh.permit-root-login.disabled"
+    ]
+    action = filtered.json()[0]
+    assert action["operations"][0] == {
+        "kind": "config_setting",
+        "resource": "openssh_server",
+        "path": "/etc/ssh/sshd_config.d/90-lsa-hardening.conf",
+        "format": "sshd_config",
+        "key": "PermitRootLogin",
+        "value_from": "desired_value",
+        "backup_required": True,
+    }
+    assert action["rollback"][0]["kind"] == "restore_backup"
+    assert client.get(
+        "/api/v1/remediation-actions", params={"os_family": "debian"}, headers=headers
+    ).status_code == 422
+    assert client.get(
+        "/api/v1/remediation-actions/linux.missing", headers=headers
+    ).status_code == 404
+
+
+def test_remediation_plan_snapshots_matching_declarative_action(client):
+    payload = report_payload()
+    payload["findings"][0].update(
+        {
+            "control_id": "CIS-DEBIAN13-5.1.21",
+            "module": "cis_debian13",
+            "category": "ssh",
+            "title": "Ensure sshd PermitRootLogin is disabled",
+            "severity": "high",
+            "expected": "permitrootlogin is no",
+            "actual": "permitrootlogin yes",
+            "remediation_summary": "Disable direct root login after validating sudo access.",
+            "remediation_commands": [],
+            "verification_commands": [],
+            "service_restart": True,
+        }
+    )
+    assert client.post(
+        "/api/v1/ingest/reports",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        json=payload,
+    ).status_code == 202
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    finding = client.get("/api/v1/findings", headers=headers).json()[0]
+
+    created = client.post(
+        "/api/v1/remediation-plans",
+        headers=headers,
+        json={"finding_id": finding["id"]},
+    )
+    assert created.status_code == 201, created.text
+    plan = created.json()
+    assert plan["action_catalog_status"] == "matched"
+    assert plan["action"]["action_id"] == "linux.ssh.permit-root-login.disabled"
+    assert plan["action"]["version"] == 1
+    assert len(plan["action"]["digest"]) == 64
+    assert plan["action"]["execution_enabled"] is False
+    assert any(
+        condition["kind"] == "manual_confirmation"
+        for condition in plan["action"]["preconditions"]
+    )
+
+    with SessionLocal() as db:
+        stored = db.get(RemediationPlan, plan["id"])
+        assert stored is not None
+        assert stored.action_id == plan["action"]["action_id"]
+        assert stored.action_version == plan["action"]["version"]
+        assert stored.action_digest == plan["action"]["digest"]
+        assert stored.action_snapshot == plan["action"]
+
+    approved = client.post(f"/api/v1/remediation-plans/{plan['id']}/approve", headers=headers)
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["action"]["digest"] == plan["action"]["digest"]
+
+
+def test_remediation_plan_marks_cataloged_action_unsupported_for_host_os(client):
+    payload = report_payload()
+    payload["host"]["os_version"] = "14"
+    payload["findings"][0]["control_id"] = "CIS-DEBIAN13-5.1.21"
+    assert client.post(
+        "/api/v1/ingest/reports",
+        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+        json=payload,
+    ).status_code == 202
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    finding = client.get("/api/v1/findings", headers=headers).json()[0]
+
+    created = client.post(
+        "/api/v1/remediation-plans",
+        headers=headers,
+        json={"finding_id": finding["id"]},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["action_catalog_status"] == "unsupported_system"
+    assert created.json()["action"] is None
 
 
 def test_application_inventory_tracks_versions_and_removals(client):
