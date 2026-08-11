@@ -1,8 +1,8 @@
 import {
-  ArrowRight, CheckCircle2, CircleSlash2, FileText, History, Search,
-  ShieldCheck, ShieldX, TriangleAlert, XCircle,
+  ArrowRight, CheckCircle2, ChevronDown, CircleSlash2, FileText, History,
+  ListChecks, RotateCcw, Search, ShieldCheck, ShieldX, TriangleAlert, XCircle,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/useAuth'
@@ -13,7 +13,7 @@ import { Button } from '../components/ui/Button'
 import { Dialog } from '../components/ui/Dialog'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime } from '../lib/dateTime'
-import type { RemediationPlan, RemediationPlanStatus } from '../types'
+import type { RemediationActionOperation, RemediationPlan, RemediationPlanStatus } from '../types'
 
 type PlanFilter = RemediationPlanStatus | 'all'
 type DecisionKind = 'approve' | 'reject' | 'cancel'
@@ -55,6 +55,49 @@ function DecisionDialog({ kind, plan, busy, error, close, submit }: { kind: Deci
   </Dialog>
 }
 
+function readableToken(value: string) {
+  return value.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+}
+
+function OperationList({ title, icon, operations }: { title: string; icon: ReactNode; operations: RemediationActionOperation[] }) {
+  return <section className="remediation-action-procedure">
+    <h4>{icon}{title}</h4>
+    <ol>{operations.map((operation, index) => <li key={`${operation.kind}:${operation.resource}:${operation.path ?? index}`}>
+      <span>{index + 1}</span>
+      <div><strong>{readableToken(operation.kind)}</strong><p>{operation.key ? `${operation.key} · ` : ''}{operation.path ?? readableToken(operation.resource)}{operation.value_from ? ` · Reviewed Parameter: ${operation.value_from}` : ''}</p></div>
+    </li>)}</ol>
+  </section>
+}
+
+function ActionCatalogSection({ plan }: { plan: RemediationPlan }) {
+  const action = plan.action
+  if (!action) {
+    const unsupported = plan.action_catalog_status === 'unsupported_system'
+    return <section className="remediation-dossier-section remediation-action-coverage">
+      <h3>Declarative Action Coverage</h3>
+      <div className={unsupported ? 'remediation-action-coverage-warning' : ''}><ShieldX size={16} /><div><strong>{unsupported ? 'Action Not Reviewed For This Host OS' : 'No Reviewed Action For This Control'}</strong><p>{unsupported ? 'The control is cataloged, but this host family or version is outside the reviewed support matrix.' : 'The plan remains available for accountable human review, but no structured change procedure is attached.'} Approval remains non-executable.</p></div></div>
+    </section>
+  }
+  return <section className="remediation-dossier-section remediation-action-catalog">
+    <header><div><h3>Reviewed Declarative Action</h3><p>{action.action_id} · Version {action.version}</p></div><span><ShieldCheck size={13} />Catalog Only · Non-Executable</span></header>
+    <p>{action.description}</p>
+    <dl className="remediation-action-facts">
+      <div><dt>Risk</dt><dd>{readableToken(action.risk)}</dd></div>
+      <div><dt>Availability</dt><dd>{readableToken(action.impact.availability)}</dd></div>
+      <div><dt>Integrity</dt><dd className="remediation-action-digest">SHA-256 {action.digest}</dd></div>
+    </dl>
+    <div className="remediation-action-preconditions"><h4>Stop Conditions</h4><ul>{action.preconditions.map((condition) => <li key={`${condition.kind}:${condition.resource}`}><ListChecks size={14} /><span><strong>{readableToken(condition.kind)}</strong>{condition.description}</span></li>)}</ul></div>
+    <details className="remediation-action-details">
+      <summary>Review Structured Procedure <ChevronDown size={15} /></summary>
+      <div>
+        <OperationList title="Reviewed Change" icon={<ListChecks size={14} />} operations={action.operations} />
+        <section className="remediation-action-procedure"><h4><ShieldCheck size={14} />Validation</h4><ol>{action.validation.map((validation, index) => <li key={`${validation.kind}:${validation.key}`}><span>{index + 1}</span><div><strong>{readableToken(validation.kind)}</strong><p>{validation.key} Must Equal {String(validation.expected)}</p></div></li>)}</ol></section>
+        <OperationList title="Rollback" icon={<RotateCcw size={14} />} operations={action.rollback} />
+      </div>
+    </details>
+  </section>
+}
+
 function PlanDossier({ plan, admin, onDecision, containerRef }: { plan: RemediationPlan; admin: boolean; onDecision: (kind: DecisionKind) => void; containerRef: Ref<HTMLElement> }) {
   const stale = !plan.source_is_current || !plan.finding_still_open
   const timeline = [
@@ -79,6 +122,7 @@ function PlanDossier({ plan, admin, onDecision, containerRef }: { plan: Remediat
         <div><span>Required State</span><p>{plan.required_state || 'Use The Approved Security Baseline.'}</p></div>
       </div>
     </section>
+    <ActionCatalogSection plan={plan} />
     <section className="remediation-dossier-section">
       <h3>Change Guidance</h3>
       <p>{plan.remediation_summary}</p>

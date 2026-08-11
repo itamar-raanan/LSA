@@ -32,9 +32,28 @@ const pendingPlan: RemediationPlan = {
   approved_by: null, approved_by_name: null, approved_at: null,
   rejected_by: null, rejected_by_name: null, rejected_at: null, rejection_reason: null,
   canceled_by: null, canceled_by_name: null, canceled_at: null, cancellation_reason: null,
-  source_is_current: true, finding_still_open: true, execution_enabled: false, execution_status: 'not_supported',
+  source_is_current: true, finding_still_open: true, action_catalog_status: 'not_cataloged', action: null,
+  execution_enabled: false, execution_status: 'not_supported',
   execution_reason: 'This release records review decisions only and cannot change hosts.',
   created_at: '2026-08-08T10:00:00Z', updated_at: '2026-08-08T10:00:00Z',
+}
+
+const matchedPlan: RemediationPlan = {
+  ...pendingPlan,
+  action_catalog_status: 'matched',
+  action: {
+    action_id: 'linux.ssh.permit-root-login.disabled', version: 1, digest: 'a'.repeat(64), status: 'reviewed',
+    control_ids: ['CIS-DEBIAN13-5.1.21'], title: 'Disable Direct Root SSH Login',
+    description: 'Set the effective OpenSSH PermitRootLogin value to no after alternate administrative access is confirmed.',
+    supported_systems: [{ family: 'debian', versions: ['13'] }], risk: 'high',
+    parameters: [{ name: 'desired_value', type: 'enum', required: true, default: 'no', allowed_values: ['no'], minimum: null, maximum: null, description: 'Reviewed target value.' }],
+    preconditions: [{ kind: 'manual_confirmation', resource: 'alternate_administrative_access', expected: 'confirmed', failure_mode: 'stop', description: 'Confirm a tested sudo-capable account.' }],
+    operations: [{ kind: 'config_setting', resource: 'openssh_server', path: '/etc/ssh/sshd_config.d/90-lsa-hardening.conf', format: 'sshd_config', key: 'PermitRootLogin', value_from: 'desired_value', backup_required: true }],
+    validation: [{ kind: 'effective_setting', resource: 'openssh_server', key: 'permitrootlogin', expected: 'no' }],
+    rollback: [{ kind: 'restore_backup', resource: 'openssh_server', path: '/etc/ssh/sshd_config.d/90-lsa-hardening.conf', format: null, key: null, value_from: null, backup_required: false }],
+    impact: { service_restart: true, reboot_required: false, availability: 'brief_connection_risk', notes: 'Reload OpenSSH after validation.' },
+    execution_enabled: false, execution_status: 'catalog_only',
+  },
 }
 
 describe('Remediation Review', () => {
@@ -116,5 +135,27 @@ describe('Remediation Review', () => {
 
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
     expect(dossier).toHaveFocus()
+  })
+
+  it('shows matched declarative safeguards before the procedure details', async () => {
+    remediationPlans.mockResolvedValueOnce([matchedPlan])
+    render(<MemoryRouter initialEntries={['/findings?view=remediation']}><RemediationReviewPage /></MemoryRouter>)
+
+    expect(await screen.findByText('Reviewed Declarative Action')).toBeInTheDocument()
+    expect(screen.getByText('Catalog Only · Non-Executable')).toBeInTheDocument()
+    expect(screen.getByText(`SHA-256 ${'a'.repeat(64)}`)).toBeInTheDocument()
+    expect(screen.getByText('Stop Conditions')).toBeInTheDocument()
+    expect(screen.getByText('Confirm a tested sudo-capable account.')).toBeInTheDocument()
+    const procedure = screen.getByText('Review Structured Procedure').closest('details')
+    expect(procedure).not.toHaveAttribute('open')
+
+    fireEvent.click(screen.getByText('Review Structured Procedure'))
+    expect(procedure).toHaveAttribute('open')
+    const reviewedChange = screen.getByText('Reviewed Change').closest('section')
+    expect(reviewedChange).not.toBeNull()
+    expect(within(reviewedChange!).getByText('Config Setting')).toBeInTheDocument()
+    expect(within(reviewedChange!).getByText(/Reviewed Parameter: desired_value/)).toHaveTextContent('/etc/ssh/sshd_config.d/90-lsa-hardening.conf')
+    expect(screen.getByText('Validation')).toBeInTheDocument()
+    expect(screen.getByText('Rollback')).toBeInTheDocument()
   })
 })

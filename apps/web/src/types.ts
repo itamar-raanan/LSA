@@ -200,6 +200,37 @@ export interface Finding {
 }
 
 export type RemediationPlanStatus = 'pending_approval' | 'approved' | 'rejected' | 'canceled'
+export type RemediationCatalogStatus = 'matched' | 'not_cataloged' | 'unsupported_system'
+
+export interface RemediationActionOperation {
+  kind: 'config_setting' | 'restore_backup' | 'service_reload' | 'sysctl_reload' | 'sysctl_setting'
+  resource: string
+  path: string | null
+  format: 'sshd_config' | 'sysctl' | null
+  key: string | null
+  value_from: string | null
+  backup_required: boolean
+}
+
+export interface RemediationAction {
+  action_id: string
+  version: number
+  digest: string
+  status: 'reviewed'
+  control_ids: string[]
+  title: string
+  description: string
+  supported_systems: Array<{ family: string; versions: string[] }>
+  risk: 'low' | 'medium' | 'high' | 'critical'
+  parameters: Array<{ name: string; type: 'boolean' | 'enum' | 'integer' | 'string'; required: boolean; default: boolean | number | string | null; allowed_values: Array<boolean | number | string>; minimum: number | null; maximum: number | null; description: string }>
+  preconditions: Array<{ kind: 'command_available' | 'host_role_not' | 'manual_confirmation' | 'package_present'; resource: string; expected: string; failure_mode: 'stop'; description: string }>
+  operations: RemediationActionOperation[]
+  validation: Array<{ kind: 'effective_setting' | 'sysctl_value'; resource: string; key: string; expected: boolean | number | string }>
+  rollback: RemediationActionOperation[]
+  impact: { service_restart: boolean; reboot_required: boolean; availability: 'none' | 'brief_connection_risk' | 'role_dependent'; notes: string }
+  execution_enabled: false
+  execution_status: 'catalog_only'
+}
 
 export interface RemediationPlan {
   id: string
@@ -236,6 +267,8 @@ export interface RemediationPlan {
   cancellation_reason: string | null
   source_is_current: boolean
   finding_still_open: boolean
+  action_catalog_status: RemediationCatalogStatus
+  action: RemediationAction | null
   execution_enabled: false
   execution_status: 'not_supported'
   execution_reason: string

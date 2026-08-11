@@ -436,6 +436,85 @@ class FindingResponse(BaseModel):
 
 
 RemediationPlanStatusValue = Literal["pending_approval", "approved", "rejected", "canceled"]
+RemediationCatalogStatusValue = Literal["matched", "not_cataloged", "unsupported_system"]
+
+
+class RemediationCatalogModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class RemediationSystemSupport(RemediationCatalogModel):
+    family: str
+    versions: list[str]
+
+
+class RemediationActionParameter(RemediationCatalogModel):
+    name: str
+    type: Literal["boolean", "enum", "integer", "string"]
+    required: bool
+    default: bool | int | str | None = None
+    allowed_values: list[bool | int | str] = Field(default_factory=list)
+    minimum: int | None = None
+    maximum: int | None = None
+    description: str
+
+
+class RemediationActionPrecondition(RemediationCatalogModel):
+    kind: Literal["command_available", "host_role_not", "manual_confirmation", "package_present"]
+    resource: str
+    expected: str
+    failure_mode: Literal["stop"] = "stop"
+    description: str
+
+
+class RemediationActionOperation(RemediationCatalogModel):
+    kind: Literal[
+        "config_setting",
+        "restore_backup",
+        "service_reload",
+        "sysctl_reload",
+        "sysctl_setting",
+    ]
+    resource: str
+    path: str | None = None
+    format: Literal["sshd_config", "sysctl"] | None = None
+    key: str | None = None
+    value_from: str | None = None
+    backup_required: bool = False
+
+
+class RemediationActionValidation(RemediationCatalogModel):
+    kind: Literal["effective_setting", "sysctl_value"]
+    resource: str
+    key: str
+    expected: bool | int | str
+
+
+class RemediationActionImpact(RemediationCatalogModel):
+    service_restart: bool
+    reboot_required: bool
+    availability: Literal["none", "brief_connection_risk", "role_dependent"]
+    notes: str
+
+
+class RemediationActionResponse(RemediationCatalogModel):
+    action_id: str = Field(pattern=r"^linux\.[a-z0-9.-]+$", max_length=200)
+    version: int = Field(ge=1)
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    status: Literal["reviewed"]
+    control_ids: list[str]
+    title: str
+    description: str
+    supported_systems: list[RemediationSystemSupport]
+    risk: Literal["low", "medium", "high", "critical"]
+    parameters: list[RemediationActionParameter]
+    preconditions: list[RemediationActionPrecondition]
+    operations: list[RemediationActionOperation]
+    validation: list[RemediationActionValidation]
+    rollback: list[RemediationActionOperation]
+    impact: RemediationActionImpact
+    execution_enabled: Literal[False] = False
+    execution_status: Literal["catalog_only"] = "catalog_only"
 
 
 class RemediationPlanCreate(BaseModel):
@@ -482,6 +561,8 @@ class RemediationPlanResponse(BaseModel):
     cancellation_reason: str | None
     source_is_current: bool
     finding_still_open: bool
+    action_catalog_status: RemediationCatalogStatusValue = "not_cataloged"
+    action: RemediationActionResponse | None = None
     execution_enabled: Literal[False] = False
     execution_status: Literal["not_supported"] = "not_supported"
     execution_reason: str = "This release records review decisions only and cannot change hosts."

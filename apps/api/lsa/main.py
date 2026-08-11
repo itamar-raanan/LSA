@@ -14,6 +14,7 @@ from lsa.api import (
     auth,
     fleet,
     ingest,
+    remediation_actions,
     remediations,
     settings as settings_api,
     vulnerabilities,
@@ -23,6 +24,7 @@ from lsa.database import Base, SessionLocal, engine, get_db
 from lsa.seed import bootstrap
 from lsa.services.artifacts import ArtifactStore, get_artifact_store
 from lsa.services.certificates import bootstrap_tls
+from lsa.services.remediation_catalog import load_remediation_catalog
 
 
 settings = get_settings()
@@ -30,6 +32,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    load_remediation_catalog()
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         bootstrap(db, settings)
@@ -60,6 +63,7 @@ app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(artifacts.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
 app.include_router(vulnerabilities.router, prefix="/api/v1")
+app.include_router(remediation_actions.router, prefix="/api/v1")
 app.include_router(remediations.router, prefix="/api/v1")
 
 
