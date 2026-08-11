@@ -519,6 +519,8 @@ export interface LinuxAgent {
   agent_version: string
   capabilities: string[]
   fingerprint: string
+  platform_trust_status: 'pinned' | 'missing'
+  platform_command_key_fingerprint: string | null
   last_seen_at: string | null
   last_policy_version: number | null
   last_scan_at: string | null
@@ -554,6 +556,7 @@ export interface AgentEnrollmentTokenCreated {
   token: string
   token_prefix: string
   expires_at: string
+  platform_trust: PlatformCommandTrust
 }
 
 export interface AgentEnrollmentToken {
@@ -582,6 +585,15 @@ export interface AgentPackage {
   sha256: string
 }
 
+export interface PlatformCommandTrust {
+  key_id: string
+  key_version: number
+  algorithm: 'Ed25519'
+  public_key: string
+  fingerprint: string
+}
+
 export interface AgentConnectivity {
   public_url: string
+  platform_trust: PlatformCommandTrust
 }

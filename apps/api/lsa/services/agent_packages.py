@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 
-AGENT_VERSION = "0.4.3"
+AGENT_VERSION = "0.4.4"
 PACKAGE_ID = "linux-universal"
 PACKAGE_FILENAME = f"lsa-agent-{AGENT_VERSION}-linux-universal.tar.gz"
 PACKAGE_ROOT = f"lsa-agent-{AGENT_VERSION}"
@@ -37,23 +37,25 @@ INSTALL_SCRIPT = r'''#!/bin/sh
 set -eu
 
 usage() {
-  echo "Usage: sudo ./install.sh --platform-url https://lsa.example.com:8444 --token lsa_enroll_..." >&2
+  echo "Usage: sudo ./install.sh --platform-url https://lsa.example.com:8444 --token lsa_enroll_... --platform-command-key BASE64_PUBLIC_KEY" >&2
   exit 2
 }
 
 PLATFORM_URL=""
 ENROLLMENT_TOKEN=""
+PLATFORM_COMMAND_KEY=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --platform-url) [ "$#" -ge 2 ] || usage; PLATFORM_URL="$2"; shift 2 ;;
     --token) [ "$#" -ge 2 ] || usage; ENROLLMENT_TOKEN="$2"; shift 2 ;;
+    --platform-command-key) [ "$#" -ge 2 ] || usage; PLATFORM_COMMAND_KEY="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
 
 [ "$(id -u)" -eq 0 ] || { echo "Run this installer as root." >&2; exit 1; }
-[ -n "$PLATFORM_URL" ] && [ -n "$ENROLLMENT_TOKEN" ] || usage
+[ -n "$PLATFORM_URL" ] && [ -n "$ENROLLMENT_TOKEN" ] && [ -n "$PLATFORM_COMMAND_KEY" ] || usage
 SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 INSTALL_DIR=/opt/lsa-agent
 CONFIG_DIR=/etc/lsa-agent
@@ -70,7 +72,7 @@ cp "$SOURCE_DIR/integrity-manifest.json" "$INSTALL_DIR/integrity-manifest.json"
 
 install -m 0644 "$SOURCE_DIR/agent/lsa-agent.service" /usr/lib/systemd/system/lsa-agent.service
 install -m 0755 "$SOURCE_DIR/agent/lsa-agent-enroll" /usr/sbin/lsa-agent-enroll
-/usr/sbin/lsa-agent-enroll --platform-url "$PLATFORM_URL" --token "$ENROLLMENT_TOKEN"
+/usr/sbin/lsa-agent-enroll --platform-url "$PLATFORM_URL" --token "$ENROLLMENT_TOKEN" --platform-command-key "$PLATFORM_COMMAND_KEY"
 '''
 
 

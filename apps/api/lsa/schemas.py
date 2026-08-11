@@ -691,6 +691,14 @@ class AgentGroupResponse(BaseModel):
     updated_at: datetime
 
 
+class PlatformCommandTrustResponse(BaseModel):
+    key_id: str
+    key_version: int
+    algorithm: Literal["Ed25519"]
+    public_key: str
+    fingerprint: str
+
+
 class AgentEnrollmentTokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     group_id: str
@@ -704,6 +712,7 @@ class AgentEnrollmentTokenCreated(BaseModel):
     token: str
     token_prefix: str
     expires_at: datetime
+    platform_trust: PlatformCommandTrustResponse
 
 
 class AgentEnrollmentTokenResponse(BaseModel):
@@ -743,6 +752,9 @@ class AgentEnrollmentResponse(BaseModel):
     ingestion_token: str
     signing_key_id: str
     policy_version: int
+    platform_trust: PlatformCommandTrustResponse
+    platform_envelope: dict[str, object]
+    platform_signature: str
 
 
 class AgentHeartbeatRequest(BaseModel):
@@ -780,6 +792,8 @@ class LinuxAgentResponse(BaseModel):
     agent_version: str
     capabilities: list[str]
     fingerprint: str
+    platform_trust_status: Literal["pinned", "missing"]
+    platform_command_key_fingerprint: str | None
     last_seen_at: datetime | None
     last_policy_version: int | None
     last_scan_at: datetime | None
@@ -859,6 +873,7 @@ class AgentPackageResponse(BaseModel):
 
 class AgentConnectivityResponse(BaseModel):
     public_url: str
+    platform_trust: PlatformCommandTrustResponse
 
 
 ChangeSetStatusValue = Literal["pending_authorization", "authorized", "canceled"]

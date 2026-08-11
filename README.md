@@ -129,7 +129,7 @@ Agent sizing is per managed host. The figures below describe available headroom 
 | **CPU** | 1 available vCPU | 2 available vCPU during larger audit profiles |
 | **Memory** | 512 MiB available | 1 GiB available during an audit |
 | **Disk** | 500 MiB free for runtime, virtual environment, controls, state, and initial reports | 1 GiB or more, plus capacity for retained report history |
-| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.4.3 encrypts HTTPS traffic but does not validate the gateway certificate or hostname |
+| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.4.4 encrypts HTTPS traffic and pins the platform identity for enrollment, but does not validate the gateway certificate or hostname |
 
 The host requires Python 3.11 or newer, `venv` support, systemd, and root privileges so read-only controls can inspect protected system state. Enrollment installs constrained Python dependencies into `/opt/lsa-agent/venv`, so it also requires access to the dependency source or an internal/offline package mirror. No inbound agent port is required.
 
@@ -228,13 +228,16 @@ curl --fail-with-body \
 Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
 
 ```bash
-sudo apt install ./lsa-agent_0.4.3_all.deb
-sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
+sudo apt install ./lsa-agent_0.4.4_all.deb
+# Copy the complete enrollment command from the console; it includes the public platform key.
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
 The **Agents** workspace opens on **All hosts**. Select a group in the left fleet rail to view its hosts and effective policy. From there, administrators can publish categorized control overrides, request an audit, move agents to another group, or revoke them.
 
 Agent 0.4 verifies a package-generated SHA-256 manifest before each cycle and refuses to run a scan when its runtime or local control catalog has changed. It also remembers the highest accepted group-policy version and rejects policy rollback. Package transport checksums remain available in the console; the runtime manifest protects the installed executable and scanner content after download.
+
+The generated installation command also provisions a tenant-specific public Ed25519 platform key. Enrollment credentials are written only after the agent verifies a short-lived signed proof bound to its locally generated identity. This makes the application-layer trust bootstrap transparent to the operator without treating the public key as a secret. Remediation and command execution remain disabled.
 
 ## Repository map
 

@@ -2,23 +2,25 @@
 set -eu
 
 usage() {
-  echo "Usage: sudo lsa-agent-enroll --platform-url https://lsa.example.com:8444 --token lsa_enroll_..." >&2
+  echo "Usage: sudo lsa-agent-enroll --platform-url https://lsa.example.com:8444 --token lsa_enroll_... --platform-command-key BASE64_PUBLIC_KEY" >&2
   exit 2
 }
 
 PLATFORM_URL=""
 ENROLLMENT_TOKEN=""
+PLATFORM_COMMAND_KEY=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --platform-url) [ "$#" -ge 2 ] || usage; PLATFORM_URL="$2"; shift 2 ;;
     --token) [ "$#" -ge 2 ] || usage; ENROLLMENT_TOKEN="$2"; shift 2 ;;
+    --platform-command-key) [ "$#" -ge 2 ] || usage; PLATFORM_COMMAND_KEY="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
 
 [ "$(id -u)" -eq 0 ] || { echo "Run enrollment as root." >&2; exit 1; }
-[ -n "$PLATFORM_URL" ] && [ -n "$ENROLLMENT_TOKEN" ] || usage
+[ -n "$PLATFORM_URL" ] && [ -n "$ENROLLMENT_TOKEN" ] && [ -n "$PLATFORM_COMMAND_KEY" ] || usage
 case "$PLATFORM_URL" in
   https://*) ;;
   *) echo "The platform URL must use HTTPS." >&2; exit 1 ;;
@@ -50,18 +52,36 @@ if [ ! -x "$INSTALL_DIR/venv/bin/python" ]; then
 fi
 "$INSTALL_DIR/venv/bin/pip" install --disable-pip-version-check --no-cache-dir -r "$INSTALL_DIR/requirements.txt"
 
-"$PYTHON" - "$CONFIG_DIR/config.json" "$PLATFORM_URL" <<'PY'
+"$PYTHON" - "$CONFIG_DIR/config.json" "$CONFIG_DIR/platform-command-key.pub" "$PLATFORM_URL" "$PLATFORM_COMMAND_KEY" <<'PY'
+import base64
+import hashlib
 import json
 import os
 import sys
 import tempfile
 
-path, platform_url = sys.argv[1:]
+path, key_path, platform_url, encoded_key = sys.argv[1:]
+try:
+    public_key = base64.b64decode(encoded_key, validate=True)
+except (ValueError, TypeError) as exc:
+    raise SystemExit("Platform command key must be valid base64") from exc
+if len(public_key) != 32:
+    raise SystemExit("Platform command key must contain 32 raw Ed25519 public-key bytes")
+
+key_descriptor, temporary_key = tempfile.mkstemp(prefix=".platform-command-key.", dir=os.path.dirname(key_path))
+with os.fdopen(key_descriptor, "w", encoding="utf-8") as handle:
+    handle.write(base64.b64encode(public_key).decode() + "\n")
+    handle.flush()
+    os.fsync(handle.fileno())
+os.chmod(temporary_key, 0o644)
+os.replace(temporary_key, key_path)
+
 payload = {
     "platform_url": platform_url.rstrip("/"),
     "scanner_dir": "/opt/lsa-agent/scanner",
     "state_dir": "/var/lib/lsa-agent",
     "ansible_playbook": "/opt/lsa-agent/venv/bin/ansible-playbook",
+    "platform_command_key_file": key_path,
     "verify_tls": False,
     "tags": {},
 }
@@ -73,7 +93,9 @@ with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
     os.fsync(handle.fileno())
 os.chmod(temporary, 0o600)
 os.replace(temporary, path)
+print(f"Pinned platform identity: SHA256:{hashlib.sha256(public_key).hexdigest()}")
 PY
+unset PLATFORM_COMMAND_KEY
 
 TOKEN_FILE=$(mktemp "$STATE_DIR/.enrollment-token.XXXXXX")
 trap 'rm -f "$TOKEN_FILE"' EXIT HUP INT TERM

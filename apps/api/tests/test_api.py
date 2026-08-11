@@ -125,7 +125,11 @@ def test_admin_can_download_versioned_agent_package(client):
     headers = {"Authorization": f"Bearer {login(client)}"}
     connectivity = client.get("/api/v1/agent-connectivity", headers=headers)
     assert connectivity.status_code == 200, connectivity.text
-    assert connectivity.json() == {"public_url": "https://localhost:8444"}
+    connectivity_data = connectivity.json()
+    assert connectivity_data["public_url"] == "https://localhost:8444"
+    assert connectivity_data["platform_trust"]["algorithm"] == "Ed25519"
+    assert len(connectivity_data["platform_trust"]["fingerprint"]) == 64
+    assert len(b64decode(connectivity_data["platform_trust"]["public_key"])) == 32
 
     listed = client.get("/api/v1/agent-packages", headers=headers)
     assert listed.status_code == 200, listed.text
@@ -156,6 +160,8 @@ def test_admin_can_download_versioned_agent_package(client):
         assert f"{root}/scanner/library/lsa_application_inventory.py" in names
         assert f"{root}/scanner/roles/lsa_report/tasks/main.yml" in names
         assert archive.getmember(f"{root}/install.sh").mode == 0o755
+        install_script = archive.extractfile(f"{root}/install.sh").read().decode()
+        assert "--platform-command-key" in install_script
 
 
 def test_agent_package_download_requires_admin_session(client):
@@ -241,7 +247,19 @@ def test_agent_enrollment_and_signed_policy_poll(client):
         },
     )
     assert enrollment.status_code == 201, enrollment.text
-    agent_id = enrollment.json()["agent_id"]
+    enrollment_data = enrollment.json()
+    agent_id = enrollment_data["agent_id"]
+    trust = enrollment_data["platform_trust"]
+    envelope = enrollment_data["platform_envelope"]
+    Ed25519PublicKey.from_public_bytes(b64decode(trust["public_key"])).verify(
+        b64decode(enrollment_data["platform_signature"]),
+        json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(),
+    )
+    assert envelope["kind"] == "agent-enrollment"
+    assert envelope["agent_id"] == agent_id
+    assert envelope["payload"]["execution_enabled"] is False
+    assert envelope["payload"]["agent_identity_fingerprint"] == hashlib.sha256(public_key).hexdigest()
+    assert token_response.json()["platform_trust"] == trust
 
     timestamp = str(int(datetime.now(UTC).timestamp()))
     body_hash = hashlib.sha256(b"").hexdigest()

@@ -22,7 +22,7 @@ import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { useApi } from '../../hooks/useApi'
 import { formatDateTime } from '../../lib/dateTime'
-import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, LinuxAgent, PolicyMode } from '../../types'
+import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, LinuxAgent, PlatformCommandTrust, PolicyMode } from '../../types'
 
 const modes: PolicyMode[] = ['audit', 'manual', 'remediate', 'disabled']
 type WorkspaceTab = 'hosts' | 'policy' | 'deployment'
@@ -59,7 +59,7 @@ function AgentTable({ agents, groups, packageVersion, submit, selected, setSelec
   const [revoking, setRevoking] = useState<LinuxAgent | null>(null)
   const columns: SecurityColumn<LinuxAgent>[] = [
     { id: 'host', header: 'Host', priority: 'primary', hideable: false, sortValue: (agent) => agent.hostname, exportValue: (agent) => agent.hostname, cell: (agent) => <span className="table-primary">{agent.hostname}<small>Agent {agent.agent_version} · {packageVersion && agent.agent_version !== packageVersion ? `Upgrade ${packageVersion} Available` : agent.capabilities.join(', ') || 'No Capabilities'}</small></span> },
-    { id: 'connection', header: 'Connection', priority: 'secondary', sortValue: (agent) => agentStatus(agent), exportValue: (agent) => agentStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">Outbound Agent Heartbeat</span></> },
+    { id: 'connection', header: 'Connection', priority: 'secondary', sortValue: (agent) => agentStatus(agent), exportValue: (agent) => agentStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">{agent.platform_trust_status === 'pinned' ? 'Platform Identity Pinned' : 'Platform Trust Missing'}</span></> },
     { id: 'report', header: 'Report Freshness', priority: 'secondary', sortValue: (agent) => reportStatus(agent), exportValue: (agent) => reportStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${reportStatus(agent) === 'fresh' ? 'online' : reportStatus(agent)}`}>{reportStatus(agent)}</span><span className="table-subtitle">{formatDateTime(agent.last_scan_at, 'No Accepted Report')}</span></> },
     { id: 'group', header: 'Group', priority: 'detail', sortValue: (agent) => agent.group_name, exportValue: (agent) => agent.group_name, cell: (agent) => <select aria-label={`Group for ${agent.hostname}`} className="select-input min-h-9" value={agent.group_id} disabled={!!agent.revoked_at} onChange={(event) => void submit(() => api.assignAgentGroup(agent.id, event.target.value))}>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select> },
     { id: 'policy', header: 'Policy', priority: 'detail', sortValue: (agent) => agent.policy_name, exportValue: (agent) => `${agent.policy_name} v${agent.policy_version}`, cell: (agent) => <span className="table-primary">{agent.policy_name}<small>Expected V{agent.policy_version} · Reported V{agent.last_policy_version ?? '—'}</small></span> },
@@ -164,6 +164,7 @@ export function AgentsSettingsPage() {
   const [showPolicy, setShowPolicy] = useState(false)
   const [showDownloads, setShowDownloads] = useState(false)
   const [token, setToken] = useState('')
+  const [enrollmentTrust, setEnrollmentTrust] = useState<PlatformCommandTrust | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [controlModes, setControlModes] = useState<Record<string, PolicyMode>>({})
@@ -280,6 +281,7 @@ export function AgentsSettingsPage() {
         expires_at: new Date(Date.now() + Number(values.get('hours')) * 3600000).toISOString(),
       })
       setToken(created.token)
+      setEnrollmentTrust(created.platform_trust)
     })
   }
 
@@ -347,10 +349,10 @@ export function AgentsSettingsPage() {
       eyebrow="Managed Linux fleet"
       title="Agents"
       detail="Monitor agent connectivity, review accepted report freshness, and manage group-specific policy and deployment."
-      action={<button className="button-primary" onClick={() => { setActiveTab('deployment'); setToken('') }}><Key size={16} /> Deploy agent</button>}
+      action={<button className="button-primary" onClick={() => { setActiveTab('deployment'); setToken(''); setEnrollmentTrust(null) }}><Key size={16} /> Deploy agent</button>}
     />
     {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
-    {showDownloads && <AgentDownloadPanel packages={data.packages} platformUrl={data.connectivity.public_url} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
+    {showDownloads && <AgentDownloadPanel packages={data.packages} platformUrl={data.connectivity.public_url} platformTrust={enrollmentTrust ?? data.connectivity.platform_trust} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
 
     <section className="panel overflow-hidden">
       <div className="grid min-w-0 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -406,12 +408,13 @@ export function AgentsSettingsPage() {
               <section className="min-w-0 border-b border-stone-800 px-5 py-6 sm:px-7 lg:border-b-0 lg:border-r">
                 <div className="flex items-start justify-between gap-4">
                   <div><p className="section-label">Connection destination</p><p className="mt-3 text-sm font-medium text-stone-200">Dedicated agent gateway</p><code className="mt-2 block break-all text-[11px] text-stone-500">{data.connectivity.public_url}</code></div>
-                  <span className="status-pill status-pill-online">HTTPS</span>
+                  <span className="status-pill status-pill-online">Identity Pinned</span>
                 </div>
                 <div className="mt-6 grid gap-4 border-t border-stone-800 pt-5 sm:grid-cols-2">
                   <div><span className="detail-label">Current release</span><strong className="mt-2 block text-sm font-semibold text-stone-200">{data.packages[0]?.version ?? 'Unavailable'}</strong><span className="table-subtitle">{data.packages.length} package formats</span></div>
                   <div><span className="detail-label">Operating mode</span><strong className="mt-2 block text-sm font-semibold text-stone-200">Audit only</strong><span className="table-subtitle">Host configuration is not changed</span></div>
                 </div>
+                <div className="mt-4 border-t border-stone-800 pt-4"><span className="detail-label">Platform identity fingerprint</span><code className="mt-2 block break-all text-[10px] text-stone-500">SHA256:{data.connectivity.platform_trust.fingerprint}</code></div>
                 <Button className="mt-6" disabled={!data.packages.length} onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> View packages and commands</Button>
               </section>
 

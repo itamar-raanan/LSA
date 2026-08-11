@@ -30,6 +30,7 @@ from lsa.models import (
     IngestionToken,
     LinuxAgent,
     PolicyMode,
+    PlatformCommandSigningKey,
     SigningKey,
     User,
     now_utc,
@@ -61,6 +62,11 @@ from lsa.schemas import (
     LinuxAgentResponse,
 )
 from lsa.security import hash_ingestion_token
+from lsa.services.platform_command_trust import (
+    active_platform_command_key,
+    platform_trust_descriptor,
+    sign_platform_envelope,
+)
 
 
 router = APIRouter(tags=["agents"])
@@ -242,6 +248,8 @@ def _agent_response(db: Session, agent: LinuxAgent) -> LinuxAgentResponse:
         agent_version=agent.agent_version,
         capabilities=agent.capabilities or [],
         fingerprint=agent.fingerprint,
+        platform_trust_status="pinned" if agent.platform_command_key_id else "missing",
+        platform_command_key_fingerprint=agent.platform_command_key_fingerprint,
         last_seen_at=agent.last_seen_at,
         last_policy_version=agent.last_policy_version,
         last_scan_at=host.last_scan_at,
@@ -709,9 +717,11 @@ def create_enrollment_token(
     if expires_at <= now_utc() or expires_at > now_utc() + timedelta(days=30):
         raise HTTPException(status_code=422, detail="Enrollment token expiry must be within the next 30 days")
     raw_token = f"lsa_enroll_{secrets.token_urlsafe(32)}"
+    platform_key, key_created = active_platform_command_key(db, user.tenant_id)
     token = AgentEnrollmentToken(
         tenant_id=user.tenant_id,
         group_id=request.group_id,
+        platform_command_key_id=platform_key.id,
         name=request.name.strip(),
         token_prefix=raw_token[:24],
         token_hash=hash_ingestion_token(raw_token),
@@ -727,7 +737,12 @@ def create_enrollment_token(
             action="agent_enrollment_token.created",
             target_type="agent_enrollment_token",
             target_id=token.id,
-            details={"group_id": token.group_id, "expires_at": token.expires_at.isoformat()},
+            details={
+                "group_id": token.group_id,
+                "expires_at": token.expires_at.isoformat(),
+                "platform_command_key_fingerprint": platform_key.fingerprint,
+                "platform_command_key_created": key_created,
+            },
         )
     )
     db.commit()
@@ -738,6 +753,7 @@ def create_enrollment_token(
         token=raw_token,
         token_prefix=token.token_prefix,
         expires_at=token.expires_at,
+        platform_trust=platform_trust_descriptor(platform_key),
     )
 
 
@@ -836,6 +852,18 @@ def enroll_agent(
     ):
         raise HTTPException(status_code=401, detail="Invalid, expired, or already used enrollment token")
     group = _require_group(db, enrollment.tenant_id, enrollment.group_id)
+    if enrollment.platform_command_key_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Enrollment token predates platform identity pinning; create a new token",
+        )
+    platform_key = db.get(PlatformCommandSigningKey, enrollment.platform_command_key_id)
+    if (
+        platform_key is None
+        or platform_key.tenant_id != enrollment.tenant_id
+        or platform_key.revoked_at is not None
+    ):
+        raise HTTPException(status_code=409, detail="Enrollment platform identity is unavailable")
     _, public_key_raw = _validate_public_key(request.public_key)
     fingerprint = hashlib.sha256(public_key_raw).hexdigest()
     if db.scalar(
@@ -911,6 +939,9 @@ def enroll_agent(
         agent_version=request.agent_version,
         capabilities=request.capabilities,
         capabilities_attested_at=now_utc(),
+        platform_command_key_id=platform_key.id,
+        platform_command_key_fingerprint=platform_key.fingerprint,
+        platform_envelope_sequence=1,
         last_seen_at=now_utc(),
     )
     db.add(agent)
@@ -932,6 +963,27 @@ def enroll_agent(
             },
         )
     )
+    issued_at = now_utc()
+    envelope = {
+        "schema_version": "1.0",
+        "kind": "agent-enrollment",
+        "key_id": platform_key.id,
+        "sequence": 1,
+        "issued_at": issued_at.isoformat(),
+        "expires_at": (issued_at + timedelta(minutes=5)).isoformat(),
+        "agent_id": agent.id,
+        "payload": {
+            "agent_id": agent.id,
+            "host_id": host.id,
+            "group_id": group.id,
+            "ingestion_token": raw_ingestion_token,
+            "signing_key_id": signing_key.id,
+            "policy_version": version.version,
+            "agent_identity_fingerprint": fingerprint,
+            "execution_enabled": False,
+        },
+    }
+    signature = sign_platform_envelope(platform_key, envelope)
     db.commit()
     return AgentEnrollmentResponse(
         agent_id=agent.id,
@@ -940,6 +992,9 @@ def enroll_agent(
         ingestion_token=raw_ingestion_token,
         signing_key_id=signing_key.id,
         policy_version=version.version,
+        platform_trust=platform_trust_descriptor(platform_key),
+        platform_envelope=envelope,
+        platform_signature=signature,
     )
 
 

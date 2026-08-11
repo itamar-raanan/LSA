@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.orm import Session
 
 from lsa.api.admin import require_admin
 from lsa.dependencies import current_user
-from lsa.models import User
+from lsa.models import AuditEvent, User
+from lsa.database import get_db
 from lsa.config import Settings, get_settings
 from lsa.schemas import AgentConnectivityResponse, AgentPackageResponse
 from lsa.services.agent_packages import AgentPackage, agent_packages, get_agent_package
+from lsa.services.platform_command_trust import active_platform_command_key, platform_trust_descriptor
 
 
 router = APIRouter(tags=["agent packages"])
@@ -15,9 +18,27 @@ router = APIRouter(tags=["agent packages"])
 def agent_connectivity(
     user: User = Depends(current_user),
     settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
 ) -> AgentConnectivityResponse:
     require_admin(user)
-    return AgentConnectivityResponse(public_url=settings.agent_public_url.rstrip("/"))
+    key, created = active_platform_command_key(db, user.tenant_id)
+    if created:
+        db.add(
+            AuditEvent(
+                tenant_id=user.tenant_id,
+                actor_type="user",
+                actor_id=user.id,
+                action="platform_command_key.created",
+                target_type="platform_command_signing_key",
+                target_id=key.id,
+                details={"key_version": key.key_version, "fingerprint": key.fingerprint},
+            )
+        )
+        db.commit()
+    return AgentConnectivityResponse(
+        public_url=settings.agent_public_url.rstrip("/"),
+        platform_trust=platform_trust_descriptor(key),
+    )
 
 
 def _response(package: AgentPackage) -> AgentPackageResponse:

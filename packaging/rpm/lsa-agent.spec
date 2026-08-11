@@ -52,6 +52,8 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Tue Aug 11 2026 Linux Security Auditor - 0.4.4-1
+  - Pin the tenant platform identity and verify signed enrollment proofs.
 * Wed Aug 05 2026 Linux Security Auditor - 0.4.3-1
 - Keep Ansible runtime and temporary files inside the agent's writable state directory.
 
