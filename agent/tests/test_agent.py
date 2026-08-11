@@ -1,9 +1,11 @@
 import base64
 import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from agent.integrity import build_manifest, verify_manifest, write_manifest
@@ -16,6 +18,7 @@ from agent.lsa_agent import (
     platform_url,
     run_scanner,
     signed_headers,
+    verify_platform_envelope,
 )
 
 
@@ -80,6 +83,124 @@ def test_policy_version_cannot_roll_back():
     assert state["highest_policy_version"] == 4
     with pytest.raises(RuntimeError, match="policy rollback rejected"):
         accept_policy_version(state, {"policy_version": 3})
+
+
+def signed_platform_envelope(
+    *,
+    key: Ed25519PrivateKey | None = None,
+    sequence: int = 1,
+    issued_at: datetime | None = None,
+    expires_at: datetime | None = None,
+    identity_fingerprint: str = "agent-fingerprint",
+    execution_enabled: bool = False,
+):
+    key = key or Ed25519PrivateKey.generate()
+    public_raw = key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    current = datetime.now(UTC)
+    envelope = {
+        "schema_version": "1.0",
+        "kind": "agent-enrollment",
+        "key_id": "platform-key-1",
+        "sequence": sequence,
+        "issued_at": (issued_at or current).isoformat(),
+        "expires_at": (expires_at or current + timedelta(minutes=5)).isoformat(),
+        "agent_id": "agent-1",
+        "payload": {
+            "agent_id": "agent-1",
+            "host_id": "host-1",
+            "agent_identity_fingerprint": identity_fingerprint,
+            "execution_enabled": execution_enabled,
+        },
+    }
+    canonical = json.dumps(
+        envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    trust = {
+        "key_id": "platform-key-1",
+        "key_version": 1,
+        "algorithm": "Ed25519",
+        "public_key": base64.b64encode(public_raw).decode(),
+        "fingerprint": hashlib.sha256(public_raw).hexdigest(),
+    }
+    return envelope, base64.b64encode(key.sign(canonical)).decode(), trust, key.public_key(), public_raw
+
+
+def test_platform_envelope_accepts_pinned_identity_and_records_sequence():
+    envelope, signature, trust, key, raw = signed_platform_envelope()
+    payload = verify_platform_envelope(
+        envelope,
+        signature,
+        trust,
+        key,
+        raw,
+        expected_kind="agent-enrollment",
+        expected_identity_fingerprint="agent-fingerprint",
+    )
+    assert payload["platform_envelope_sequence"] == 1
+    assert payload["platform_command_key_fingerprint"] == trust["fingerprint"]
+
+
+def test_platform_envelope_rejects_a_different_pinned_platform_key():
+    envelope, signature, trust, _, _ = signed_platform_envelope()
+    other = Ed25519PrivateKey.generate()
+    other_raw = other.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    with pytest.raises(RuntimeError, match="does not match the pinned key"):
+        verify_platform_envelope(
+            envelope,
+            signature,
+            trust,
+            other.public_key(),
+            other_raw,
+            expected_kind="agent-enrollment",
+            expected_identity_fingerprint="agent-fingerprint",
+        )
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ("tamper", "signature is invalid"),
+        ("expired", "expired"),
+        ("future", "future"),
+        ("replay", "replay or rollback"),
+        ("identity", "another agent identity"),
+        ("execution", "audit-only safety lock"),
+    ],
+)
+def test_platform_envelope_rejects_untrusted_or_replayed_control_data(change, message):
+    now = datetime.now(UTC)
+    kwargs = {}
+    state = None
+    expected_identity = "agent-fingerprint"
+    if change == "expired":
+        kwargs = {"issued_at": now - timedelta(minutes=6), "expires_at": now - timedelta(minutes=1)}
+    elif change == "future":
+        kwargs = {"issued_at": now + timedelta(minutes=6), "expires_at": now + timedelta(minutes=9)}
+    elif change == "replay":
+        state = {"agent_id": "agent-1", "platform_envelope_sequence": 1}
+    elif change == "identity":
+        expected_identity = "different-agent"
+    elif change == "execution":
+        kwargs = {"execution_enabled": True}
+    envelope, signature, trust, key, raw = signed_platform_envelope(**kwargs)
+    if change == "tamper":
+        envelope["payload"]["host_id"] = "attacker-host"
+    with pytest.raises(RuntimeError, match=message):
+        verify_platform_envelope(
+            envelope,
+            signature,
+            trust,
+            key,
+            raw,
+            expected_kind="agent-enrollment",
+            expected_identity_fingerprint=expected_identity,
+            state=state,
+            now=now,
+        )
 
 
 def test_scanner_uses_writable_ansible_runtime_paths_under_agent_state(tmp_path, monkeypatch):

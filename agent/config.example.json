@@ -2,6 +2,7 @@
   "platform_url": "https://lsa.example.com:8444",
   "scanner_dir": "/opt/lsa-agent/scanner",
   "state_dir": "/var/lib/lsa-agent",
+  "platform_command_key_file": "/etc/lsa-agent/platform-command-key.pub",
   "ansible_playbook": "ansible-playbook",
   "verify_tls": false,
   "tags": {

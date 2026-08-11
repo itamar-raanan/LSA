@@ -11,15 +11,15 @@ From **Agents** in the console, choose **Install agent** and download the Debian
 For Debian 13 or Ubuntu 24.04+:
 
 ```bash
-sudo apt install ./lsa-agent_0.4.3_all.deb
-sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
+sudo apt install ./lsa-agent_0.4.4_all.deb
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
 For RHEL, Rocky Linux, or AlmaLinux 9+:
 
 ```bash
-sudo dnf install ./lsa-agent-0.4.3-1.noarch.rpm
-sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
+sudo dnf install ./lsa-agent-0.4.4-1.noarch.rpm
+sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
 The native package only stages the runtime. It does not start the service before successful enrollment.
@@ -29,14 +29,16 @@ For the universal archive:
 Create a one-time enrollment token for the target group, then run:
 
 ```bash
-tar -xzf lsa-agent-0.4.3-linux-universal.tar.gz
-cd lsa-agent-0.4.3
-sudo ./install.sh --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...'
+tar -xzf lsa-agent-0.4.4-linux-universal.tar.gz
+cd lsa-agent-0.4.4
+sudo ./install.sh --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
 The installer places the runtime in `/opt/lsa-agent`, configuration in `/etc/lsa-agent`, state in `/var/lib/lsa-agent`, and the service unit in `/usr/lib/systemd/system`.
 
-The private key, host ingestion token, and local state are stored with mode `0600` under `/var/lib/lsa-agent`. The server only receives the public key. The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.4.3 does not validate the gateway certificate or hostname. The signed agent protocol still authenticates enrolled agents to the platform, but a network attacker could impersonate the platform during enrollment or agent polling. The agent does not use the management console port.
+The console-generated command transparently installs the tenant's public Ed25519 platform key in `/etc/lsa-agent/platform-command-key.pub`. This key is public, not a credential. Before storing its ingestion token, the agent verifies a short-lived signed enrollment proof bound to its locally generated identity and rejects a changed key, invalid signature, expired proof, or replayed sequence. The private agent key, host ingestion token, and local state remain mode `0600` under `/var/lib/lsa-agent`.
+
+The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.4.4 does not validate the gateway certificate or hostname. Platform identity is authenticated during enrollment at the application layer. Ordinary policy polling is not yet signed, so the audit-only protocol lock remains mandatory: policy data cannot carry commands and the agent rejects any response that enables execution. The agent does not use the management console port.
 
 The agent advertises `signed-change-set-planning-v1` so the management plane can verify that it supplies the identity, freshness, policy, and integrity evidence needed for signed governance planning. This capability does not enable configuration writes or change-set execution; task consumption remains restricted to `audit`.
 

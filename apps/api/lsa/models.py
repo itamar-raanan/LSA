@@ -357,6 +357,13 @@ class LinuxAgent(Base):
     capabilities_attested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    platform_command_key_id: Mapped[str | None] = mapped_column(
+        ForeignKey("platform_command_signing_keys.id"), nullable=True, index=True
+    )
+    platform_command_key_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    platform_envelope_sequence: Mapped[int] = mapped_column(default=0)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_policy_version: Mapped[int | None] = mapped_column(nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -388,6 +395,9 @@ class AgentEnrollmentToken(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     group_id: Mapped[str] = mapped_column(ForeignKey("agent_groups.id"), index=True)
+    platform_command_key_id: Mapped[str | None] = mapped_column(
+        ForeignKey("platform_command_signing_keys.id"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(160))
     token_prefix: Mapped[str] = mapped_column(String(24), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
@@ -546,6 +556,32 @@ class RemediationPlan(Base):
     cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class PlatformCommandSigningKey(Base):
+    __tablename__ = "platform_command_signing_keys"
+    __table_args__ = (
+        Index(
+            "ix_platform_command_signing_keys_tenant_fingerprint",
+            "tenant_id",
+            "fingerprint",
+            unique=True,
+        ),
+        UniqueConstraint("tenant_id", "key_version", name="uq_platform_command_key_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    key_version: Mapped[int] = mapped_column(default=1)
+    public_key: Mapped[str] = mapped_column(String(64))
+    private_key_ciphertext: Mapped[str] = mapped_column(Text)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    supersedes_key_id: Mapped[str | None] = mapped_column(
+        ForeignKey("platform_command_signing_keys.id"), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
 class PlatformChangeSigningKey(Base):

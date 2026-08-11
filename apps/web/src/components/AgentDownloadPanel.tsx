@@ -1,12 +1,13 @@
 import { Check, Copy, DownloadSimple, Package, TerminalWindow } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { api } from '../api/client'
-import type { AgentPackage } from '../types'
+import type { AgentPackage, PlatformCommandTrust } from '../types'
 import { Dialog } from './ui/Dialog'
 
 interface AgentDownloadPanelProps {
   packages: AgentPackage[]
   platformUrl: string
+  platformTrust: PlatformCommandTrust
   enrollmentToken?: string
   close: () => void
 }
@@ -21,7 +22,7 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
 
-export function AgentDownloadPanel({ packages, platformUrl, enrollmentToken, close }: AgentDownloadPanelProps) {
+export function AgentDownloadPanel({ packages, platformUrl, platformTrust, enrollmentToken, close }: AgentDownloadPanelProps) {
   const [downloading, setDownloading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
@@ -31,16 +32,17 @@ export function AgentDownloadPanel({ packages, platformUrl, enrollmentToken, clo
   const installCommand = useMemo(
     () => {
       if (!selectedPackage) return 'No agent package is available.'
-      const enrollment = `sudo lsa-agent-enroll --platform-url ${shellQuote(platformUrl)} --token ${shellQuote(tokenValue)}`
+      const trustArgument = `--platform-command-key ${shellQuote(platformTrust.public_key)}`
+      const enrollment = `sudo lsa-agent-enroll --platform-url ${shellQuote(platformUrl)} --token ${shellQuote(tokenValue)} ${trustArgument}`
       if (selectedPackage.package_format === 'deb') {
         return `sudo apt install ./${selectedPackage.filename}\n${enrollment}`
       }
       if (selectedPackage.package_format === 'rpm') {
         return `sudo dnf install ./${selectedPackage.filename}\n${enrollment}`
       }
-      return `tar -xzf ${selectedPackage.filename}\ncd lsa-agent-${selectedPackage.version}\nsudo ./install.sh --platform-url ${shellQuote(platformUrl)} --token ${shellQuote(tokenValue)}`
+      return `tar -xzf ${selectedPackage.filename}\ncd lsa-agent-${selectedPackage.version}\nsudo ./install.sh --platform-url ${shellQuote(platformUrl)} --token ${shellQuote(tokenValue)} ${trustArgument}`
     },
-    [platformUrl, selectedPackage, tokenValue],
+    [platformTrust.public_key, platformUrl, selectedPackage, tokenValue],
   )
 
   async function copy(label: string, value: string) {
@@ -96,7 +98,8 @@ export function AgentDownloadPanel({ packages, platformUrl, enrollmentToken, clo
         <button className="button-secondary min-h-9 px-3" onClick={() => void copy('command', installCommand)}>{copied === 'command' ? <Check size={14} /> : <Copy size={14} />} {copied === 'command' ? 'Copied' : 'Copy command'}</button>
       </div>
       <pre className="mt-4 overflow-x-auto rounded-xl border border-stone-800 bg-[#f7f3eb] p-4 font-mono text-[11px] leading-6 text-[#4f6f5c]"><code>{installCommand}</code></pre>
-      <p className="mt-3 text-[11px] leading-5 text-stone-600">Agents connect outbound to the dedicated HTTPS gateway at <code className="text-stone-500">{platformUrl}</code>. Package installation stages the audit-only runtime but does not start it. Enrollment requires Python 3.11+, systemd, and network access to install constrained Python dependencies. Agent certificate and hostname verification are disabled; traffic remains encrypted, but the platform identity is not authenticated.</p>
+      <div className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-stone-600"><Check size={14} className="mt-0.5 shrink-0 text-[#4f6f5c]" /><p><strong className="font-medium text-stone-700">Platform identity is pinned during enrollment.</strong> The public key is not secret. The agent verifies the signed enrollment proof before saving credentials. TLS certificate verification remains disabled, while platform responses are authenticated by this pinned Ed25519 identity.</p></div>
+      <p className="mt-2 break-all font-mono text-[10px] text-stone-500">Platform fingerprint · SHA256:{platformTrust.fingerprint}</p>
       {!enrollmentToken && <p className="mt-2 text-[11px] text-amber-300/80">Create an enrollment token before running the command and replace the token placeholder.</p>}
     </div>
   </Dialog>

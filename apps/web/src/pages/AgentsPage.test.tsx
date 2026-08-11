@@ -22,8 +22,8 @@ vi.mock('../api/client', () => ({
     ]),
     controlCatalog: vi.fn().mockResolvedValue([{ control_id: 'CIS-DEBIAN13-1.1.1', title: 'Disable unused filesystem', category: 'filesystem', module: 'cis_debian13' }]),
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
-    createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token' }),
-    agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444' }),
+    createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
+    agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
     agentPackages: vi.fn().mockResolvedValue([
       { id: 'linux-deb', version: '0.4.1', filename: 'lsa-agent_0.4.1_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
       { id: 'linux-rpm', version: '0.4.1', filename: 'lsa-agent-0.4.1-1.noarch.rpm', content_type: 'application/x-rpm', operating_system: 'RHEL / Rocky / AlmaLinux 9+', architecture: 'noarch', package_format: 'rpm', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'b'.repeat(64) },
@@ -96,6 +96,7 @@ describe('Agents', () => {
     expect(screen.getAllByRole('button', { name: 'Download Package' })).toHaveLength(1)
     expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.1_all.deb/)).toBeInTheDocument()
     expect(screen.getByText(/--platform-url 'https:\/\/lsa.example.test:8444'/)).toBeInTheDocument()
+    expect(screen.getByText(/--platform-command-key 'cHVibGljLWtleQ=='/)).toBeInTheDocument()
     fireEvent.change(screen.getByRole('combobox', { name: 'Agent package' }), { target: { value: 'linux-rpm' } })
     expect(screen.getByText(/sudo dnf install .*lsa-agent-0.4.1-1.noarch.rpm/)).toBeInTheDocument()
     expect(screen.getAllByText(/SHA-256/)).toHaveLength(1)
@@ -103,7 +104,7 @@ describe('Agents', () => {
 
   it('separates connection and report freshness and explains agent revocation', async () => {
     vi.mocked(api.agents).mockResolvedValueOnce([{
-      id: 'agent-1', host_id: 'host-1', hostname: 'web-01', group_id: 'group-1', group_name: 'Default Linux Fleet', policy_name: 'Monitor (Audit Only)', policy_version: 1, agent_version: '0.4.1', capabilities: ['audit'], fingerprint: 'fingerprint', last_seen_at: new Date().toISOString(), last_policy_version: 1, last_scan_at: new Date().toISOString(), latest_task_status: 'completed', latest_task_created_at: new Date().toISOString(), revoked_at: null, created_at: '2026-01-01T00:00:00Z',
+      id: 'agent-1', host_id: 'host-1', hostname: 'web-01', group_id: 'group-1', group_name: 'Default Linux Fleet', policy_name: 'Monitor (Audit Only)', policy_version: 1, agent_version: '0.4.1', capabilities: ['audit'], fingerprint: 'fingerprint', platform_trust_status: 'pinned', platform_command_key_fingerprint: 'f'.repeat(64), last_seen_at: new Date().toISOString(), last_policy_version: 1, last_scan_at: new Date().toISOString(), latest_task_status: 'completed', latest_task_created_at: new Date().toISOString(), revoked_at: null, created_at: '2026-01-01T00:00:00Z',
     }])
     render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
 

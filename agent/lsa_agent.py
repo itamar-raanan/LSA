@@ -20,14 +20,15 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 try:
     from .integrity import verify_manifest
@@ -35,7 +36,7 @@ except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
 
 
-VERSION = "0.4.3"
+VERSION = "0.4.4"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -125,6 +126,100 @@ def public_key_b64(key: Ed25519PrivateKey) -> str:
         serialization.Encoding.Raw, serialization.PublicFormat.Raw
     )
     return base64.b64encode(raw).decode()
+
+
+def canonical_envelope(envelope: dict[str, Any]) -> bytes:
+    return json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+def load_platform_command_key(config: dict[str, Any]) -> tuple[Ed25519PublicKey, bytes]:
+    path = Path(config.get("platform_command_key_file", "/etc/lsa-agent/platform-command-key.pub"))
+    try:
+        raw = base64.b64decode(path.read_text(encoding="utf-8").strip(), validate=True)
+        if len(raw) != 32:
+            raise ValueError
+        return Ed25519PublicKey.from_public_bytes(raw), raw
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"pinned platform identity is missing: {path}") from exc
+    except (OSError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"pinned platform identity is invalid: {path}") from exc
+
+
+def _envelope_time(value: object, field: str) -> datetime:
+    if not isinstance(value, str):
+        raise RuntimeError(f"platform envelope {field} is invalid")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise RuntimeError(f"platform envelope {field} is invalid") from exc
+    if parsed.tzinfo is None:
+        raise RuntimeError(f"platform envelope {field} must include a timezone")
+    return parsed.astimezone(UTC)
+
+
+def verify_platform_envelope(
+    envelope: dict[str, Any],
+    signature: str,
+    trust: dict[str, Any],
+    pinned_key: Ed25519PublicKey,
+    pinned_raw: bytes,
+    *,
+    expected_kind: str,
+    expected_identity_fingerprint: str,
+    state: dict[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    pinned_fingerprint = hashlib.sha256(pinned_raw).hexdigest()
+    if trust.get("algorithm") != "Ed25519":
+        raise RuntimeError("platform trust algorithm is unsupported")
+    if trust.get("fingerprint") != pinned_fingerprint:
+        raise RuntimeError("platform identity does not match the pinned key")
+    try:
+        advertised_raw = base64.b64decode(str(trust.get("public_key", "")), validate=True)
+        signature_raw = base64.b64decode(signature, validate=True)
+        if advertised_raw != pinned_raw or len(signature_raw) != 64:
+            raise ValueError
+        pinned_key.verify(signature_raw, canonical_envelope(envelope))
+    except (InvalidSignature, TypeError, ValueError) as exc:
+        raise RuntimeError("platform envelope signature is invalid") from exc
+
+    if envelope.get("schema_version") != "1.0" or envelope.get("kind") != expected_kind:
+        raise RuntimeError("platform envelope type is invalid")
+    if envelope.get("key_id") != trust.get("key_id"):
+        raise RuntimeError("platform envelope key binding is invalid")
+    sequence = envelope.get("sequence")
+    if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 1:
+        raise RuntimeError("platform envelope sequence is invalid")
+    prior_sequence = (state or {}).get("platform_envelope_sequence", 0)
+    if not isinstance(prior_sequence, int) or sequence <= prior_sequence:
+        raise RuntimeError("platform envelope replay or rollback rejected")
+
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    issued_at = _envelope_time(envelope.get("issued_at"), "issued_at")
+    expires_at = _envelope_time(envelope.get("expires_at"), "expires_at")
+    if issued_at > current + timedelta(minutes=5):
+        raise RuntimeError("platform envelope was issued too far in the future")
+    if expires_at <= current or expires_at <= issued_at:
+        raise RuntimeError("platform envelope is expired")
+    if expires_at - issued_at > timedelta(minutes=10):
+        raise RuntimeError("platform envelope validity window is too long")
+
+    payload = envelope.get("payload")
+    if not isinstance(payload, dict):
+        raise RuntimeError("platform envelope payload is invalid")
+    if envelope.get("agent_id") != payload.get("agent_id"):
+        raise RuntimeError("platform envelope agent binding is invalid")
+    if state and envelope.get("agent_id") != state.get("agent_id"):
+        raise RuntimeError("platform envelope belongs to another agent")
+    if payload.get("agent_identity_fingerprint") != expected_identity_fingerprint:
+        raise RuntimeError("platform envelope belongs to another agent identity")
+    if payload.get("execution_enabled") is not False:
+        raise RuntimeError("platform envelope does not preserve the audit-only safety lock")
+    payload["platform_envelope_sequence"] = sequence
+    payload["platform_command_key_id"] = trust["key_id"]
+    payload["platform_command_key_version"] = trust["key_version"]
+    payload["platform_command_key_fingerprint"] = pinned_fingerprint
+    return payload
 
 
 def os_release() -> dict[str, str]:
@@ -236,8 +331,12 @@ def enroll(config: dict[str, Any], token: str) -> None:
     if state_path.exists():
         raise RuntimeError(f"agent is already enrolled: {state_path}")
     key = ensure_private_key(key_path)
+    pinned_key, pinned_raw = load_platform_command_key(config)
     payload = inventory(config)
     payload["public_key"] = public_key_b64(key)
+    identity_fingerprint = hashlib.sha256(
+        key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    ).hexdigest()
     with http_client(config) as client:
         response = client.post(
             "/api/v1/agent/enroll",
@@ -245,10 +344,24 @@ def enroll(config: dict[str, Any], token: str) -> None:
             json=payload,
         )
         response.raise_for_status()
-        state = response.json()
+        result = response.json()
+    try:
+        state = verify_platform_envelope(
+            result["platform_envelope"],
+            result["platform_signature"],
+            result["platform_trust"],
+            pinned_key,
+            pinned_raw,
+            expected_kind="agent-enrollment",
+            expected_identity_fingerprint=identity_fingerprint,
+        )
+    except (KeyError, TypeError) as exc:
+        raise RuntimeError("platform did not return a signed enrollment proof") from exc
     state["enrolled_at"] = datetime.now(UTC).isoformat()
     state["highest_policy_version"] = state.get("policy_version", 0)
     atomic_json(state_path, state)
+    print("Platform identity verified")
+    print(f"Fingerprint: SHA256:{state['platform_command_key_fingerprint']}")
     print(f"Enrolled agent {state['agent_id']} for host {state['host_id']}")
 
 
@@ -418,7 +531,8 @@ def main() -> int:
         config = read_json(arguments.config)
         print(
             "WARNING: LSA agent server certificate verification is disabled; "
-            "HTTPS traffic is encrypted but the platform identity is not authenticated.",
+            "HTTPS traffic is encrypted, and enrollment identity is authenticated with the "
+            "pinned platform key, but ordinary polling still relies on the audit-only protocol lock.",
             file=sys.stderr,
         )
         if arguments.command == "enroll":

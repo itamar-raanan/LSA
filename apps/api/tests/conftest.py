@@ -1,11 +1,11 @@
 import os
 import shutil
 
-os.environ["LSA_DATABASE_URL"] = "sqlite:///./lsa-test.sqlite3"
-os.environ["LSA_SEED_DEMO"] = "false"
-os.environ["LSA_BOOTSTRAP_PASSWORD"] = "test-password"
-os.environ["LSA_SESSION_SECRET"] = "test-session-secret-with-more-than-32-chars"
-os.environ["LSA_ARTIFACT_PATH"] = "/tmp/lsa-test-artifacts"
+os.environ.setdefault("LSA_DATABASE_URL", "sqlite:///./lsa-test.sqlite3")
+os.environ.setdefault("LSA_SEED_DEMO", "false")
+os.environ.setdefault("LSA_BOOTSTRAP_PASSWORD", "test-password")
+os.environ.setdefault("LSA_SESSION_SECRET", "test-session-secret-with-more-than-32-chars")
+os.environ.setdefault("LSA_ARTIFACT_PATH", "/tmp/lsa-test-artifacts")
 
 import pytest
 from fastapi.testclient import TestClient
