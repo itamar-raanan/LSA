@@ -106,28 +106,65 @@ def _validate_policy_settings(settings: dict[str, object]) -> dict[str, object]:
         "jitter_seconds": 300,
         "profile": "level2_server",
         "remediation_approval": "required",
+        "remediation_four_eyes": True,
+        "remediation_required_capability": "signed-change-set-planning-v1",
+        "remediation_max_evidence_age_minutes": 1440,
+        "remediation_max_agent_attestation_age_minutes": 15,
+        "remediation_max_targets_per_change_set": 25,
+        "remediation_max_canary_hosts": 3,
+        "remediation_max_batch_hosts": 5,
+        "remediation_min_batch_interval_minutes": 15,
         **settings,
     }
     try:
         schedule = int(result["schedule_minutes"])
         jitter = int(result["jitter_seconds"])
+        max_evidence_age = int(result["remediation_max_evidence_age_minutes"])
+        max_attestation_age = int(result["remediation_max_agent_attestation_age_minutes"])
+        max_targets = int(result["remediation_max_targets_per_change_set"])
+        max_canaries = int(result["remediation_max_canary_hosts"])
+        max_batch = int(result["remediation_max_batch_hosts"])
+        min_interval = int(result["remediation_min_batch_interval_minutes"])
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="Policy schedule and jitter must be integers") from exc
+        raise HTTPException(status_code=422, detail="Policy timing and remediation limits must be integers") from exc
     if schedule < 5 or schedule > 10080:
         raise HTTPException(status_code=422, detail="Policy schedule must be between 5 and 10080 minutes")
     if jitter < 0 or jitter > 3600:
         raise HTTPException(status_code=422, detail="Policy jitter must be between 0 and 3600 seconds")
+    if max_evidence_age < 15 or max_evidence_age > 10080:
+        raise HTTPException(status_code=422, detail="Remediation evidence age must be between 15 and 10080 minutes")
+    if max_attestation_age < 5 or max_attestation_age > 1440:
+        raise HTTPException(status_code=422, detail="Agent attestation age must be between 5 and 1440 minutes")
+    if max_targets < 1 or max_targets > 100:
+        raise HTTPException(status_code=422, detail="Change-set target limit must be between 1 and 100")
+    if max_canaries < 1 or max_canaries > min(10, max_targets):
+        raise HTTPException(
+            status_code=422,
+            detail="Canary limit must be between 1 and 10 and not exceed the target limit",
+        )
+    if max_batch < 1 or max_batch > max_targets:
+        raise HTTPException(status_code=422, detail="Batch limit must be between 1 and the target limit")
+    if min_interval < 15 or min_interval > 1440:
+        raise HTTPException(status_code=422, detail="Batch interval must be between 15 and 1440 minutes")
     result["schedule_minutes"] = schedule
     result["jitter_seconds"] = jitter
     result["remediation_approval"] = "required"
+    result["remediation_four_eyes"] = True
+    result["remediation_required_capability"] = "signed-change-set-planning-v1"
+    result["remediation_max_evidence_age_minutes"] = max_evidence_age
+    result["remediation_max_agent_attestation_age_minutes"] = max_attestation_age
+    result["remediation_max_targets_per_change_set"] = max_targets
+    result["remediation_max_canary_hosts"] = max_canaries
+    result["remediation_max_batch_hosts"] = max_batch
+    result["remediation_min_batch_interval_minutes"] = min_interval
     return result
 
 
 def _policy_response(db: Session, policy: AgentPolicy) -> AgentPolicyResponse:
     version = _latest_policy_version(db, policy.id)
-    assigned_groups = db.scalar(
-        select(func.count()).select_from(AgentGroup).where(AgentGroup.policy_id == policy.id)
-    ) or 0
+    assigned_groups = (
+        db.scalar(select(func.count()).select_from(AgentGroup).where(AgentGroup.policy_id == policy.id)) or 0
+    )
     return AgentPolicyResponse(
         id=policy.id,
         name=policy.name,
@@ -147,11 +184,14 @@ def _group_response(db: Session, group: AgentGroup) -> AgentGroupResponse:
     if policy is None:
         raise HTTPException(status_code=409, detail="Assigned policy no longer exists")
     version = _latest_policy_version(db, policy.id)
-    agent_count = db.scalar(
-        select(func.count()).select_from(LinuxAgent).where(
-            LinuxAgent.group_id == group.id, LinuxAgent.revoked_at.is_(None)
+    agent_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(LinuxAgent)
+            .where(LinuxAgent.group_id == group.id, LinuxAgent.revoked_at.is_(None))
         )
-    ) or 0
+        or 0
+    )
     return AgentGroupResponse(
         id=group.id,
         name=group.name,
@@ -189,9 +229,7 @@ def _agent_response(db: Session, agent: LinuxAgent) -> LinuxAgentResponse:
         raise HTTPException(status_code=409, detail="Assigned policy no longer exists")
     version = _latest_policy_version(db, policy.id)
     latest_task = db.scalar(
-        select(AgentTask)
-        .where(AgentTask.agent_id == agent.id)
-        .order_by(AgentTask.created_at.desc())
+        select(AgentTask).where(AgentTask.agent_id == agent.id).order_by(AgentTask.created_at.desc())
     )
     return LinuxAgentResponse(
         id=agent.id,
@@ -253,9 +291,7 @@ def list_policies(user: User = Depends(current_user), db: Session = Depends(get_
 @router.post("/agent-policies", response_model=AgentPolicyResponse, status_code=201)
 def create_policy(request: AgentPolicyCreate, user: User = Depends(current_user), db: Session = Depends(get_db)):
     require_admin(user)
-    policy = AgentPolicy(
-        tenant_id=user.tenant_id, name=request.name.strip(), description=request.description.strip()
-    )
+    policy = AgentPolicy(tenant_id=user.tenant_id, name=request.name.strip(), description=request.description.strip())
     db.add(policy)
     db.flush()
     version = AgentPolicyVersion(
@@ -268,7 +304,17 @@ def create_policy(request: AgentPolicyCreate, user: User = Depends(current_user)
         created_by=user.id,
     )
     db.add(version)
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_policy.created", target_type="agent_policy", target_id=policy.id, details={"name": policy.name, "version": 1}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent_policy.created",
+            target_type="agent_policy",
+            target_id=policy.id,
+            details={"name": policy.name, "version": 1},
+        )
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -278,12 +324,17 @@ def create_policy(request: AgentPolicyCreate, user: User = Depends(current_user)
 
 
 @router.put("/agent-policies/{policy_id}", response_model=AgentPolicyResponse)
-def update_policy(policy_id: str, request: AgentPolicyUpdate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def update_policy(
+    policy_id: str,
+    request: AgentPolicyUpdate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     require_admin(user)
     policy = db.scalar(
-        select(AgentPolicy).where(
-            AgentPolicy.id == policy_id, AgentPolicy.tenant_id == user.tenant_id
-        ).with_for_update()
+        select(AgentPolicy)
+        .where(AgentPolicy.id == policy_id, AgentPolicy.tenant_id == user.tenant_id)
+        .with_for_update()
     )
     if policy is None:
         raise HTTPException(status_code=404, detail="Agent policy not found")
@@ -300,7 +351,17 @@ def update_policy(policy_id: str, request: AgentPolicyUpdate, user: User = Depen
         created_by=user.id,
     )
     db.add(version)
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_policy.version_published", target_type="agent_policy", target_id=policy.id, details={"version": version.version, "enforcement_enabled": False}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent_policy.version_published",
+            target_type="agent_policy",
+            target_id=policy.id,
+            details={"version": version.version, "enforcement_enabled": False},
+        )
+    )
     db.commit()
     return _policy_response(db, policy)
 
@@ -311,7 +372,10 @@ def list_policy_versions(policy_id: str, user: User = Depends(current_user), db:
     _require_policy(db, user.tenant_id, policy_id)
     versions = db.scalars(
         select(AgentPolicyVersion)
-        .where(AgentPolicyVersion.policy_id == policy_id, AgentPolicyVersion.tenant_id == user.tenant_id)
+        .where(
+            AgentPolicyVersion.policy_id == policy_id,
+            AgentPolicyVersion.tenant_id == user.tenant_id,
+        )
         .order_by(AgentPolicyVersion.version.desc())
     ).all()
     return [
@@ -320,7 +384,11 @@ def list_policy_versions(policy_id: str, user: User = Depends(current_user), db:
             default_mode=item.default_mode.value,
             control_modes=item.control_modes or {},
             settings=item.settings or {},
-            created_by_name=(db.get(User, item.created_by).display_name if item.created_by and db.get(User, item.created_by) else None),
+            created_by_name=(
+                db.get(User, item.created_by).display_name
+                if item.created_by and db.get(User, item.created_by)
+                else None
+            ),
             created_at=item.created_at,
         )
         for item in versions
@@ -328,10 +396,19 @@ def list_policy_versions(policy_id: str, user: User = Depends(current_user), db:
 
 
 @router.post("/agent-policies/{policy_id}/restore", response_model=AgentPolicyResponse)
-def restore_policy_version(policy_id: str, request: AgentPolicyRestoreRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def restore_policy_version(
+    policy_id: str,
+    request: AgentPolicyRestoreRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     require_admin(user)
     policy = _require_policy(db, user.tenant_id, policy_id)
-    source = db.scalar(select(AgentPolicyVersion).where(AgentPolicyVersion.policy_id == policy.id, AgentPolicyVersion.version == request.version))
+    source = db.scalar(
+        select(AgentPolicyVersion).where(
+            AgentPolicyVersion.policy_id == policy.id, AgentPolicyVersion.version == request.version
+        )
+    )
     if source is None:
         raise HTTPException(status_code=404, detail="Policy version not found")
     latest = _latest_policy_version(db, policy.id)
@@ -346,7 +423,21 @@ def restore_policy_version(policy_id: str, request: AgentPolicyRestoreRequest, u
     )
     policy.updated_at = now_utc()
     db.add(restored)
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_policy.version_restored", target_type="agent_policy", target_id=policy.id, details={"source_version": source.version, "version": restored.version, "enforcement_enabled": False}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent_policy.version_restored",
+            target_type="agent_policy",
+            target_id=policy.id,
+            details={
+                "source_version": source.version,
+                "version": restored.version,
+                "enforcement_enabled": False,
+            },
+        )
+    )
     db.commit()
     return _policy_response(db, policy)
 
@@ -364,10 +455,25 @@ def list_groups(user: User = Depends(current_user), db: Session = Depends(get_db
 def create_group(request: AgentGroupCreate, user: User = Depends(current_user), db: Session = Depends(get_db)):
     require_admin(user)
     _require_policy(db, user.tenant_id, request.policy_id)
-    group = AgentGroup(tenant_id=user.tenant_id, policy_id=request.policy_id, name=request.name.strip(), description=request.description.strip())
+    group = AgentGroup(
+        tenant_id=user.tenant_id,
+        policy_id=request.policy_id,
+        name=request.name.strip(),
+        description=request.description.strip(),
+    )
     db.add(group)
     db.flush()
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_group.created", target_type="agent_group", target_id=group.id, details={"name": group.name, "policy_id": group.policy_id}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent_group.created",
+            target_type="agent_group",
+            target_id=group.id,
+            details={"name": group.name, "policy_id": group.policy_id},
+        )
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -377,7 +483,12 @@ def create_group(request: AgentGroupCreate, user: User = Depends(current_user), 
 
 
 @router.put("/agent-groups/{group_id}", response_model=AgentGroupResponse)
-def update_group(group_id: str, request: AgentGroupUpdate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def update_group(
+    group_id: str,
+    request: AgentGroupUpdate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     require_admin(user)
     group = _require_group(db, user.tenant_id, group_id)
     _require_policy(db, user.tenant_id, request.policy_id)
@@ -385,7 +496,17 @@ def update_group(group_id: str, request: AgentGroupUpdate, user: User = Depends(
     group.description = request.description.strip()
     group.policy_id = request.policy_id
     group.updated_at = now_utc()
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_group.updated", target_type="agent_group", target_id=group.id, details={"policy_id": group.policy_id}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent_group.updated",
+            target_type="agent_group",
+            target_id=group.id,
+            details={"policy_id": group.policy_id},
+        )
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -403,12 +524,12 @@ def list_agents(user: User = Depends(current_user), db: Session = Depends(get_db
     return [_agent_response(db, agent) for agent in agents]
 
 
-def _selected_agents(db: Session, tenant_id: str, agent_ids: list[str], *, active_only: bool = True) -> list[LinuxAgent]:
+def _selected_agents(
+    db: Session, tenant_id: str, agent_ids: list[str], *, active_only: bool = True
+) -> list[LinuxAgent]:
     unique_ids = list(dict.fromkeys(agent_ids))
     agents = db.scalars(
-        select(LinuxAgent)
-        .where(LinuxAgent.tenant_id == tenant_id, LinuxAgent.id.in_(unique_ids))
-        .with_for_update()
+        select(LinuxAgent).where(LinuxAgent.tenant_id == tenant_id, LinuxAgent.id.in_(unique_ids)).with_for_update()
     ).all()
     if len(agents) != len(unique_ids):
         raise HTTPException(status_code=404, detail="One or more agents were not found")
@@ -423,27 +544,64 @@ def queue_agent_audits(request: AgentBulkSelection, user: User = Depends(current
     agents = _selected_agents(db, user.tenant_id, request.agent_ids)
     tasks: list[AgentTask] = []
     for agent in agents:
-        existing = db.scalar(select(AgentTask).where(AgentTask.agent_id == agent.id, AgentTask.status.in_(["queued", "dispatched"])).order_by(AgentTask.created_at.desc()))
+        existing = db.scalar(
+            select(AgentTask)
+            .where(AgentTask.agent_id == agent.id, AgentTask.status.in_(["queued", "dispatched"]))
+            .order_by(AgentTask.created_at.desc())
+        )
         if existing:
             tasks.append(existing)
             continue
-        task = AgentTask(tenant_id=user.tenant_id, agent_id=agent.id, task_type="audit", status="queued", requested_by=user.id)
+        task = AgentTask(
+            tenant_id=user.tenant_id,
+            agent_id=agent.id,
+            task_type="audit",
+            status="queued",
+            requested_by=user.id,
+        )
         db.add(task)
         tasks.append(task)
     db.flush()
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.audit_queued", target_type="linux_agent", target_id="bulk", details={"agent_ids": [agent.id for agent in agents], "task_ids": [task.id for task in tasks]}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent.audit_queued",
+            target_type="linux_agent",
+            target_id="bulk",
+            details={
+                "agent_ids": [agent.id for agent in agents],
+                "task_ids": [task.id for task in tasks],
+            },
+        )
+    )
     db.commit()
     return tasks
 
 
 @router.post("/agents/actions/assign-group", response_model=AgentBulkResult)
-def bulk_assign_agent_group(request: AgentBulkGroupAssignment, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def bulk_assign_agent_group(
+    request: AgentBulkGroupAssignment,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     require_admin(user)
     _require_group(db, user.tenant_id, request.group_id)
     agents = _selected_agents(db, user.tenant_id, request.agent_ids)
     for agent in agents:
         agent.group_id = request.group_id
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.group_bulk_assigned", target_type="agent_group", target_id=request.group_id, details={"agent_ids": [agent.id for agent in agents]}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent.group_bulk_assigned",
+            target_type="agent_group",
+            target_id=request.group_id,
+            details={"agent_ids": [agent.id for agent in agents]},
+        )
+    )
     db.commit()
     return AgentBulkResult(affected=len(agents))
 
@@ -456,7 +614,9 @@ def _revoke_agent_credentials(db: Session, agent: LinuxAgent, revoked_at) -> Non
         token.revoked_at = revoked_at
     if key is not None:
         key.revoked_at = revoked_at
-    for task in db.scalars(select(AgentTask).where(AgentTask.agent_id == agent.id, AgentTask.status.in_(["queued", "dispatched"]))).all():
+    for task in db.scalars(
+        select(AgentTask).where(AgentTask.agent_id == agent.id, AgentTask.status.in_(["queued", "dispatched"]))
+    ).all():
         task.status = "cancelled"
         task.completed_at = revoked_at
 
@@ -468,13 +628,28 @@ def bulk_revoke_agents(request: AgentBulkSelection, user: User = Depends(current
     revoked_at = now_utc()
     for agent in agents:
         _revoke_agent_credentials(db, agent, revoked_at)
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.bulk_revoked", target_type="linux_agent", target_id="bulk", details={"agent_ids": [agent.id for agent in agents]}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent.bulk_revoked",
+            target_type="linux_agent",
+            target_id="bulk",
+            details={"agent_ids": [agent.id for agent in agents]},
+        )
+    )
     db.commit()
     return AgentBulkResult(affected=len(agents))
 
 
 @router.patch("/agents/{agent_id}/group", response_model=LinuxAgentResponse)
-def assign_agent_group(agent_id: str, request: AgentGroupAssignment, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def assign_agent_group(
+    agent_id: str,
+    request: AgentGroupAssignment,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     require_admin(user)
     agent = db.get(LinuxAgent, agent_id)
     if agent is None or agent.tenant_id != user.tenant_id:
@@ -482,7 +657,17 @@ def assign_agent_group(agent_id: str, request: AgentGroupAssignment, user: User 
     _require_group(db, user.tenant_id, request.group_id)
     previous = agent.group_id
     agent.group_id = request.group_id
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.group_assigned", target_type="linux_agent", target_id=agent.id, details={"previous_group_id": previous, "group_id": agent.group_id}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent.group_assigned",
+            target_type="linux_agent",
+            target_id=agent.id,
+            details={"previous_group_id": previous, "group_id": agent.group_id},
+        )
+    )
     db.commit()
     return _agent_response(db, agent)
 
@@ -497,13 +682,27 @@ def revoke_agent(agent_id: str, user: User = Depends(current_user), db: Session 
         raise HTTPException(status_code=409, detail="Agent is already revoked")
     revoked_at = now_utc()
     _revoke_agent_credentials(db, agent, revoked_at)
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent.revoked", target_type="linux_agent", target_id=agent.id, details={"host_id": agent.host_id}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent.revoked",
+            target_type="linux_agent",
+            target_id=agent.id,
+            details={"host_id": agent.host_id},
+        )
+    )
     db.commit()
     return Response(status_code=204)
 
 
 @router.post("/agent-enrollment-tokens", response_model=AgentEnrollmentTokenCreated, status_code=201)
-def create_enrollment_token(request: AgentEnrollmentTokenCreate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def create_enrollment_token(
+    request: AgentEnrollmentTokenCreate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     require_admin(user)
     _require_group(db, user.tenant_id, request.group_id)
     expires_at = _aware(request.expires_at)
@@ -520,9 +719,26 @@ def create_enrollment_token(request: AgentEnrollmentTokenCreate, user: User = De
     )
     db.add(token)
     db.flush()
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_enrollment_token.created", target_type="agent_enrollment_token", target_id=token.id, details={"group_id": token.group_id, "expires_at": token.expires_at.isoformat()}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent_enrollment_token.created",
+            target_type="agent_enrollment_token",
+            target_id=token.id,
+            details={"group_id": token.group_id, "expires_at": token.expires_at.isoformat()},
+        )
+    )
     db.commit()
-    return AgentEnrollmentTokenCreated(id=token.id, name=token.name, group_id=token.group_id, token=raw_token, token_prefix=token.token_prefix, expires_at=token.expires_at)
+    return AgentEnrollmentTokenCreated(
+        id=token.id,
+        name=token.name,
+        group_id=token.group_id,
+        token=raw_token,
+        token_prefix=token.token_prefix,
+        expires_at=token.expires_at,
+    )
 
 
 @router.get("/agent-enrollment-tokens", response_model=list[AgentEnrollmentTokenResponse])
@@ -563,7 +779,17 @@ def revoke_enrollment_token(token_id: str, user: User = Depends(current_user), d
     if token.revoked_at is not None:
         raise HTTPException(status_code=409, detail="Enrollment token is already revoked")
     token.revoked_at = now_utc()
-    db.add(AuditEvent(tenant_id=user.tenant_id, actor_type="user", actor_id=user.id, action="agent_enrollment_token.revoked", target_type="agent_enrollment_token", target_id=token.id, details={"group_id": token.group_id}))
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent_enrollment_token.revoked",
+            target_type="agent_enrollment_token",
+            target_id=token.id,
+            details={"group_id": token.group_id},
+        )
+    )
     db.commit()
     return Response(status_code=204)
 
@@ -590,7 +816,11 @@ def list_control_catalog(user: User = Depends(current_user), db: Session = Depen
 
 
 @router.post("/agent/enroll", response_model=AgentEnrollmentResponse, status_code=201)
-def enroll_agent(request: AgentEnrollmentRequest, credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)):
+def enroll_agent(
+    request: AgentEnrollmentRequest,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+):
     if credentials is None:
         raise HTTPException(status_code=401, detail="Enrollment token required")
     enrollment = db.scalar(
@@ -598,18 +828,44 @@ def enroll_agent(request: AgentEnrollmentRequest, credentials: HTTPAuthorization
         .where(AgentEnrollmentToken.token_hash == hash_ingestion_token(credentials.credentials))
         .with_for_update()
     )
-    if enrollment is None or enrollment.used_at is not None or enrollment.revoked_at is not None or _aware(enrollment.expires_at) <= now_utc():
+    if (
+        enrollment is None
+        or enrollment.used_at is not None
+        or enrollment.revoked_at is not None
+        or _aware(enrollment.expires_at) <= now_utc()
+    ):
         raise HTTPException(status_code=401, detail="Invalid, expired, or already used enrollment token")
     group = _require_group(db, enrollment.tenant_id, enrollment.group_id)
     _, public_key_raw = _validate_public_key(request.public_key)
     fingerprint = hashlib.sha256(public_key_raw).hexdigest()
-    if db.scalar(select(LinuxAgent).where(LinuxAgent.tenant_id == enrollment.tenant_id, LinuxAgent.fingerprint == fingerprint)):
+    if db.scalar(
+        select(LinuxAgent).where(LinuxAgent.tenant_id == enrollment.tenant_id, LinuxAgent.fingerprint == fingerprint)
+    ):
         raise HTTPException(status_code=409, detail="This agent identity is already enrolled")
-    host = db.scalar(select(Host).where(Host.tenant_id == enrollment.tenant_id, Host.machine_id_hash == request.machine_id_hash))
+    host = db.scalar(
+        select(Host).where(Host.tenant_id == enrollment.tenant_id, Host.machine_id_hash == request.machine_id_hash)
+    )
     if host is None:
-        host = db.scalar(select(Host).where(Host.tenant_id == enrollment.tenant_id, Host.hostname == request.hostname, Host.machine_id_hash.like("pending:%"), Host.deleted_at.is_(None)))
+        host = db.scalar(
+            select(Host).where(
+                Host.tenant_id == enrollment.tenant_id,
+                Host.hostname == request.hostname,
+                Host.machine_id_hash.like("pending:%"),
+                Host.deleted_at.is_(None),
+            )
+        )
     if host is None:
-        host = Host(id=str(uuid.uuid4()), tenant_id=enrollment.tenant_id, hostname=request.hostname, machine_id_hash=request.machine_id_hash, operating_system=request.operating_system, os_family=request.os_family, os_version=request.os_version, kernel=request.kernel, architecture=request.architecture)
+        host = Host(
+            id=str(uuid.uuid4()),
+            tenant_id=enrollment.tenant_id,
+            hostname=request.hostname,
+            machine_id_hash=request.machine_id_hash,
+            operating_system=request.operating_system,
+            os_family=request.os_family,
+            os_version=request.os_version,
+            kernel=request.kernel,
+            architecture=request.architecture,
+        )
         db.add(host)
     elif host.deleted_at is not None:
         raise HTTPException(status_code=409, detail="This host was deleted and cannot be enrolled")
@@ -627,25 +883,81 @@ def enroll_agent(request: AgentEnrollmentRequest, credentials: HTTPAuthorization
     host.tags = request.tags
     host.system_info = request.system_info
     raw_ingestion_token = f"lsa_ingest_{secrets.token_urlsafe(32)}"
-    ingestion_token = IngestionToken(tenant_id=enrollment.tenant_id, host_id=host.id, name=f"Agent: {request.name}", token_prefix=raw_ingestion_token[:20], token_hash=hash_ingestion_token(raw_ingestion_token))
-    signing_key = SigningKey(tenant_id=enrollment.tenant_id, host_id=host.id, name=f"Agent: {request.name}", public_key=request.public_key, fingerprint=fingerprint)
+    ingestion_token = IngestionToken(
+        tenant_id=enrollment.tenant_id,
+        host_id=host.id,
+        name=f"Agent: {request.name}",
+        token_prefix=raw_ingestion_token[:20],
+        token_hash=hash_ingestion_token(raw_ingestion_token),
+    )
+    signing_key = SigningKey(
+        tenant_id=enrollment.tenant_id,
+        host_id=host.id,
+        name=f"Agent: {request.name}",
+        public_key=request.public_key,
+        fingerprint=fingerprint,
+    )
     db.add_all([ingestion_token, signing_key])
     db.flush()
-    agent = LinuxAgent(tenant_id=enrollment.tenant_id, host_id=host.id, group_id=group.id, ingestion_token_id=ingestion_token.id, signing_key_id=signing_key.id, name=request.name, public_key=request.public_key, fingerprint=fingerprint, agent_version=request.agent_version, capabilities=request.capabilities, last_seen_at=now_utc())
+    agent = LinuxAgent(
+        tenant_id=enrollment.tenant_id,
+        host_id=host.id,
+        group_id=group.id,
+        ingestion_token_id=ingestion_token.id,
+        signing_key_id=signing_key.id,
+        name=request.name,
+        public_key=request.public_key,
+        fingerprint=fingerprint,
+        agent_version=request.agent_version,
+        capabilities=request.capabilities,
+        capabilities_attested_at=now_utc(),
+        last_seen_at=now_utc(),
+    )
     db.add(agent)
     db.flush()
     enrollment.used_at = now_utc()
     version = _latest_policy_version(db, group.policy_id)
-    db.add(AuditEvent(tenant_id=enrollment.tenant_id, actor_type="agent", actor_id=agent.id, action="agent.enrolled", target_type="host", target_id=host.id, details={"group_id": group.id, "policy_version": version.version, "fingerprint": fingerprint}))
+    db.add(
+        AuditEvent(
+            tenant_id=enrollment.tenant_id,
+            actor_type="agent",
+            actor_id=agent.id,
+            action="agent.enrolled",
+            target_type="host",
+            target_id=host.id,
+            details={
+                "group_id": group.id,
+                "policy_version": version.version,
+                "fingerprint": fingerprint,
+            },
+        )
+    )
     db.commit()
-    return AgentEnrollmentResponse(agent_id=agent.id, host_id=host.id, group_id=group.id, ingestion_token=raw_ingestion_token, signing_key_id=signing_key.id, policy_version=version.version)
+    return AgentEnrollmentResponse(
+        agent_id=agent.id,
+        host_id=host.id,
+        group_id=group.id,
+        ingestion_token=raw_ingestion_token,
+        signing_key_id=signing_key.id,
+        policy_version=version.version,
+    )
 
 
 def _effective_policy(db: Session, agent: LinuxAgent) -> AgentEffectivePolicyResponse:
     group = _require_group(db, agent.tenant_id, agent.group_id)
     policy = _require_policy(db, agent.tenant_id, group.policy_id)
     version = _latest_policy_version(db, policy.id)
-    return AgentEffectivePolicyResponse(policy_id=policy.id, policy_name=policy.name, policy_version=version.version, group_id=group.id, group_name=group.name, default_mode=version.default_mode.value, control_modes=version.control_modes or {}, settings=version.settings or {}, enforcement_enabled=False)
+    return AgentEffectivePolicyResponse(
+        policy_id=policy.id,
+        policy_name=policy.name,
+        policy_version=version.version,
+        group_id=group.id,
+        group_name=group.name,
+        default_mode=version.default_mode.value,
+        control_modes=version.control_modes or {},
+        settings=version.settings or {},
+        enforcement_enabled=False,
+    )
 
 
 @router.get("/agent/policy", response_model=AgentEffectivePolicyResponse)
@@ -657,15 +969,24 @@ def get_agent_policy(principal: AgentPrincipal = Depends(signed_agent_principal)
 
 
 @router.post("/agent/heartbeat", response_model=AgentHeartbeatResponse)
-def agent_heartbeat(request: AgentHeartbeatRequest, principal: AgentPrincipal = Depends(signed_agent_principal), db: Session = Depends(get_db)):
+def agent_heartbeat(
+    request: AgentHeartbeatRequest,
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+):
     agent = principal.agent
     policy = _effective_policy(db, agent)
     agent.agent_version = request.agent_version
     agent.capabilities = request.capabilities
-    agent.last_seen_at = now_utc()
+    agent.capabilities_attested_at = now_utc()
+    agent.last_seen_at = agent.capabilities_attested_at
     agent.last_policy_version = request.policy_version
     db.commit()
-    return AgentHeartbeatResponse(accepted_at=agent.last_seen_at, policy_changed=request.policy_version != policy.policy_version, policy_version=policy.policy_version)
+    return AgentHeartbeatResponse(
+        accepted_at=agent.last_seen_at,
+        policy_changed=request.policy_version != policy.policy_version,
+        policy_version=policy.policy_version,
+    )
 
 
 @router.get("/agent/tasks/next", response_model=AgentTaskResponse | None)
@@ -694,7 +1015,12 @@ def next_agent_task(principal: AgentPrincipal = Depends(signed_agent_principal),
 
 
 @router.post("/agent/tasks/{task_id}/complete", response_model=AgentTaskResponse)
-def complete_agent_task(task_id: str, request: AgentTaskCompletion, principal: AgentPrincipal = Depends(signed_agent_principal), db: Session = Depends(get_db)):
+def complete_agent_task(
+    task_id: str,
+    request: AgentTaskCompletion,
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+):
     task = db.get(AgentTask, task_id)
     if task is None or task.agent_id != principal.agent.id or task.tenant_id != principal.agent.tenant_id:
         raise HTTPException(status_code=404, detail="Agent task not found")
@@ -705,6 +1031,16 @@ def complete_agent_task(task_id: str, request: AgentTaskCompletion, principal: A
     task.error = request.error
     task.completed_at = now_utc()
     principal.agent.last_seen_at = task.completed_at
-    db.add(AuditEvent(tenant_id=task.tenant_id, actor_type="agent", actor_id=principal.agent.id, action=f"agent.audit_{request.status}", target_type="agent_task", target_id=task.id, details={"error": request.error}))
+    db.add(
+        AuditEvent(
+            tenant_id=task.tenant_id,
+            actor_type="agent",
+            actor_id=principal.agent.id,
+            action=f"agent.audit_{request.status}",
+            target_type="agent_task",
+            target_id=task.id,
+            details={"error": request.error},
+        )
+    )
     db.commit()
     return task

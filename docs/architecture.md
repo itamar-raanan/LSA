@@ -45,6 +45,10 @@ Approval is intentionally non-executable. Every response states `execution_enabl
 
 The management API also loads a versioned declarative remediation action catalog at startup. Catalog entries use a closed vocabulary of typed configuration, reload, validation, backup, and rollback operations; executable command or script payload fields are rejected. A supported plan snapshots its matching action ID, version, normalized document, and SHA-256 digest. Snapshot integrity is checked again at approval, but no action is sent through the agent gateway or converted into work.
 
+Approved catalog-backed plans can be compiled into a canonical change-set envelope that snapshots the exact action digests, target agent and policy identities, canary rollout, maintenance window, and bounded batch settings. Authorization recalculates readiness from live evidence and requires a different administrator from both the requester and each plan approver. A tenant Ed25519 change-signing key then signs the envelope; its private material is encrypted with the settings cipher. Signed change sets remain management-plane governance records: they do not create `AgentTask` rows, are not exposed by the agent gateway, and cannot be consumed by the audit-only agent.
+
+Capability freshness is tracked separately from general agent activity and advances only when a signed enrollment or heartbeat supplies the capability list. Policy reads and task polling may refresh online status but cannot make an old capability attestation current. Change-set creation locks the selected plan rows through the active-ownership check and insert so concurrent requests cannot place one plan in multiple active envelopes.
+
 ## Container topology
 
 The supported platform deployment uses Docker Compose. A single Nginx web gateway serves the compiled console and proxies `/api`, `/docs`, and health traffic to the private API container. The API, PostgreSQL, and MinIO communicate only on an internal Docker network; neither data service has a published host port. The API applies Alembic migrations before starting and Compose health gates each dependency.
@@ -80,6 +84,8 @@ The v0.6 scanner runs on Debian 12/13, Ubuntu 22.04/24.04, and RHEL, Rocky Linux
 - Policy versions are immutable, and one effective group eliminates policy precedence ambiguity.
 - Remediation enforcement is hard-disabled in this release even when remediation intent is staged in a policy.
 - Remediation plan approval records a human decision only; it never creates an agent task or transmits executable content.
+- Signed change sets require current evidence, exact action integrity, current policy identity, fresh agent capability attestation, canary and rate boundaries, rollback metadata, a bounded maintenance window, and four-eyes authorization.
+- Change-set Ed25519 signatures cover canonical immutable payloads; signing and cancellation never dispatch work.
 - Scanner audit tasks may read privileged host state but cannot run package, service, account, permission, mount, firewall, kernel, or filesystem mutation commands; automated tests enforce this boundary.
 - Portable controls carry a unique semantic key, canonical finding category, and explicit benchmark-overlap metadata. Runtime and unit assertions reject duplicate IDs, duplicate semantics, unknown overlap references, and unmapped categories.
 - Ingestion token hashes—not raw tokens—are stored.

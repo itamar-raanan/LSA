@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -859,3 +859,97 @@ class AgentPackageResponse(BaseModel):
 
 class AgentConnectivityResponse(BaseModel):
     public_url: str
+
+
+ChangeSetStatusValue = Literal["pending_authorization", "authorized", "canceled"]
+
+
+class RemediationChangeSetCreate(BaseModel):
+    plan_ids: list[str] = Field(min_length=1, max_length=25)
+    canary_host_ids: list[str] = Field(min_length=1, max_length=5)
+    maintenance_window_start: datetime
+    maintenance_window_end: datetime
+    batch_size: int = Field(default=1, ge=1, le=25)
+    batch_interval_minutes: int = Field(default=15, ge=15, le=1440)
+
+
+class RemediationChangeSetDecision(BaseModel):
+    reason: str = Field(min_length=3, max_length=4000)
+
+
+class RemediationChangeSetGate(BaseModel):
+    code: Literal[
+        "action_integrity",
+        "agent_attestation",
+        "canary_scope",
+        "evidence_freshness",
+        "four_eyes",
+        "maintenance_window",
+        "policy_authorization",
+        "rate_limit",
+        "rollback_checkpoint",
+    ]
+    status: Literal["passed", "blocked"]
+    detail: str
+
+
+class RemediationChangeSetPlanResponse(BaseModel):
+    plan_id: str
+    hostname: str
+    host_id: str
+    control_id: str
+    title: str
+    action_id: str
+    action_version: int
+    action_digest: str
+    plan_approved_by: str
+
+
+class RemediationChangeSetTargetResponse(BaseModel):
+    host_id: str
+    hostname: str
+    agent_id: str
+    group_id: str
+    group_name: str
+    policy_id: str
+    policy_name: str
+    policy_version: int
+    rollout_phase: Literal["canary", "deferred"]
+    required_capability: str
+    capability_attested: bool
+
+
+class RemediationChangeSetResponse(BaseModel):
+    id: str
+    status: ChangeSetStatusValue
+    payload_schema_version: Literal["1.0"] = "1.0"
+    payload: dict[str, Any]
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signature: str | None
+    signing_key_id: str | None
+    signing_key_fingerprint: str | None
+    signing_public_key: str | None
+    maintenance_window_start: datetime
+    maintenance_window_end: datetime
+    batch_size: int
+    batch_interval_minutes: int
+    plans: list[RemediationChangeSetPlanResponse]
+    targets: list[RemediationChangeSetTargetResponse]
+    gates: list[RemediationChangeSetGate]
+    requested_by: str
+    requested_by_name: str
+    requested_at: datetime
+    authorized_by: str | None
+    authorized_by_name: str | None
+    authorized_at: datetime | None
+    canceled_by: str | None
+    canceled_by_name: str | None
+    canceled_at: datetime | None
+    cancellation_reason: str | None
+    execution_enabled: Literal[False] = False
+    execution_status: Literal["not_supported"] = "not_supported"
+    execution_reason: str = (
+        "Signed change sets are governance records only; no agent execution path exists."
+    )
+    created_at: datetime
+    updated_at: datetime

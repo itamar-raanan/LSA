@@ -264,9 +264,7 @@ class HostApplicationVulnerability(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
-    host_application_id: Mapped[str] = mapped_column(
-        ForeignKey("host_applications.id"), index=True
-    )
+    host_application_id: Mapped[str] = mapped_column(ForeignKey("host_applications.id"), index=True)
     vulnerability_id: Mapped[str] = mapped_column(ForeignKey("vulnerabilities.id"), index=True)
     matched_purl: Mapped[str] = mapped_column(String(1000))
     fixed_versions: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -310,9 +308,7 @@ class AgentPolicy(Base):
 
 class AgentPolicyVersion(Base):
     __tablename__ = "agent_policy_versions"
-    __table_args__ = (
-        UniqueConstraint("policy_id", "version", name="uq_agent_policy_version"),
-    )
+    __table_args__ = (UniqueConstraint("policy_id", "version", name="uq_agent_policy_version"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
@@ -358,6 +354,9 @@ class LinuxAgent(Base):
     fingerprint: Mapped[str] = mapped_column(String(64))
     agent_version: Mapped[str] = mapped_column(String(40), default="0.1.0")
     capabilities: Mapped[list[str]] = mapped_column(JSON, default=list)
+    capabilities_attested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_policy_version: Mapped[int | None] = mapped_column(nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -547,6 +546,93 @@ class RemediationPlan(Base):
     cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class PlatformChangeSigningKey(Base):
+    __tablename__ = "platform_change_signing_keys"
+    __table_args__ = (
+        Index(
+            "ix_platform_change_signing_keys_tenant_fingerprint",
+            "tenant_id",
+            "fingerprint",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    public_key: Mapped[str] = mapped_column(String(64))
+    private_key_ciphertext: Mapped[str] = mapped_column(Text)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class RemediationChangeSet(Base):
+    __tablename__ = "remediation_change_sets"
+    __table_args__ = (
+        Index(
+            "ix_remediation_change_sets_tenant_status_created",
+            "tenant_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending_authorization", index=True)
+    payload_schema_version: Mapped[str] = mapped_column(String(20), default="1.0")
+    payload: Mapped[dict[str, object]] = mapped_column(JSON)
+    digest: Mapped[str] = mapped_column(String(64), index=True)
+    signature: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signing_key_id: Mapped[str | None] = mapped_column(
+        ForeignKey("platform_change_signing_keys.id"), nullable=True, index=True
+    )
+    maintenance_window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    maintenance_window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    batch_size: Mapped[int] = mapped_column(default=1)
+    batch_interval_minutes: Mapped[int] = mapped_column(default=15)
+    requested_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    authorized_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    canceled_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class RemediationChangeSetPlan(Base):
+    __tablename__ = "remediation_change_set_plans"
+    __table_args__ = (UniqueConstraint("change_set_id", "plan_id", name="uq_change_set_plan"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    change_set_id: Mapped[str] = mapped_column(
+        ForeignKey("remediation_change_sets.id", ondelete="CASCADE"), index=True
+    )
+    plan_id: Mapped[str] = mapped_column(ForeignKey("remediation_plans.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class RemediationChangeSetTarget(Base):
+    __tablename__ = "remediation_change_set_targets"
+    __table_args__ = (
+        UniqueConstraint("change_set_id", "host_id", name="uq_change_set_target_host"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    change_set_id: Mapped[str] = mapped_column(
+        ForeignKey("remediation_change_sets.id", ondelete="CASCADE"), index=True
+    )
+    host_id: Mapped[str] = mapped_column(ForeignKey("hosts.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("linux_agents.id"), index=True)
+    rollout_phase: Mapped[str] = mapped_column(String(20), default="canary")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
 class AuditEvent(Base):

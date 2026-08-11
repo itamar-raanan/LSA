@@ -77,6 +77,14 @@ def bootstrap(db: Session, settings: Settings) -> None:
                     "jitter_seconds": 300,
                     "profile": "level2_server",
                     "remediation_approval": "required",
+                    "remediation_four_eyes": True,
+                    "remediation_required_capability": "signed-change-set-planning-v1",
+                    "remediation_max_evidence_age_minutes": 1440,
+                    "remediation_max_agent_attestation_age_minutes": 15,
+                    "remediation_max_targets_per_change_set": 25,
+                    "remediation_max_canary_hosts": 3,
+                    "remediation_max_batch_hosts": 5,
+                    "remediation_min_batch_interval_minutes": 15,
                 },
                 created_by=user.id,
             )
@@ -106,6 +114,14 @@ def bootstrap(db: Session, settings: Settings) -> None:
                     "jitter_seconds": 300,
                     "profile": "level2_server",
                     "remediation_approval": "required",
+                    "remediation_four_eyes": True,
+                    "remediation_required_capability": "signed-change-set-planning-v1",
+                    "remediation_max_evidence_age_minutes": 1440,
+                    "remediation_max_agent_attestation_age_minutes": 15,
+                    "remediation_max_targets_per_change_set": 25,
+                    "remediation_max_canary_hosts": 3,
+                    "remediation_max_batch_hosts": 5,
+                    "remediation_min_batch_interval_minutes": 15,
                 },
                 created_by=user.id,
             )
@@ -152,7 +168,9 @@ def seed_demo_reports(db: Session, tenant_id: str, token_id: str) -> None:
         ("archive-node-04", "Ubuntu", "ubuntu", "22.04", "production", "archive", 67.9),
     ]
     severities = ["medium", "critical", "low", "high", "high"]
-    for index, (hostname, os_name, family, version, environment, application, score) in enumerate(hosts):
+    for index, (hostname, os_name, family, version, environment, application, score) in enumerate(
+        hosts
+    ):
         host_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"lsa-demo-{hostname}"))
         report_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"lsa-demo-report-{hostname}"))
         if db.get(Report, report_id):
@@ -215,7 +233,9 @@ def seed_demo_reports(db: Session, tenant_id: str, token_id: str) -> None:
                         "severity": "high",
                         "status": "fail" if index in {1, 4} else "pass",
                         "expected": "PermitRootLogin no",
-                        "actual": "PermitRootLogin yes" if index in {1, 4} else "PermitRootLogin no",
+                        "actual": "PermitRootLogin yes"
+                        if index in {1, 4}
+                        else "PermitRootLogin no",
                         "remediation_summary": "Disable direct root SSH login after validating sudo access.",
                         "remediation_commands": ["sshd -T | grep permitrootlogin"],
                     },

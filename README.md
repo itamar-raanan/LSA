@@ -141,6 +141,10 @@ Administrators can create and review non-executable remediation plans from curre
 
 For selected high-confidence controls, a plan also snapshots a versioned declarative action from LSA's code-reviewed catalog. These actions describe supported operating systems, typed parameters, preconditions, validation, impact, and rollback through a closed schema; they do not contain arbitrary shell content and are not executable by the current agent. Catalog reads are available only through the management API at `/api/v1/remediation-actions`.
 
+Approved catalog-backed plans can be prepared as signed change sets from **Security Findings → Change Sets**. The workspace shows current readiness gates, canary targets, maintenance and batch boundaries, immutable SHA-256 payload identity, and the tenant Ed25519 signature. A different administrator must authorize the envelope. This is a governance-only workflow: authorization never creates an agent task, and the current agent cannot execute a change set.
+
+Managed agents advertise `signed-change-set-planning-v1` when they can provide the identity, policy, freshness, and integrity evidence required by this workflow. This capability does not grant or advertise configuration-write support.
+
 Agents poll the platform rather than accepting inbound connections. Their signed heartbeats drive online, stale, and offline status. Each audit uses the shared scanner to report the same package and service inventory as offline mode. On-demand audits are persisted, allow-listed tasks consumed on the next poll—not remote shell commands.
 
 See [the agent guide](agent/README.md) for package installation, enrollment, transport behavior, and service operation, and [the report-format guide](docs/report-format.md) for normalized and signed report contracts.
