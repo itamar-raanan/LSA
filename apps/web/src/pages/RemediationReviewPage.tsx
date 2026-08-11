@@ -236,6 +236,7 @@ export function RemediationReviewPage() {
     <nav className="findings-view-tabs" aria-label="Security Finding Workspaces">
       <Link className="findings-view-tab" to="/findings">Findings Queue</Link>
       <Link className="findings-view-tab findings-view-tab-active" to="/findings?view=remediation" aria-current="page">Remediation Review</Link>
+      <Link className="findings-view-tab" to="/findings?view=change-sets">Change Sets</Link>
     </nav>
     <div className="remediation-safety-banner"><ShieldCheck size={18} /><div><strong>Review And Approval Are Non-Executable</strong><p>Plans contain evidence snapshots and human decisions only. The agent remains audit-only and no action on this page changes host configuration.</p></div></div>
     {plans.loading && !plans.data ? <LoadingState variant="table" /> : plans.error ? <ErrorState message={plans.error} retry={() => void plans.reload()} /> : <section className="panel remediation-review-desk" aria-label="Remediation Review Desk">

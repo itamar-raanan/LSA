@@ -276,6 +276,74 @@ export interface RemediationPlan {
   updated_at: string
 }
 
+export type RemediationChangeSetStatus = 'pending_authorization' | 'authorized' | 'canceled'
+
+export interface RemediationChangeSetGate {
+  code: 'action_integrity' | 'agent_attestation' | 'canary_scope' | 'evidence_freshness' | 'four_eyes' | 'maintenance_window' | 'policy_authorization' | 'rate_limit' | 'rollback_checkpoint'
+  status: 'passed' | 'blocked'
+  detail: string
+}
+
+export interface RemediationChangeSetPlan {
+  plan_id: string
+  hostname: string
+  host_id: string
+  control_id: string
+  title: string
+  action_id: string
+  action_version: number
+  action_digest: string
+  plan_approved_by: string
+}
+
+export interface RemediationChangeSetTarget {
+  host_id: string
+  hostname: string
+  agent_id: string
+  group_id: string
+  group_name: string
+  policy_id: string
+  policy_name: string
+  policy_version: number
+  rollout_phase: 'canary' | 'deferred'
+  required_capability: string
+  capability_attested: boolean
+}
+
+export interface RemediationChangeSet {
+  id: string
+  status: RemediationChangeSetStatus
+  payload_schema_version: '1.0'
+  payload: Record<string, unknown>
+  digest: string
+  signature: string | null
+  signing_key_id: string | null
+  signing_key_fingerprint: string | null
+  signing_public_key: string | null
+  maintenance_window_start: string
+  maintenance_window_end: string
+  batch_size: number
+  batch_interval_minutes: number
+  plans: RemediationChangeSetPlan[]
+  targets: RemediationChangeSetTarget[]
+  gates: RemediationChangeSetGate[]
+  requested_by: string
+  requested_by_name: string
+  requested_at: string
+  authorized_by: string | null
+  authorized_by_name: string | null
+  authorized_at: string | null
+  canceled_by: string | null
+  canceled_by_name: string | null
+  canceled_at: string | null
+  cancellation_reason: string | null
+  execution_enabled: false
+  execution_status: 'not_supported'
+  execution_reason: string
+  created_at: string
+  updated_at: string
+}
+
 export interface DashboardData {
   total_hosts: number
   healthy_hosts: number

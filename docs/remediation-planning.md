@@ -1,6 +1,6 @@
 # Remediation planning
 
-LSA remediation is being introduced in security-gated stages. The current stage adds a versioned, code-reviewed declarative action catalog to the review and approval ledger without giving the platform or agent any ability to change a host.
+LSA remediation is being introduced in security-gated stages. The current stage compiles approved, catalog-backed plans into immutable signed change sets with canary and maintenance boundaries. It still gives neither the platform nor the agent any ability to change a host.
 
 ## Current workflow
 
@@ -20,6 +20,11 @@ The API exposes these management routes:
 - `POST /api/v1/remediation-plans/{plan_id}/cancel`
 - `GET /api/v1/remediation-actions`
 - `GET /api/v1/remediation-actions/{action_id}`
+- `GET /api/v1/remediation-change-sets`
+- `POST /api/v1/remediation-change-sets`
+- `GET /api/v1/remediation-change-sets/{change_set_id}`
+- `POST /api/v1/remediation-change-sets/{change_set_id}/authorize`
+- `POST /api/v1/remediation-change-sets/{change_set_id}/cancel`
 
 Authenticated users can review plans. Mutations require the administrator role. Only one pending or approved plan can exist for the same finding. A newer report makes the source snapshot stale and blocks approval; the reviewer must create a new plan from the current finding.
 
@@ -37,6 +42,26 @@ The catalog currently defines reviewed actions for direct root SSH login, empty-
 The catalog cannot contain shell, script, command, executable, or argument payload fields. Paths must be normalized absolute paths beneath reviewed system configuration prefixes. API startup fails if the catalog is malformed, maps an unknown control, duplicates a current control mapping, omits validation or rollback, or references an unapproved operation field.
 
 When a plan is created for a supported host and control, LSA stores an immutable copy of the matching action with its ID, version, and digest. Approval revalidates that snapshot and its digest. An unsupported host is labeled `unsupported_system`; a control without an action is labeled `not_cataloged`. Both can still use the non-executable review ledger, but neither silently receives an action.
+
+## Signed change sets
+
+An administrator can compile one or more approved catalog-backed plans into a pending change set. The canonical envelope snapshots plan and action identities, target agents, group and policy versions, required capability, canary membership, maintenance window, batch size, batch interval, and explicit non-execution safeguards. A SHA-256 digest covers the canonical JSON document.
+
+Authorization is fail closed. LSA recalculates the following gates from current state:
+
+- action snapshot and digest integrity;
+- current source evidence within the policy age limit;
+- current group and policy authorization;
+- recent agent attestation of the exact `signed-change-set-planning-v1` capability, which declares support for governance evidence only and does not declare write execution;
+- at least one bounded canary host;
+- policy-constrained target, canary, batch, and interval limits;
+- a future maintenance window lasting between 30 minutes and 8 hours;
+- reviewed backup, validation, and rollback metadata;
+- a four-eyes authorizer who is neither the requester nor an approver of an included plan.
+
+If every gate passes, LSA signs the envelope with a tenant-specific Ed25519 change-signing key. The encrypted private key remains in platform settings storage; the response exposes the public key, fingerprint, payload digest, and signature so the governance record can be independently verified. Signing does not create an `AgentTask`, expose a gateway route, or make the envelope executable.
+
+Change-set states are `pending_authorization`, `authorized`, and `canceled`. An authorized envelope is immutable. Cancellation retains its payload, signature, decision history, and audit evidence.
 
 ## State model
 
@@ -64,7 +89,13 @@ Terminal plans cannot be reopened. Creating a replacement produces a new plan an
 - Plans contain review data, not an agent command payload.
 - Catalog actions contain declarative data only and always return `execution_enabled: false` with `execution_status: catalog_only`.
 - A plan's action snapshot is digest-checked before approval and never refreshed from a later catalog version.
+- Every change-set payload is canonicalized and digest-checked; an authorized envelope must also pass Ed25519 signature verification when read.
+- Change-set authorization enforces fresh policy, evidence, agent capability, rollout, maintenance, rollback, and independent-review gates.
+- Capability freshness uses the last signed heartbeat that actually supplied the capability list; policy and task polling cannot refresh this gate.
+- Selected plan rows are locked while active ownership is checked and the envelope is inserted, preventing concurrent active change sets for the same plan.
+- Tenant change-signing private keys are encrypted at rest and are created only when the first envelope is authorized.
 - Plan APIs are available only on the management listener; the agent gateway allow-list does not expose them.
+- Change-set APIs are also management-only and never create agent tasks.
 - The agent task schema accepts only `task_type: audit`.
 - Policies and plans never contain arbitrary scripts.
 - Approval is blocked when the source report is no longer current.
@@ -81,7 +112,7 @@ Create, review, approve, reject, and cancel non-executable plans. Present the ob
 
 Define versioned, code-reviewed remediation actions for individual controls. Each action must declare supported operating systems, exact parameters, preconditions, validation, expected file or service impact, and rollback behavior. Arbitrary shell content remains prohibited.
 
-### Stage 3 — signed change sets and canaries (next)
+### Stage 3 — signed change sets and canaries (complete)
 
 Compile approved plans into signed declarative change sets. Require fresh evidence, policy authorization, maintenance windows, agent capability attestation, canary scope, rate limits, and explicit rollback checkpoints. Add four-eyes approval as an enforceable tenant policy before execution is available.
 

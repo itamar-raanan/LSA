@@ -4,17 +4,31 @@ import json
 import tarfile
 import uuid
 import zipfile
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from lsa.config import Settings, get_settings
 from lsa.database import SessionLocal
 from lsa.main import app
-from lsa.models import AuditEvent, RemediationPlan, Report, Tenant, User
-from lsa.models import IngestionToken
+from lsa.models import (
+    AgentGroup,
+    AgentPolicy,
+    AgentTask,
+    AuditEvent,
+    Host,
+    IngestionToken,
+    LinuxAgent,
+    RemediationChangeSet,
+    RemediationPlan,
+    Report,
+    SigningKey,
+    Tenant,
+    User,
+    now_utc,
+)
 from lsa.seed import DEMO_TOKEN, bootstrap
 from lsa.security import hash_ingestion_token, hash_password
 from sqlalchemy import select
@@ -125,13 +139,9 @@ def test_admin_can_download_versioned_agent_package(client):
     assert package["release_channel"] == "stable"
     assert package["audit_only"] is True
 
-    downloaded = client.get(
-        f"/api/v1/agent-packages/{package['id']}/download", headers=headers
-    )
+    downloaded = client.get(f"/api/v1/agent-packages/{package['id']}/download", headers=headers)
     assert downloaded.status_code == 200, downloaded.text
-    assert downloaded.headers["content-disposition"] == (
-        f'attachment; filename="{package["filename"]}"'
-    )
+    assert downloaded.headers["content-disposition"] == (f'attachment; filename="{package["filename"]}"')
     assert hashlib.sha256(downloaded.content).hexdigest() == package["sha256"]
     assert downloaded.headers["x-lsa-agent-sha256"] == package["sha256"]
 
@@ -254,8 +264,7 @@ def test_agent_enrollment_and_signed_policy_poll(client):
     ).encode()
     timestamp = str(int(datetime.now(UTC).timestamp()))
     heartbeat_message = (
-        f"POST\n/api/v1/agent/heartbeat\n{timestamp}\n"
-        f"{hashlib.sha256(heartbeat_body).hexdigest()}"
+        f"POST\n/api/v1/agent/heartbeat\n{timestamp}\n{hashlib.sha256(heartbeat_body).hexdigest()}"
     ).encode()
     heartbeat = client.post(
         "/api/v1/agent/heartbeat",
@@ -317,13 +326,19 @@ def test_agent_enrollment_and_signed_policy_poll(client):
     )
     assert completed.status_code == 200, completed.text
     assert completed.json()["status"] == "completed"
-    assert client.get(task_path, headers={
-        "X-LSA-Agent-ID": agent_id,
-        "X-LSA-Agent-Timestamp": timestamp,
-        "X-LSA-Agent-Signature": b64encode(private_key.sign(
-            f"GET\n{task_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}".encode()
-        )).decode(),
-    }).json() is None
+    assert (
+        client.get(
+            task_path,
+            headers={
+                "X-LSA-Agent-ID": agent_id,
+                "X-LSA-Agent-Timestamp": timestamp,
+                "X-LSA-Agent-Signature": b64encode(
+                    private_key.sign(f"GET\n{task_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}".encode())
+                ).decode(),
+            },
+        ).json()
+        is None
+    )
 
 
 def test_policy_updates_are_immutable_versions(client):
@@ -398,9 +413,7 @@ def test_unused_agent_enrollment_token_can_be_revoked(client):
     assert listed.json()[0]["token_prefix"] == created.json()["token_prefix"]
     assert "token" not in listed.json()[0]
 
-    revoked = client.delete(
-        f"/api/v1/agent-enrollment-tokens/{created.json()['id']}", headers=headers
-    )
+    revoked = client.delete(f"/api/v1/agent-enrollment-tokens/{created.json()['id']}", headers=headers)
     assert revoked.status_code == 204
 
 
@@ -414,11 +427,7 @@ def test_production_bootstrap_does_not_create_demo_token():
                 seed_demo=False,
             ),
         )
-        token = db.scalar(
-            select(IngestionToken).where(
-                IngestionToken.token_hash == hash_ingestion_token(DEMO_TOKEN)
-            )
-        )
+        token = db.scalar(select(IngestionToken).where(IngestionToken.token_hash == hash_ingestion_token(DEMO_TOKEN)))
         assert token is None
 
 
@@ -447,9 +456,7 @@ def test_ingest_and_read_fleet(client):
     assert hosts.json()[0]["hostname"] == "test-web-01"
     assert hosts.json()[0]["system_info"]["cpu_cores"] == 4
     assert hosts.json()[0]["application_count"] == 2
-    applications = client.get(
-        f"/api/v1/hosts/{payload['host']['host_id']}/applications", headers=headers
-    )
+    applications = client.get(f"/api/v1/hosts/{payload['host']['host_id']}/applications", headers=headers)
     assert applications.status_code == 200
     assert [(item["kind"], item["name"]) for item in applications.json()] == [
         ("package", "openssl"),
@@ -467,11 +474,14 @@ def test_ingest_and_read_fleet(client):
 
 def test_remediation_plan_review_lifecycle_is_non_executable(client):
     payload = report_payload()
-    assert client.post(
-        "/api/v1/ingest/reports",
-        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
-        json=payload,
-    ).status_code == 202
+    assert (
+        client.post(
+            "/api/v1/ingest/reports",
+            headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+            json=payload,
+        ).status_code
+        == 202
+    )
     headers = {"Authorization": f"Bearer {login(client)}"}
     finding = client.get("/api/v1/findings", headers=headers).json()[0]
 
@@ -493,9 +503,7 @@ def test_remediation_plan_review_lifecycle_is_non_executable(client):
     assert plan["execution_status"] == "not_supported"
     assert "cannot change hosts" in plan["execution_reason"]
 
-    duplicate = client.post(
-        "/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]}
-    )
+    duplicate = client.post("/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]})
     assert duplicate.status_code == 409
 
     filtered = client.get(
@@ -512,9 +520,7 @@ def test_remediation_plan_review_lifecycle_is_non_executable(client):
     assert approved.json()["version"] == 2
     assert approved.json()["approved_by_name"] == "Security Administrator"
     assert approved.json()["execution_enabled"] is False
-    assert client.post(
-        f"/api/v1/remediation-plans/{plan['id']}/approve", headers=headers
-    ).status_code == 409
+    assert client.post(f"/api/v1/remediation-plans/{plan['id']}/approve", headers=headers).status_code == 409
 
     canceled = client.post(
         f"/api/v1/remediation-plans/{plan['id']}/cancel",
@@ -526,9 +532,7 @@ def test_remediation_plan_review_lifecycle_is_non_executable(client):
     assert canceled.json()["version"] == 3
     assert canceled.json()["cancellation_reason"] == "Maintenance window changed."
 
-    replacement = client.post(
-        "/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]}
-    )
+    replacement = client.post("/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]})
     assert replacement.status_code == 201
     rejected = client.post(
         f"/api/v1/remediation-plans/{replacement.json()['id']}/reject",
@@ -563,9 +567,7 @@ def test_remediation_plan_rejects_stale_approval_and_requires_admin_for_changes(
     token = login(client)
     headers = {"Authorization": f"Bearer {token}"}
     finding = client.get("/api/v1/findings", headers=headers).json()[0]
-    created = client.post(
-        "/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]}
-    )
+    created = client.post("/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]})
     assert created.status_code == 201
     plan_id = created.json()["id"]
 
@@ -603,14 +605,15 @@ def test_remediation_plan_rejects_stale_approval_and_requires_admin_for_changes(
     assert other_login.status_code == 200
     other_headers = {"Authorization": f"Bearer {other_login.json()['access_token']}"}
     assert client.get("/api/v1/remediation-plans", headers=other_headers).json() == []
-    assert client.get(
-        f"/api/v1/remediation-plans/{plan_id}", headers=other_headers
-    ).status_code == 404
-    assert client.post(
-        "/api/v1/remediation-plans",
-        headers=other_headers,
-        json={"finding_id": finding["id"]},
-    ).status_code == 404
+    assert client.get(f"/api/v1/remediation-plans/{plan_id}", headers=other_headers).status_code == 404
+    assert (
+        client.post(
+            "/api/v1/remediation-plans",
+            headers=other_headers,
+            json={"finding_id": finding["id"]},
+        ).status_code
+        == 404
+    )
 
     with SessionLocal() as db:
         admin = db.scalar(select(User).where(User.email == "admin@lsa.local"))
@@ -646,9 +649,7 @@ def test_remediation_action_catalog_is_authenticated_filterable_and_non_executab
         headers=headers,
     )
     assert filtered.status_code == 200
-    assert [action["action_id"] for action in filtered.json()] == [
-        "linux.ssh.permit-root-login.disabled"
-    ]
+    assert [action["action_id"] for action in filtered.json()] == ["linux.ssh.permit-root-login.disabled"]
     action = filtered.json()[0]
     assert action["operations"][0] == {
         "kind": "config_setting",
@@ -660,12 +661,8 @@ def test_remediation_action_catalog_is_authenticated_filterable_and_non_executab
         "backup_required": True,
     }
     assert action["rollback"][0]["kind"] == "restore_backup"
-    assert client.get(
-        "/api/v1/remediation-actions", params={"os_family": "debian"}, headers=headers
-    ).status_code == 422
-    assert client.get(
-        "/api/v1/remediation-actions/linux.missing", headers=headers
-    ).status_code == 404
+    assert client.get("/api/v1/remediation-actions", params={"os_family": "debian"}, headers=headers).status_code == 422
+    assert client.get("/api/v1/remediation-actions/linux.missing", headers=headers).status_code == 404
 
 
 def test_remediation_plan_snapshots_matching_declarative_action(client):
@@ -685,11 +682,14 @@ def test_remediation_plan_snapshots_matching_declarative_action(client):
             "service_restart": True,
         }
     )
-    assert client.post(
-        "/api/v1/ingest/reports",
-        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
-        json=payload,
-    ).status_code == 202
+    assert (
+        client.post(
+            "/api/v1/ingest/reports",
+            headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+            json=payload,
+        ).status_code
+        == 202
+    )
     headers = {"Authorization": f"Bearer {login(client)}"}
     finding = client.get("/api/v1/findings", headers=headers).json()[0]
 
@@ -705,10 +705,7 @@ def test_remediation_plan_snapshots_matching_declarative_action(client):
     assert plan["action"]["version"] == 1
     assert len(plan["action"]["digest"]) == 64
     assert plan["action"]["execution_enabled"] is False
-    assert any(
-        condition["kind"] == "manual_confirmation"
-        for condition in plan["action"]["preconditions"]
-    )
+    assert any(condition["kind"] == "manual_confirmation" for condition in plan["action"]["preconditions"])
 
     with SessionLocal() as db:
         stored = db.get(RemediationPlan, plan["id"])
@@ -728,11 +725,14 @@ def test_remediation_plan_marks_cataloged_action_unsupported_for_host_os(client)
     payload = report_payload()
     payload["host"]["os_version"] = "14"
     payload["findings"][0]["control_id"] = "CIS-DEBIAN13-5.1.21"
-    assert client.post(
-        "/api/v1/ingest/reports",
-        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
-        json=payload,
-    ).status_code == 202
+    assert (
+        client.post(
+            "/api/v1/ingest/reports",
+            headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+            json=payload,
+        ).status_code
+        == 202
+    )
     headers = {"Authorization": f"Bearer {login(client)}"}
     finding = client.get("/api/v1/findings", headers=headers).json()[0]
 
@@ -744,6 +744,353 @@ def test_remediation_plan_marks_cataloged_action_unsupported_for_host_os(client)
     assert created.status_code == 201, created.text
     assert created.json()["action_catalog_status"] == "unsupported_system"
     assert created.json()["action"] is None
+
+
+def test_signed_change_set_requires_readiness_and_four_eyes(client):
+    change_agent_private_key = Ed25519PrivateKey.generate()
+    change_agent_public_key = change_agent_private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    payload = report_payload()
+    payload["findings"][0].update(
+        {
+            "control_id": "CIS-DEBIAN13-5.1.21",
+            "module": "cis_debian13",
+            "category": "ssh",
+            "title": "Ensure sshd PermitRootLogin is disabled",
+            "severity": "high",
+            "expected": "permitrootlogin is no",
+            "actual": "permitrootlogin yes",
+            "remediation_summary": "Disable direct root login after validating sudo access.",
+            "remediation_commands": [],
+            "verification_commands": [],
+            "service_restart": True,
+        }
+    )
+    assert (
+        client.post(
+            "/api/v1/ingest/reports",
+            headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+            json=payload,
+        ).status_code
+        == 202
+    )
+    owner_headers = {"Authorization": f"Bearer {login(client)}"}
+    finding = client.get("/api/v1/findings", headers=owner_headers).json()[0]
+    plan = client.post(
+        "/api/v1/remediation-plans",
+        headers=owner_headers,
+        json={"finding_id": finding["id"]},
+    ).json()
+    approved = client.post(
+        f"/api/v1/remediation-plans/{plan['id']}/approve",
+        headers=owner_headers,
+    )
+    assert approved.status_code == 200, approved.text
+
+    with SessionLocal() as db:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == "default"))
+        host = db.get(Host, payload["host"]["host_id"])
+        policy = db.scalar(
+            select(AgentPolicy).where(
+                AgentPolicy.tenant_id == tenant.id,
+                AgentPolicy.name == "Remediation (Approval Required)",
+            )
+        )
+        group = db.scalar(select(AgentGroup).where(AgentGroup.tenant_id == tenant.id))
+        group.policy_id = policy.id
+        ingestion_token = IngestionToken(
+            tenant_id=tenant.id,
+            host_id=host.id,
+            name="Change-set test agent",
+            token_prefix="lsa_test_change",
+            token_hash=hash_ingestion_token("lsa-change-set-test-token"),
+        )
+        signing_key = SigningKey(
+            tenant_id=tenant.id,
+            host_id=host.id,
+            name="Change-set test agent",
+            public_key=b64encode(change_agent_public_key).decode(),
+            fingerprint=hashlib.sha256(change_agent_public_key).hexdigest(),
+        )
+        reviewer = User(
+            tenant_id=tenant.id,
+            email="reviewer@lsa.local",
+            display_name="Independent Reviewer",
+            password_hash=hash_password("reviewer-password"),
+            role="admin",
+        )
+        db.add_all([ingestion_token, signing_key, reviewer])
+        db.flush()
+        db.add(
+            LinuxAgent(
+                tenant_id=tenant.id,
+                host_id=host.id,
+                group_id=group.id,
+                ingestion_token_id=ingestion_token.id,
+                signing_key_id=signing_key.id,
+                name=host.hostname,
+                public_key=signing_key.public_key,
+                fingerprint=signing_key.fingerprint,
+                agent_version="0.1.0",
+                capabilities=["audit", "signed-change-set-planning-v1"],
+                capabilities_attested_at=now_utc(),
+                last_seen_at=now_utc(),
+            )
+        )
+        db.commit()
+
+    window_start = datetime.now(UTC) + timedelta(hours=1)
+    created = client.post(
+        "/api/v1/remediation-change-sets",
+        headers=owner_headers,
+        json={
+            "plan_ids": [plan["id"]],
+            "canary_host_ids": [plan["host_id"]],
+            "maintenance_window_start": window_start.isoformat(),
+            "maintenance_window_end": (window_start + timedelta(hours=2)).isoformat(),
+            "batch_size": 1,
+            "batch_interval_minutes": 15,
+        },
+    )
+    assert created.status_code == 201, created.text
+    change_set = created.json()
+    assert change_set["status"] == "pending_authorization"
+    assert change_set["execution_enabled"] is False
+    assert change_set["signature"] is None
+    assert change_set["targets"][0]["rollout_phase"] == "canary"
+    assert change_set["targets"][0]["capability_attested"] is True
+    assert {gate["code"]: gate["status"] for gate in change_set["gates"]} == {
+        "action_integrity": "passed",
+        "evidence_freshness": "passed",
+        "policy_authorization": "passed",
+        "agent_attestation": "passed",
+        "canary_scope": "passed",
+        "rate_limit": "passed",
+        "maintenance_window": "passed",
+        "rollback_checkpoint": "passed",
+        "four_eyes": "blocked",
+    }
+
+    with SessionLocal() as db:
+        agent = db.scalar(select(LinuxAgent).where(LinuxAgent.host_id == plan["host_id"]))
+        agent.capabilities_attested_at = now_utc() - timedelta(hours=1)
+        agent.last_seen_at = agent.capabilities_attested_at
+        agent_id = agent.id
+        db.commit()
+    policy_path = "/api/v1/agent/policy"
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    policy_message = f"GET\n{policy_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}".encode()
+    assert client.get(
+        policy_path,
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(policy_message)
+            ).decode(),
+        },
+    ).status_code == 200
+    after_poll = client.get(
+        f"/api/v1/remediation-change-sets/{change_set['id']}", headers=owner_headers
+    ).json()
+    assert next(
+        gate for gate in after_poll["gates"] if gate["code"] == "agent_attestation"
+    )["status"] == "blocked"
+
+    heartbeat_body = json.dumps(
+        {
+            "agent_version": "0.4.3",
+            "capabilities": ["audit", "signed-change-set-planning-v1"],
+            "policy_version": 1,
+        },
+        separators=(",", ":"),
+    ).encode()
+    heartbeat_path = "/api/v1/agent/heartbeat"
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    heartbeat_message = (
+        f"POST\n{heartbeat_path}\n{timestamp}\n{hashlib.sha256(heartbeat_body).hexdigest()}"
+    ).encode()
+    assert client.post(
+        heartbeat_path,
+        content=heartbeat_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(heartbeat_message)
+            ).decode(),
+        },
+    ).status_code == 200
+    same_actor = client.post(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/authorize",
+        headers=owner_headers,
+    )
+    assert same_actor.status_code == 409
+
+    with SessionLocal() as db:
+        stored = db.get(RemediationChangeSet, change_set["id"])
+        stored.batch_size = 2
+        db.commit()
+
+    reviewer_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "reviewer@lsa.local", "password": "reviewer-password"},
+    )
+    reviewer_headers = {"Authorization": f"Bearer {reviewer_login.json()['access_token']}"}
+    drifted = client.post(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/authorize",
+        headers=reviewer_headers,
+    )
+    assert drifted.status_code == 409
+    assert "operational columns do not match" in drifted.json()["detail"]
+    with SessionLocal() as db:
+        stored = db.get(RemediationChangeSet, change_set["id"])
+        stored.batch_size = 1
+        db.commit()
+
+    past_payload = json.loads(json.dumps(change_set["payload"]))
+    past_start = datetime.now(UTC) - timedelta(minutes=5)
+    past_end = datetime.now(UTC) + timedelta(hours=1)
+    past_payload["maintenance_window"] = {
+        "start": past_start.isoformat(),
+        "end": past_end.isoformat(),
+    }
+    with SessionLocal() as db:
+        stored = db.get(RemediationChangeSet, change_set["id"])
+        stored.payload = past_payload
+        stored.digest = hashlib.sha256(
+            json.dumps(past_payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        stored.maintenance_window_start = past_start
+        stored.maintenance_window_end = past_end
+        db.commit()
+    started_window = client.post(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/authorize",
+        headers=reviewer_headers,
+    )
+    assert started_window.status_code == 409
+    assert "maintenance window" in started_window.json()["detail"]
+    with SessionLocal() as db:
+        stored = db.get(RemediationChangeSet, change_set["id"])
+        stored.payload = change_set["payload"]
+        stored.digest = change_set["digest"]
+        stored.maintenance_window_start = datetime.fromisoformat(
+            change_set["maintenance_window_start"]
+        )
+        stored.maintenance_window_end = datetime.fromisoformat(change_set["maintenance_window_end"])
+        db.commit()
+    authorized = client.post(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/authorize",
+        headers=reviewer_headers,
+    )
+    assert authorized.status_code == 200, authorized.text
+    signed = authorized.json()
+    assert signed["status"] == "authorized"
+    assert signed["authorized_by_name"] == "Independent Reviewer"
+    assert len(signed["digest"]) == 64
+    assert signed["signature"]
+    assert signed["signing_key_fingerprint"]
+    assert all(gate["status"] == "passed" for gate in signed["gates"])
+    canonical_payload = json.dumps(
+        signed["payload"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    assert hashlib.sha256(canonical_payload).hexdigest() == signed["digest"]
+    Ed25519PublicKey.from_public_bytes(b64decode(signed["signing_public_key"])).verify(
+        b64decode(signed["signature"]), canonical_payload
+    )
+    with SessionLocal() as db:
+        assert db.scalar(select(AgentTask)) is None
+        events = db.scalars(select(AuditEvent).where(AuditEvent.target_id == change_set["id"])).all()
+        assert {event.action for event in events} == {
+            "remediation_change_set.requested",
+            "remediation_change_set.authorized",
+        }
+        db.get(Host, plan["host_id"]).hostname = "renamed-after-signing"
+        group = db.scalar(select(AgentGroup).where(AgentGroup.tenant_id == tenant.id))
+        policy = db.get(AgentPolicy, group.policy_id)
+        group.name = "Renamed Group"
+        policy.name = "Renamed Policy"
+        db.commit()
+    retained_snapshot = client.get(
+        f"/api/v1/remediation-change-sets/{change_set['id']}", headers=reviewer_headers
+    ).json()
+    assert retained_snapshot["targets"][0]["hostname"] == payload["host"]["hostname"]
+    assert retained_snapshot["targets"][0]["group_name"] != "Renamed Group"
+    assert retained_snapshot["targets"][0]["policy_name"] != "Renamed Policy"
+
+
+
+def test_change_set_authorization_blocks_missing_agent_capability(client):
+    payload = report_payload()
+    payload["findings"][0]["control_id"] = "CIS-DEBIAN13-5.1.21"
+    assert (
+        client.post(
+            "/api/v1/ingest/reports",
+            headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+            json=payload,
+        ).status_code
+        == 202
+    )
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    finding = client.get("/api/v1/findings", headers=headers).json()[0]
+    plan = client.post("/api/v1/remediation-plans", headers=headers, json={"finding_id": finding["id"]}).json()
+    assert client.post(f"/api/v1/remediation-plans/{plan['id']}/approve", headers=headers).status_code == 200
+
+    with SessionLocal() as db:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == "default"))
+        policy = db.scalar(select(AgentPolicy).where(AgentPolicy.name == "Remediation (Approval Required)"))
+        group = db.scalar(select(AgentGroup).where(AgentGroup.tenant_id == tenant.id))
+        group.policy_id = policy.id
+        token = IngestionToken(
+            tenant_id=tenant.id,
+            host_id=plan["host_id"],
+            name="Audit-only test agent",
+            token_prefix="lsa_audit_only",
+            token_hash=hash_ingestion_token("lsa-audit-only-test-token"),
+        )
+        key = SigningKey(
+            tenant_id=tenant.id,
+            host_id=plan["host_id"],
+            name="Audit-only test agent",
+            public_key=b64encode(b"b" * 32).decode(),
+            fingerprint=hashlib.sha256(b"b" * 32).hexdigest(),
+        )
+        db.add_all([token, key])
+        db.flush()
+        db.add(
+            LinuxAgent(
+                tenant_id=tenant.id,
+                host_id=plan["host_id"],
+                group_id=group.id,
+                ingestion_token_id=token.id,
+                signing_key_id=key.id,
+                name="audit-only",
+                public_key=key.public_key,
+                fingerprint=key.fingerprint,
+                capabilities=["audit"],
+                capabilities_attested_at=now_utc(),
+                last_seen_at=now_utc(),
+            )
+        )
+        db.commit()
+
+    start = datetime.now(UTC) + timedelta(hours=1)
+    created = client.post(
+        "/api/v1/remediation-change-sets",
+        headers=headers,
+        json={
+            "plan_ids": [plan["id"]],
+            "canary_host_ids": [plan["host_id"]],
+            "maintenance_window_start": start.isoformat(),
+            "maintenance_window_end": (start + timedelta(hours=1)).isoformat(),
+        },
+    )
+    assert created.status_code == 201, created.text
+    gates = {gate["code"]: gate for gate in created.json()["gates"]}
+    assert gates["agent_attestation"]["status"] == "blocked"
 
 
 def test_application_inventory_tracks_versions_and_removals(client):
@@ -765,9 +1112,7 @@ def test_application_inventory_tracks_versions_and_removals(client):
     assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
 
     headers = {"Authorization": f"Bearer {login(client)}"}
-    active = client.get(
-        f"/api/v1/hosts/{first['host']['host_id']}/applications", headers=headers
-    ).json()
+    active = client.get(f"/api/v1/hosts/{first['host']['host_id']}/applications", headers=headers).json()
     assert [(item["name"], item["version"]) for item in active] == [("openssl", "3.0.15-1")]
     history = client.get(
         f"/api/v1/hosts/{first['host']['host_id']}/applications?include_removed=true",
@@ -806,9 +1151,7 @@ def test_application_estate_summary_and_host_correlation(client):
     openssl = next(item for item in body["applications"] if item["name"] == "openssl")
     assert openssl["host_count"] == 2
     assert openssl["version_count"] == 2
-    source_search = client.get(
-        "/api/v1/applications", params={"search": "openssl-source"}, headers=headers
-    ).json()
+    source_search = client.get("/api/v1/applications", params={"search": "openssl-source"}, headers=headers).json()
     assert [item["name"] for item in source_search["applications"]] == ["openssl"]
 
     correlation = client.get(
@@ -829,9 +1172,7 @@ def test_data_workspaces_page_filter_sort_and_preserve_aggregate_facets(client):
     second = report_payload()
     second["host"]["hostname"] = "critical-db-02"
     second["host"]["fqdn"] = "critical-db-02.example.test"
-    second["host"]["machine_id_hash"] = (
-        f"sha256:{hashlib.sha256(b'critical-db-02').hexdigest()}"
-    )
+    second["host"]["machine_id_hash"] = f"sha256:{hashlib.sha256(b'critical-db-02').hexdigest()}"
     second["summary"]["security_score"] = 35
     second["findings"][0]["severity"] = "critical"
     second["findings"][0]["title"] = "Critical database hardening gap"
@@ -894,11 +1235,14 @@ def test_data_workspaces_page_filter_sort_and_preserve_aggregate_facets(client):
 
 def test_offline_vulnerability_snapshot_correlates_packages_and_kev(client):
     payload = report_payload()
-    assert client.post(
-        "/api/v1/ingest/reports",
-        headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
-        json=payload,
-    ).status_code == 202
+    assert (
+        client.post(
+            "/api/v1/ingest/reports",
+            headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
+            json=payload,
+        ).status_code
+        == 202
+    )
     snapshot = {
         "schema_version": "1.0",
         "generated_at": datetime.now(UTC).isoformat(),
@@ -1008,14 +1352,15 @@ def test_offline_vulnerability_snapshot_correlates_packages_and_kev(client):
         **snapshot,
         "packages": [{"purl": payload["applications"][0]["purl"], "vulnerabilities": []}],
     }
-    assert client.post(
-        "/api/v1/vulnerabilities/import",
-        headers=headers,
-        files={"file": ("cleared.json", json.dumps(cleared), "application/json")},
-    ).status_code == 200
-    assert client.get("/api/v1/vulnerabilities/summary", headers=headers).json()[
-        "exposure_count"
-    ] == 0
+    assert (
+        client.post(
+            "/api/v1/vulnerabilities/import",
+            headers=headers,
+            files={"file": ("cleared.json", json.dumps(cleared), "application/json")},
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/v1/vulnerabilities/summary", headers=headers).json()["exposure_count"] == 0
 
 
 def test_vulnerability_refresh_queue_is_idempotent(client):
@@ -1039,9 +1384,7 @@ def test_legacy_report_without_inventory_does_not_remove_existing_applications(c
     second.pop("applications")
     assert client.post("/api/v1/ingest/reports", headers=ingest_headers, json=second).status_code == 202
     headers = {"Authorization": f"Bearer {login(client)}"}
-    applications = client.get(
-        f"/api/v1/hosts/{first['host']['host_id']}/applications", headers=headers
-    ).json()
+    applications = client.get(f"/api/v1/hosts/{first['host']['host_id']}/applications", headers=headers).json()
     assert len(applications) == 2
 
 
@@ -1205,9 +1548,7 @@ def test_revoked_token_cannot_submit(client):
         headers=headers,
         json={"name": "temporary controller"},
     ).json()
-    assert client.delete(
-        f"/api/v1/ingestion-tokens/{created['id']}", headers=headers
-    ).status_code == 204
+    assert client.delete(f"/api/v1/ingestion-tokens/{created['id']}", headers=headers).status_code == 204
     response = client.post(
         "/api/v1/ingest/reports",
         headers={"Authorization": f"Bearer {created['token']}"},
@@ -1215,9 +1556,7 @@ def test_revoked_token_cannot_submit(client):
     )
     assert response.status_code == 401
 
-    repeated = client.delete(
-        f"/api/v1/ingestion-tokens/{created['id']}", headers=headers
-    )
+    repeated = client.delete(f"/api/v1/ingestion-tokens/{created['id']}", headers=headers)
     assert repeated.status_code == 409
     assert repeated.json()["detail"] == "Ingestion token is already revoked"
 
@@ -1247,9 +1586,7 @@ def test_offline_bundle_verifies_all_checksums(client, tmp_path: Path):
     assert response.json()["findings_imported"] == 1
 
     session_headers = {"Authorization": f"Bearer {login(client)}"}
-    history = client.get(
-        f"/api/v1/hosts/{response.json()['host_id']}/reports", headers=session_headers
-    ).json()
+    history = client.get(f"/api/v1/hosts/{response.json()['host_id']}/reports", headers=session_headers).json()
     assert history[0]["artifact_available"] is True
     assert history[0]["artifact_size_bytes"] == bundle_path.stat().st_size
     download = client.get(
@@ -1261,9 +1598,7 @@ def test_offline_bundle_verifies_all_checksums(client, tmp_path: Path):
     assert download.headers["x-lsa-artifact-sha256"] == hashlib.sha256(download.content).hexdigest()
 
 
-def test_bundle_schema_rejection_identifies_invalid_field_without_echoing_value(
-    client, tmp_path: Path
-):
+def test_bundle_schema_rejection_identifies_invalid_field_without_echoing_value(client, tmp_path: Path):
     payload = report_payload()
     invalid_name = "sensitive-package-name-" + ("x" * 300)
     payload["applications"][0]["name"] = invalid_name
@@ -1321,12 +1656,8 @@ def test_evidence_retention_blocks_early_deletion(client, tmp_path: Path):
         report = db.get(Report, report_id)
         report.artifact_retention_until = datetime.now(UTC) - timedelta(minutes=1)
         db.commit()
-    assert client.delete(
-        f"/api/v1/reports/{report_id}/artifact", headers=session_headers
-    ).status_code == 204
-    assert client.get(
-        f"/api/v1/reports/{report_id}/artifact", headers=session_headers
-    ).status_code == 404
+    assert client.delete(f"/api/v1/reports/{report_id}/artifact", headers=session_headers).status_code == 204
+    assert client.get(f"/api/v1/reports/{report_id}/artifact", headers=session_headers).status_code == 404
 
 
 def test_expired_evidence_policy_purge(client, tmp_path: Path):
@@ -1345,9 +1676,7 @@ def test_expired_evidence_policy_purge(client, tmp_path: Path):
     purge = client.post("/api/v1/artifacts/purge-expired", headers=session_headers)
     assert purge.status_code == 200
     assert purge.json() == {"deleted": 1}
-    assert client.get(
-        f"/api/v1/reports/{report_id}/artifact", headers=session_headers
-    ).status_code == 404
+    assert client.get(f"/api/v1/reports/{report_id}/artifact", headers=session_headers).status_code == 404
 
 
 def test_evidence_download_is_tenant_isolated(client, tmp_path: Path):
@@ -1416,9 +1745,7 @@ def test_signed_bundle_records_verified_provenance(client, tmp_path: Path):
 
 def test_signed_bundle_rejects_cryptographic_tampering(client, tmp_path: Path):
     private_key_path, registered = register_signing_key(client, tmp_path)
-    bundle_path = build(
-        Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"]
-    )
+    bundle_path = build(Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"])
     output = io.BytesIO()
     with zipfile.ZipFile(bundle_path) as source:
         files = {name: source.read(name) for name in source.namelist()}
@@ -1428,7 +1755,9 @@ def test_signed_bundle_rejects_cryptographic_tampering(client, tmp_path: Path):
     checksum_lines = []
     for line in files["checksums.sha256"].decode().splitlines():
         digest, _, name = line.partition("  ")
-        checksum_lines.append(f"{hashlib.sha256(files[name]).hexdigest() if name == 'signature.sig' else digest}  {name}\n")
+        checksum_lines.append(
+            f"{hashlib.sha256(files[name]).hexdigest() if name == 'signature.sig' else digest}  {name}\n"
+        )
     files["checksums.sha256"] = "".join(checksum_lines).encode()
     with zipfile.ZipFile(output, "w") as target:
         for name, data in files.items():
@@ -1446,9 +1775,7 @@ def test_revoked_signing_key_cannot_submit_bundle(client, tmp_path: Path):
     private_key_path, registered = register_signing_key(client, tmp_path)
     headers = {"Authorization": f"Bearer {login(client)}"}
     assert client.delete(f"/api/v1/signing-keys/{registered['id']}", headers=headers).status_code == 204
-    bundle_path = build(
-        Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"]
-    )
+    bundle_path = build(Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"])
     response = client.post(
         "/api/v1/ingest/bundles",
         headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
@@ -1466,9 +1793,7 @@ def test_host_scoped_signing_key_rejects_another_host(client, tmp_path: Path):
         json={"hostname": "scoped-host", "os_family": "debian", "os_version": "13"},
     ).json()
     private_key_path, registered = register_signing_key(client, tmp_path, host["id"])
-    bundle_path = build(
-        Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"]
-    )
+    bundle_path = build(Path("tests/fixtures/report.json"), tmp_path, private_key_path, registered["id"])
     response = client.post(
         "/api/v1/ingest/bundles",
         headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
@@ -1493,18 +1818,10 @@ def test_report_history_compares_new_and_resolved_findings(client):
     assert client.post("/api/v1/ingest/reports", headers=headers, json=second).status_code == 202
 
     session_headers = {"Authorization": f"Bearer {login(client)}"}
-    history = client.get(
-        f"/api/v1/hosts/{first['host']['host_id']}/reports", headers=session_headers
-    )
+    history = client.get(f"/api/v1/hosts/{first['host']['host_id']}/reports", headers=session_headers)
     assert history.status_code == 200
     assert len(history.json()) == 2
-    comparison = client.get(
-        f"/api/v1/reports/{second['report_id']}/compare", headers=session_headers
-    )
+    comparison = client.get(f"/api/v1/reports/{second['report_id']}/compare", headers=session_headers)
     assert comparison.status_code == 200
-    assert [item["control_id"] for item in comparison.json()["new"]] == [
-        "CIS-DEBIAN13-4.2.7"
-    ]
-    assert [item["control_id"] for item in comparison.json()["resolved"]] == [
-        "CIS-DEBIAN13-1.1.1"
-    ]
+    assert [item["control_id"] for item in comparison.json()["new"]] == ["CIS-DEBIAN13-4.2.7"]
+    assert [item["control_id"] for item in comparison.json()["resolved"]] == ["CIS-DEBIAN13-1.1.1"]

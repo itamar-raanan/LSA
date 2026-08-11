@@ -12,6 +12,7 @@ import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
 import { withInvestigationReturn } from '../lib/investigationContext'
 import type { Finding, Severity } from '../types'
 import { RemediationReviewPage } from './RemediationReviewPage'
+import { ChangeSetsPage } from './ChangeSetsPage'
 
 const categoryCatalog = [
   { id: 'accounts', name: 'Accounts', detail: 'Local identities and privileged UIDs' },
@@ -32,7 +33,10 @@ const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
 
 export function FindingsPage() {
   const [searchParams] = useSearchParams()
-  return searchParams.get('view') === 'remediation' ? <RemediationReviewPage /> : <FindingsQueuePage />
+  const view = searchParams.get('view')
+  if (view === 'remediation') return <RemediationReviewPage />
+  if (view === 'change-sets') return <ChangeSetsPage />
+  return <FindingsQueuePage />
 }
 
 function FindingsQueuePage() {
@@ -143,6 +147,7 @@ function FindingsQueuePage() {
     <nav className="findings-view-tabs" aria-label="Security Finding Workspaces">
       <Link className="findings-view-tab findings-view-tab-active" to="/findings" aria-current="page">Findings Queue</Link>
       <Link className="findings-view-tab" to="/findings?view=remediation">Remediation Review</Link>
+      <Link className="findings-view-tab" to="/findings?view=change-sets">Change Sets</Link>
     </nav>
     {facets.loading && !facets.data ? <LoadingState variant="table" /> : facets.error || error ? <ErrorState message={facets.error ?? error ?? 'Unable To Load Findings'} retry={() => { void facets.reload(); void reload() }} /> : <section className="panel overflow-hidden" aria-label="Findings workspace">
       <div className="findings-summary-strip">

@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from agent.integrity import build_manifest, verify_manifest, write_manifest
 from agent.lsa_agent import (
+    AGENT_CAPABILITIES,
     VERSION,
     _scan_due,
     accept_policy_version,
@@ -20,6 +21,11 @@ from agent.lsa_agent import (
 
 def test_runtime_version_matches_packaging_release():
     assert Path("agent/VERSION").read_text(encoding="utf-8").strip() == VERSION
+
+
+def test_agent_attests_governance_planning_without_write_execution():
+    assert "signed-change-set-planning-v1" in AGENT_CAPABILITIES
+    assert all("execute" not in capability and "write" not in capability for capability in AGENT_CAPABILITIES)
 
 
 def test_platform_requires_https_by_default():

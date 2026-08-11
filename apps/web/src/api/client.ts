@@ -37,6 +37,8 @@ import type {
   PagedResult,
   RemediationPlan,
   RemediationPlanStatus,
+  RemediationChangeSet,
+  RemediationChangeSetStatus,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -386,6 +388,18 @@ export const api = {
   },
   cancelRemediationPlan(planId: string, reason: string): Promise<RemediationPlan> {
     return request(`/remediation-plans/${encodeURIComponent(planId)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) })
+  },
+  remediationChangeSets(status?: RemediationChangeSetStatus): Promise<RemediationChangeSet[]> {
+    return request(queryPath('/remediation-change-sets', { status }))
+  },
+  createRemediationChangeSet(input: { plan_ids: string[]; canary_host_ids: string[]; maintenance_window_start: string; maintenance_window_end: string; batch_size: number; batch_interval_minutes: number }): Promise<RemediationChangeSet> {
+    return request('/remediation-change-sets', { method: 'POST', body: JSON.stringify(input) })
+  },
+  authorizeRemediationChangeSet(changeSetId: string): Promise<RemediationChangeSet> {
+    return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/authorize`, { method: 'POST' })
+  },
+  cancelRemediationChangeSet(changeSetId: string, reason: string): Promise<RemediationChangeSet> {
+    return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) })
   },
   async uploadBundle(file: File, ingestionToken: string): Promise<Record<string, unknown>> {
     const body = new FormData()

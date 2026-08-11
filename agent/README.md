@@ -38,6 +38,8 @@ The installer places the runtime in `/opt/lsa-agent`, configuration in `/etc/lsa
 
 The private key, host ingestion token, and local state are stored with mode `0600` under `/var/lib/lsa-agent`. The server only receives the public key. The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.4.3 does not validate the gateway certificate or hostname. The signed agent protocol still authenticates enrolled agents to the platform, but a network attacker could impersonate the platform during enrollment or agent polling. The agent does not use the management console port.
 
+The agent advertises `signed-change-set-planning-v1` so the management plane can verify that it supplies the identity, freshness, policy, and integrity evidence needed for signed governance planning. This capability does not enable configuration writes or change-set execution; task consumption remains restricted to `audit`.
+
 The daemon polls every 60 seconds by default while scheduled audits continue to follow the group policy interval and jitter. **Run audit now** queues only the built-in `audit` task. The signed protocol cannot carry a command, script, or remediation payload, and the agent reports completion or a bounded failure message back to the console.
 
 Release 0.4 validates `integrity-manifest.json` before every server exchange and scan. The manifest covers the installed agent runtime, scanner, control catalog, and dependency declaration. Any missing, symlinked, or modified managed file stops the cycle. The agent also persists the highest accepted policy version and rejects a lower version; a legitimate server-side restore is published as a new higher version.

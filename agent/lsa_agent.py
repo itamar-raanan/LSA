@@ -38,6 +38,12 @@ except ImportError:  # executed directly by the systemd unit
 VERSION = "0.4.3"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
+AGENT_CAPABILITIES = (
+    "audit",
+    "runtime-integrity",
+    "policy-rollback-protection",
+    "signed-change-set-planning-v1",
+)
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -337,7 +343,7 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
     integrity_digest = runtime_integrity(config)
     policy = signed_get(config, state, key, "/api/v1/agent/policy")
     policy_version = accept_policy_version(state, policy)
-    capabilities = ["audit", "runtime-integrity", "policy-rollback-protection"]
+    capabilities = list(AGENT_CAPABILITIES)
     heartbeat = signed_post(
         config,
         state,
