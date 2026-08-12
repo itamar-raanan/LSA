@@ -60,6 +60,7 @@ from lsa.schemas import (
     AgentTaskResponse,
     ControlCatalogItem,
     LinuxAgentResponse,
+    PlatformControlResponse,
 )
 from lsa.security import hash_ingestion_token
 from lsa.services.platform_command_trust import (
@@ -72,11 +73,13 @@ from lsa.services.platform_command_trust import (
 router = APIRouter(tags=["agents"])
 AGENT_CLOCK_SKEW_SECONDS = 300
 AGENT_TASK_LEASE_SECONDS = 3600
+SIGNED_PLATFORM_CONTROL_CAPABILITY = "signed-platform-control-v1"
 
 
 @dataclass(frozen=True)
 class AgentPrincipal:
     agent: LinuxAgent
+    signed_control_requested: bool = False
 
 
 def _aware(value):
@@ -274,7 +277,7 @@ async def signed_agent_principal(request: Request, db: Session = Depends(get_db)
     now_timestamp = int(now_utc().timestamp())
     if abs(now_timestamp - timestamp) > AGENT_CLOCK_SKEW_SECONDS:
         raise HTTPException(status_code=401, detail="Agent request timestamp is outside the allowed window")
-    agent = db.get(LinuxAgent, agent_id)
+    agent = db.scalar(select(LinuxAgent).where(LinuxAgent.id == agent_id).with_for_update())
     if agent is None or agent.revoked_at is not None:
         raise HTTPException(status_code=401, detail="Unknown or revoked agent")
     public_key, _ = _validate_public_key(agent.public_key)
@@ -284,7 +287,10 @@ async def signed_agent_principal(request: Request, db: Session = Depends(get_db)
         public_key.verify(signature, message)
     except InvalidSignature as exc:
         raise HTTPException(status_code=401, detail="Invalid agent signature") from exc
-    return AgentPrincipal(agent=agent)
+    return AgentPrincipal(
+        agent=agent,
+        signed_control_requested=request.headers.get("X-LSA-Platform-Control") == "signed-v1",
+    )
 
 
 @router.get("/agent-policies", response_model=list[AgentPolicyResponse])
@@ -1040,6 +1046,7 @@ def enroll_agent(
             "policy_version": version.version,
             "agent_identity_fingerprint": fingerprint,
             "execution_enabled": False,
+            "signed_control_required": SIGNED_PLATFORM_CONTROL_CAPABILITY in request.capabilities,
         },
     }
     signature = sign_platform_envelope(platform_key, envelope)
@@ -1074,15 +1081,68 @@ def _effective_policy(db: Session, agent: LinuxAgent) -> AgentEffectivePolicyRes
     )
 
 
-@router.get("/agent/policy", response_model=AgentEffectivePolicyResponse)
+def _signed_control_response(
+    db: Session,
+    agent: LinuxAgent,
+    kind: str,
+    payload: dict[str, object],
+) -> PlatformControlResponse:
+    if agent.platform_command_key_id is None:
+        raise HTTPException(status_code=409, detail="Agent platform trust is not pinned; re-enroll the agent")
+    platform_key = db.get(PlatformCommandSigningKey, agent.platform_command_key_id)
+    if (
+        platform_key is None
+        or platform_key.tenant_id != agent.tenant_id
+        or platform_key.revoked_at is not None
+        or platform_key.fingerprint != agent.platform_command_key_fingerprint
+    ):
+        raise HTTPException(status_code=409, detail="Agent platform trust is unavailable")
+    agent.platform_envelope_sequence += 1
+    issued_at = now_utc()
+    envelope = {
+        "schema_version": "1.0",
+        "kind": kind,
+        "key_id": platform_key.id,
+        "sequence": agent.platform_envelope_sequence,
+        "issued_at": issued_at.isoformat(),
+        "expires_at": (issued_at + timedelta(minutes=5)).isoformat(),
+        "agent_id": agent.id,
+        "payload": {
+            **payload,
+            "agent_id": agent.id,
+            "agent_identity_fingerprint": agent.fingerprint,
+            "execution_enabled": False,
+        },
+    }
+    return PlatformControlResponse(
+        platform_trust=platform_trust_descriptor(platform_key),
+        platform_envelope=envelope,
+        platform_signature=sign_platform_envelope(platform_key, envelope),
+    )
+
+
+def _requires_signed_control(agent: LinuxAgent) -> bool:
+    return SIGNED_PLATFORM_CONTROL_CAPABILITY in (agent.capabilities or [])
+
+
+def _principal_requires_signed_control(principal: AgentPrincipal) -> bool:
+    return principal.signed_control_requested or _requires_signed_control(principal.agent)
+
+
+@router.get("/agent/policy", response_model=PlatformControlResponse | AgentEffectivePolicyResponse)
 def get_agent_policy(principal: AgentPrincipal = Depends(signed_agent_principal), db: Session = Depends(get_db)):
     principal.agent.last_seen_at = now_utc()
     policy = _effective_policy(db, principal.agent)
+    response = (
+        _signed_control_response(db, principal.agent, "agent-policy", policy.model_dump(mode="json"))
+        if _principal_requires_signed_control(principal)
+        else policy
+    )
     db.commit()
-    return policy
+    return response
 
 
-@router.post("/agent/heartbeat", response_model=AgentHeartbeatResponse)
+@router.post("/agent/heartbeat", response_model=PlatformControlResponse | AgentHeartbeatResponse)
 def agent_heartbeat(
     request: AgentHeartbeatRequest,
     principal: AgentPrincipal = Depends(signed_agent_principal),
@@ -1090,20 +1150,29 @@ def agent_heartbeat(
 ):
     agent = principal.agent
     policy = _effective_policy(db, agent)
+    signed_control_required = _principal_requires_signed_control(principal)
     agent.agent_version = request.agent_version
-    agent.capabilities = request.capabilities
+    agent.capabilities = list(request.capabilities)
+    if signed_control_required and SIGNED_PLATFORM_CONTROL_CAPABILITY not in agent.capabilities:
+        agent.capabilities.append(SIGNED_PLATFORM_CONTROL_CAPABILITY)
     agent.capabilities_attested_at = now_utc()
     agent.last_seen_at = agent.capabilities_attested_at
     agent.last_policy_version = request.policy_version
-    db.commit()
-    return AgentHeartbeatResponse(
+    heartbeat = AgentHeartbeatResponse(
         accepted_at=agent.last_seen_at,
         policy_changed=request.policy_version != policy.policy_version,
         policy_version=policy.policy_version,
     )
+    response = (
+        _signed_control_response(db, agent, "agent-heartbeat", heartbeat.model_dump(mode="json"))
+        if signed_control_required
+        else heartbeat
+    )
+    db.commit()
+    return response
 
 
-@router.get("/agent/tasks/next", response_model=AgentTaskResponse | None)
+@router.get("/agent/tasks/next", response_model=PlatformControlResponse | AgentTaskResponse | None)
 def next_agent_task(principal: AgentPrincipal = Depends(signed_agent_principal), db: Session = Depends(get_db)):
     agent = principal.agent
     stale_lease = now_utc() - timedelta(seconds=AGENT_TASK_LEASE_SECONDS)
@@ -1124,11 +1193,17 @@ def next_agent_task(principal: AgentPrincipal = Depends(signed_agent_principal),
     if task is not None:
         task.status = "dispatched"
         task.dispatched_at = now_utc()
+    task_payload = AgentTaskResponse.model_validate(task, from_attributes=True).model_dump(mode="json") if task else None
+    response = (
+        _signed_control_response(db, agent, "agent-task", {"task": task_payload})
+        if _principal_requires_signed_control(principal)
+        else task
+    )
     db.commit()
-    return task
+    return response
 
 
-@router.post("/agent/tasks/{task_id}/complete", response_model=AgentTaskResponse)
+@router.post("/agent/tasks/{task_id}/complete", response_model=PlatformControlResponse | AgentTaskResponse)
 def complete_agent_task(
     task_id: str,
     request: AgentTaskCompletion,
@@ -1156,5 +1231,13 @@ def complete_agent_task(
             details={"error": request.error},
         )
     )
+    task_payload = AgentTaskResponse.model_validate(task, from_attributes=True).model_dump(mode="json")
+    response = (
+        _signed_control_response(
+            db, principal.agent, "agent-task-completion", {"task": task_payload}
+        )
+        if _principal_requires_signed_control(principal)
+        else task
+    )
     db.commit()
-    return task
+    return response

@@ -36,7 +36,7 @@ except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
 
 
-VERSION = "0.4.4"
+VERSION = "0.5.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -44,6 +44,7 @@ AGENT_CAPABILITIES = (
     "runtime-integrity",
     "policy-rollback-protection",
     "signed-change-set-planning-v1",
+    "signed-platform-control-v1",
 )
 
 
@@ -222,6 +223,29 @@ def verify_platform_envelope(
     return payload
 
 
+def verify_control_response(
+    result: dict[str, Any],
+    config: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    expected_kind: str,
+) -> dict[str, Any]:
+    pinned_key, pinned_raw = load_platform_command_key(config)
+    try:
+        return verify_platform_envelope(
+            result["platform_envelope"],
+            result["platform_signature"],
+            result["platform_trust"],
+            pinned_key,
+            pinned_raw,
+            expected_kind=expected_kind,
+            expected_identity_fingerprint=str(state["agent_identity_fingerprint"]),
+            state=state,
+        )
+    except (KeyError, TypeError) as exc:
+        raise RuntimeError(f"platform did not return a signed {expected_kind} response") from exc
+
+
 def os_release() -> dict[str, str]:
     values: dict[str, str] = {}
     path = Path("/etc/os-release")
@@ -323,6 +347,7 @@ def signed_headers(key: Ed25519PrivateKey, agent_id: str, method: str, path: str
         "X-LSA-Agent-ID": agent_id,
         "X-LSA-Agent-Timestamp": timestamp,
         "X-LSA-Agent-Signature": base64.b64encode(key.sign(message)).decode(),
+        "X-LSA-Platform-Control": "signed-v1",
     }
 
 
@@ -357,6 +382,8 @@ def enroll(config: dict[str, Any], token: str) -> None:
         )
     except (KeyError, TypeError) as exc:
         raise RuntimeError("platform did not return a signed enrollment proof") from exc
+    if state.get("signed_control_required") is not True:
+        raise RuntimeError("platform did not require signed control responses")
     state["enrolled_at"] = datetime.now(UTC).isoformat()
     state["highest_policy_version"] = state.get("policy_version", 0)
     atomic_json(state_path, state)
@@ -380,6 +407,35 @@ def signed_post(config: dict[str, Any], state: dict[str, Any], key: Ed25519Priva
         response = client.post(path, headers=headers, content=body)
         response.raise_for_status()
         return response.json()
+
+
+def signed_control_get(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    key: Ed25519PrivateKey,
+    path: str,
+    kind: str,
+) -> dict[str, Any]:
+    result = signed_get(config, state, key, path)
+    payload = verify_control_response(result, config, state, expected_kind=kind)
+    state["platform_envelope_sequence"] = payload.pop("platform_envelope_sequence")
+    atomic_json(state_paths(config)[0], state)
+    return payload
+
+
+def signed_control_post(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    key: Ed25519PrivateKey,
+    path: str,
+    payload: dict[str, Any],
+    kind: str,
+) -> dict[str, Any]:
+    result = signed_post(config, state, key, path, payload)
+    verified = verify_control_response(result, config, state, expected_kind=kind)
+    state["platform_envelope_sequence"] = verified.pop("platform_envelope_sequence")
+    atomic_json(state_paths(config)[0], state)
+    return verified
 
 
 def run_scanner(config: dict[str, Any], state: dict[str, Any], key_path: Path, policy: dict[str, Any]) -> None:
@@ -454,10 +510,12 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
     state = read_json(state_path)
     key = ensure_private_key(key_path)
     integrity_digest = runtime_integrity(config)
-    policy = signed_get(config, state, key, "/api/v1/agent/policy")
+    policy = signed_control_get(
+        config, state, key, "/api/v1/agent/policy", "agent-policy"
+    )
     policy_version = accept_policy_version(state, policy)
     capabilities = list(AGENT_CAPABILITIES)
-    heartbeat = signed_post(
+    heartbeat = signed_control_post(
         config,
         state,
         key,
@@ -467,9 +525,13 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
             "capabilities": capabilities,
             "policy_version": policy_version,
         },
+        "agent-heartbeat",
     )
     state["integrity_manifest_sha256"] = integrity_digest
-    task = signed_get(config, state, key, "/api/v1/agent/tasks/next")
+    task_payload = signed_control_get(
+        config, state, key, "/api/v1/agent/tasks/next", "agent-task"
+    )
+    task = task_payload.get("task")
     should_scan = always_scan or task is not None or _scan_due(state)
     if should_scan:
         try:
@@ -481,20 +543,20 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
             jitter = random.randint(0, max(0, int(settings.get("jitter_seconds", 300))))
             state["next_scan_at"] = datetime.fromtimestamp(completed_at.timestamp() + interval + jitter, UTC).isoformat()
             if task is not None:
-                signed_post(config, state, key, f"/api/v1/agent/tasks/{task['id']}/complete", {
+                signed_control_post(config, state, key, f"/api/v1/agent/tasks/{task['id']}/complete", {
                     "status": "completed",
                     "result": {"completed_at": completed_at.isoformat(), "policy_version": policy["policy_version"]},
                     "error": None,
-                })
+                }, "agent-task-completion")
         except Exception as exc:
             if task is not None:
                 try:
-                    signed_post(config, state, key, f"/api/v1/agent/tasks/{task['id']}/complete", {
+                    signed_control_post(config, state, key, f"/api/v1/agent/tasks/{task['id']}/complete", {
                         "status": "failed",
                         "result": {},
                         "error": str(exc)[:4000],
-                    })
-                except httpx.HTTPError as report_error:
+                    }, "agent-task-completion")
+                except (httpx.HTTPError, RuntimeError) as report_error:
                     print(f"LSA agent could not report failed audit task: {report_error}", file=sys.stderr, flush=True)
             raise
     atomic_json(state_path, state)
@@ -531,8 +593,8 @@ def main() -> int:
         config = read_json(arguments.config)
         print(
             "WARNING: LSA agent server certificate verification is disabled; "
-            "HTTPS traffic is encrypted, and enrollment identity is authenticated with the "
-            "pinned platform key, but ordinary polling still relies on the audit-only protocol lock.",
+            "HTTPS traffic is encrypted and platform control responses are authenticated with "
+            "the pinned application-layer signing key.",
             file=sys.stderr,
         )
         if arguments.command == "enroll":

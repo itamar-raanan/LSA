@@ -17,7 +17,9 @@ from agent.lsa_agent import (
     http_client,
     platform_url,
     run_scanner,
+    signed_control_get,
     signed_headers,
+    verify_control_response,
     verify_platform_envelope,
 )
 
@@ -28,6 +30,7 @@ def test_runtime_version_matches_packaging_release():
 
 def test_agent_attests_governance_planning_without_write_execution():
     assert "signed-change-set-planning-v1" in AGENT_CAPABILITIES
+    assert "signed-platform-control-v1" in AGENT_CAPABILITIES
     assert all("execute" not in capability and "write" not in capability for capability in AGENT_CAPABILITIES)
 
 
@@ -69,6 +72,7 @@ def test_agent_request_signature_covers_method_path_timestamp_and_body():
         f"{headers['X-LSA-Agent-Timestamp']}\n{hashlib.sha256(body).hexdigest()}"
     ).encode()
     key.public_key().verify(base64.b64decode(headers["X-LSA-Agent-Signature"]), message)
+    assert headers["X-LSA-Platform-Control"] == "signed-v1"
 
 
 def test_scan_schedule_treats_missing_and_expired_deadlines_as_due():
@@ -158,6 +162,92 @@ def test_platform_envelope_rejects_a_different_pinned_platform_key():
             expected_kind="agent-enrollment",
             expected_identity_fingerprint="agent-fingerprint",
         )
+
+
+def test_control_response_uses_persisted_agent_binding_and_sequence(tmp_path):
+    envelope, signature, trust, _, _ = signed_platform_envelope(sequence=2)
+    envelope["kind"] = "agent-policy"
+    key = Ed25519PrivateKey.generate()
+    # Re-sign with a key whose raw bytes are installed as the platform pin.
+    public_raw = key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    trust.update(
+        public_key=base64.b64encode(public_raw).decode(),
+        fingerprint=hashlib.sha256(public_raw).hexdigest(),
+    )
+    signature = base64.b64encode(
+        key.sign(json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode())
+    ).decode()
+    pin = tmp_path / "platform.pub"
+    pin.write_text(trust["public_key"], encoding="utf-8")
+    state = {
+        "agent_id": "agent-1",
+        "agent_identity_fingerprint": "agent-fingerprint",
+        "platform_envelope_sequence": 1,
+    }
+    payload = verify_control_response(
+        {"platform_envelope": envelope, "platform_signature": signature, "platform_trust": trust},
+        {"platform_command_key_file": str(pin)},
+        state,
+        expected_kind="agent-policy",
+    )
+    assert payload["platform_envelope_sequence"] == 2
+
+
+def test_control_response_rejects_unsigned_data(tmp_path):
+    pin = tmp_path / "platform.pub"
+    pin.write_text(base64.b64encode(b"x" * 32).decode(), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="did not return a signed agent-policy response"):
+        verify_control_response(
+            {"policy_version": 2},
+            {"platform_command_key_file": str(pin)},
+            {
+                "agent_id": "agent-1",
+                "agent_identity_fingerprint": "agent-fingerprint",
+                "platform_envelope_sequence": 1,
+            },
+            expected_kind="agent-policy",
+        )
+
+
+def test_control_response_persists_sequence_before_returning(tmp_path, monkeypatch):
+    envelope, _, trust, _, _ = signed_platform_envelope(sequence=2)
+    envelope["kind"] = "agent-policy"
+    key = Ed25519PrivateKey.generate()
+    raw = key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    trust.update(
+        public_key=base64.b64encode(raw).decode(),
+        fingerprint=hashlib.sha256(raw).hexdigest(),
+    )
+    signature = base64.b64encode(
+        key.sign(json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode())
+    ).decode()
+    pin = tmp_path / "platform.pub"
+    pin.write_text(base64.b64encode(raw).decode(), encoding="utf-8")
+    config = {
+        "state_dir": str(tmp_path / "state"),
+        "platform_command_key_file": str(pin),
+    }
+    state = {
+        "agent_id": "agent-1",
+        "agent_identity_fingerprint": "agent-fingerprint",
+        "platform_envelope_sequence": 1,
+    }
+    monkeypatch.setattr(
+        "agent.lsa_agent.signed_get",
+        lambda *_: {
+            "platform_envelope": envelope,
+            "platform_signature": signature,
+            "platform_trust": trust,
+        },
+    )
+    payload = signed_control_get(config, state, object(), "/policy", "agent-policy")
+    assert payload["agent_id"] == "agent-1"
+    persisted = json.loads((tmp_path / "state" / "state.json").read_text())
+    assert persisted["platform_envelope_sequence"] == 2
 
 
 @pytest.mark.parametrize(

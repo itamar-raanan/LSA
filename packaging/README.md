@@ -11,6 +11,7 @@ Build on a Linux host with `dpkg-deb` and `rpmbuild`:
 ./packaging/build-agent-packages.sh ./dist/agents
 ```
 
-Package installation never enables remediation. The 0.4.4 agent advertises only
-the `audit` capability and refuses any policy without the server's audit-only
-enforcement lock.
+Package installation never enables remediation. The 0.5.0 agent advertises audit,
+runtime-integrity, governance-planning, and signed-platform-control capabilities.
+It refuses unsigned control responses and any policy without the server's
+audit-only enforcement lock.
