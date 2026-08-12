@@ -556,6 +556,9 @@ export interface AgentEnrollmentTokenCreated {
   token: string
   token_prefix: string
   expires_at: string
+  token_type: 'one_time' | 'reusable'
+  max_uses: number | null
+  use_count: number
   platform_trust: PlatformCommandTrust
 }
 
@@ -565,8 +568,12 @@ export interface AgentEnrollmentToken {
   group_id: string
   group_name: string
   token_prefix: string
+  token_type: 'one_time' | 'reusable'
+  max_uses: number | null
+  use_count: number
   expires_at: string
   used_at: string | null
+  last_used_at: string | null
   revoked_at: string | null
   created_at: string
 }

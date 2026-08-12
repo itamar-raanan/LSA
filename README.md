@@ -239,6 +239,8 @@ Agent 0.4 verifies a package-generated SHA-256 manifest before each cycle and re
 
 The generated installation command also provisions a tenant-specific public Ed25519 platform key. Enrollment credentials are written only after the agent verifies a short-lived signed proof bound to its locally generated identity. This makes the application-layer trust bootstrap transparent to the operator without treating the public key as a secret. Remediation and command execution remain disabled.
 
+For automated provisioning, administrators can create one reusable tenant enrollment token from **Agents → Deployment**. The token is shown only once, stored hashed by LSA, assigned to a default group, valid for at most one year, and optionally limited to a maximum number of successful enrollments. Only one reusable token may be active per tenant. Every use updates its counter and last-used timestamp and is recorded with the resulting agent enrollment; administrators can revoke it immediately. One-time tokens remain the recommended option for individual manual installations.
+
 ## Repository map
 
 - `apps/api` — API, data model, ingestion, migrations, and tests

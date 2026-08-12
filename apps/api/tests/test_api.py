@@ -435,6 +435,80 @@ def test_unused_agent_enrollment_token_can_be_revoked(client):
     assert revoked.status_code == 204
 
 
+def test_reusable_tenant_enrollment_token_tracks_and_limits_host_enrollments(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    group = client.get("/api/v1/agent-groups", headers=headers).json()[0]
+    created = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "tenant automation",
+            "group_id": group["id"],
+            "token_type": "reusable",
+            "max_uses": 2,
+            "expires_at": (datetime.now(UTC) + timedelta(days=90)).isoformat(),
+        },
+    )
+    assert created.status_code == 201, created.text
+    token_data = created.json()
+    assert token_data["token"].startswith("lsa_tenant_enroll_")
+    assert token_data["token_type"] == "reusable"
+    assert token_data["max_uses"] == 2
+
+    duplicate = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "second tenant token",
+            "group_id": group["id"],
+            "token_type": "reusable",
+            "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+        },
+    )
+    assert duplicate.status_code == 409
+
+    def enroll(index: int):
+        private_key = Ed25519PrivateKey.generate()
+        public_key = private_key.public_key().public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+        return client.post(
+            "/api/v1/agent/enroll",
+            headers={"Authorization": f"Bearer {token_data['token']}"},
+            json={
+                "name": f"tenant-agent-{index}",
+                "public_key": b64encode(public_key).decode(),
+                "agent_version": "0.4.4",
+                "capabilities": ["audit"],
+                "hostname": f"tenant-agent-{index}",
+                "machine_id_hash": f"sha256:{hashlib.sha256(f'tenant-agent-{index}'.encode()).hexdigest()}",
+                "operating_system": "Debian GNU/Linux",
+                "os_family": "debian",
+                "os_version": "13",
+                "kernel": "6.12.0",
+                "architecture": "x86_64",
+            },
+        )
+
+    assert enroll(1).status_code == 201
+    assert enroll(2).status_code == 201
+    exhausted = enroll(3)
+    assert exhausted.status_code == 401
+    assert "exhausted" in exhausted.json()["detail"]
+
+    listed = client.get("/api/v1/agent-enrollment-tokens", headers=headers)
+    reusable = next(item for item in listed.json() if item["id"] == token_data["id"])
+    assert reusable["use_count"] == 2
+    assert reusable["last_used_at"] is not None
+    assert reusable["used_at"] is None
+
+    revoked = client.delete(
+        f"/api/v1/agent-enrollment-tokens/{token_data['id']}", headers=headers
+    )
+    assert revoked.status_code == 204
+
+
 def test_production_bootstrap_does_not_create_demo_token():
     with SessionLocal() as db:
         bootstrap(

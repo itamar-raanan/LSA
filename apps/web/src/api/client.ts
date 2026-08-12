@@ -302,7 +302,7 @@ export const api = {
   bulkRevokeAgents(agentIds: string[]): Promise<{ affected: number }> {
     return request('/agents/actions/revoke', { method: 'POST', body: JSON.stringify({ agent_ids: agentIds }) })
   },
-  createAgentEnrollmentToken(payload: { name: string; group_id: string; expires_at: string }): Promise<AgentEnrollmentTokenCreated> {
+  createAgentEnrollmentToken(payload: { name: string; group_id: string; expires_at: string; token_type?: 'one_time' | 'reusable'; max_uses?: number | null }): Promise<AgentEnrollmentTokenCreated> {
     return request('/agent-enrollment-tokens', { method: 'POST', body: JSON.stringify(payload) })
   },
   agentEnrollmentTokens(): Promise<AgentEnrollmentToken[]> {

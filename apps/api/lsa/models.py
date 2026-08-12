@@ -401,8 +401,12 @@ class AgentEnrollmentToken(Base):
     name: Mapped[str] = mapped_column(String(160))
     token_prefix: Mapped[str] = mapped_column(String(24), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    token_type: Mapped[str] = mapped_column(String(20), default="one_time", index=True)
+    max_uses: Mapped[int | None] = mapped_column(nullable=True)
+    use_count: Mapped[int] = mapped_column(default=0)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
