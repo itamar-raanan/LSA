@@ -766,6 +766,12 @@ class AgentEnrollmentResponse(BaseModel):
     platform_signature: str
 
 
+class PlatformControlResponse(BaseModel):
+    platform_trust: PlatformCommandTrustResponse
+    platform_envelope: dict[str, object]
+    platform_signature: str
+
+
 class AgentHeartbeatRequest(BaseModel):
     agent_version: str = Field(min_length=1, max_length=40)
     capabilities: list[str] = Field(default_factory=list, max_length=32)

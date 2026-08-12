@@ -276,30 +276,153 @@ def test_agent_enrollment_and_signed_policy_poll(client):
     assert policy.json()["policy_name"] == "Monitor (Audit Only)"
     assert policy.json()["enforcement_enabled"] is False
 
-    heartbeat_body = json.dumps(
-        {"agent_version": "0.1.1", "capabilities": ["audit"], "policy_version": 1},
-        separators=(",", ":"),
-    ).encode()
+    # An upgraded agent can request signed responses before its new capability
+    # has been persisted by a heartbeat. Once attested, signed control is sticky.
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    signed = f"GET\n/api/v1/agent/policy\n{timestamp}\n{body_hash}".encode()
+    upgraded_policy = client.get(
+        "/api/v1/agent/policy",
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(private_key.sign(signed)).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert upgraded_policy.status_code == 200, upgraded_policy.text
+    assert upgraded_policy.json()["platform_envelope"]["kind"] == "agent-policy"
+
+    heartbeat_path = "/api/v1/agent/heartbeat"
+    heartbeat_payload = {
+        "agent_version": "0.5.0",
+        "capabilities": ["audit", "signed-platform-control-v1"],
+        "policy_version": 1,
+    }
+    heartbeat_body = json.dumps(heartbeat_payload, separators=(",", ":")).encode()
     timestamp = str(int(datetime.now(UTC).timestamp()))
     heartbeat_message = (
-        f"POST\n/api/v1/agent/heartbeat\n{timestamp}\n{hashlib.sha256(heartbeat_body).hexdigest()}"
+        f"POST\n{heartbeat_path}\n{timestamp}\n{hashlib.sha256(heartbeat_body).hexdigest()}"
     ).encode()
     heartbeat = client.post(
-        "/api/v1/agent/heartbeat",
+        heartbeat_path,
         content=heartbeat_body,
         headers={
             "Content-Type": "application/json",
             "X-LSA-Agent-ID": agent_id,
             "X-LSA-Agent-Timestamp": timestamp,
             "X-LSA-Agent-Signature": b64encode(private_key.sign(heartbeat_message)).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
         },
     )
     assert heartbeat.status_code == 200, heartbeat.text
-    assert heartbeat.json()["policy_version"] == 1
+    assert heartbeat.json()["platform_envelope"]["kind"] == "agent-heartbeat"
+
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    signed = f"GET\n/api/v1/agent/policy\n{timestamp}\n{body_hash}".encode()
+    sticky_policy = client.get(
+        "/api/v1/agent/policy",
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(private_key.sign(signed)).decode(),
+        },
+    )
+    assert sticky_policy.status_code == 200, sticky_policy.text
+    assert sticky_policy.json()["platform_envelope"]["kind"] == "agent-policy"
+
+
+def test_new_agent_receives_signed_monotonic_control_responses(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    group = client.get("/api/v1/agent-groups", headers=headers).json()[0]
+    token_response = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "signed control enrollment",
+            "group_id": group["id"],
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+    )
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    enrollment = client.post(
+        "/api/v1/agent/enroll",
+        headers={"Authorization": f"Bearer {token_response.json()['token']}"},
+        json={
+            "name": "signed-control-agent",
+            "public_key": b64encode(public_key).decode(),
+            "agent_version": "0.5.0",
+            "capabilities": ["audit", "signed-platform-control-v1"],
+            "hostname": "signed-control-agent",
+            "machine_id_hash": f"sha256:{hashlib.sha256(b'signed-control-agent').hexdigest()}",
+            "operating_system": "Debian GNU/Linux",
+            "os_family": "debian",
+            "os_version": "13",
+            "kernel": "6.12.0",
+            "architecture": "x86_64",
+        },
+    )
+    assert enrollment.status_code == 201, enrollment.text
+    enrollment_data = enrollment.json()
+    assert enrollment_data["platform_envelope"]["payload"]["signed_control_required"] is True
+    agent_id = enrollment_data["agent_id"]
+    platform_public_key = Ed25519PublicKey.from_public_bytes(
+        b64decode(enrollment_data["platform_trust"]["public_key"])
+    )
+
+    def agent_headers(method: str, path: str, body: bytes = b""):
+        timestamp = str(int(datetime.now(UTC).timestamp()))
+        message = f"{method}\n{path}\n{timestamp}\n{hashlib.sha256(body).hexdigest()}".encode()
+        return {
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(private_key.sign(message)).decode(),
+        }
+
+    sequence = 1
+    for path, kind in (
+        ("/api/v1/agent/policy", "agent-policy"),
+        ("/api/v1/agent/tasks/next", "agent-task"),
+    ):
+        response = client.get(path, headers=agent_headers("GET", path))
+        assert response.status_code == 200, response.text
+        result = response.json()
+        envelope = result["platform_envelope"]
+        platform_public_key.verify(
+            b64decode(result["platform_signature"]),
+            json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(),
+        )
+        assert envelope["kind"] == kind
+        assert envelope["agent_id"] == agent_id
+        assert envelope["payload"]["execution_enabled"] is False
+        assert envelope["sequence"] == sequence + 1
+        sequence = envelope["sequence"]
+    assert result["platform_envelope"]["payload"]["task"] is None
+
+    heartbeat_path = "/api/v1/agent/heartbeat"
+    heartbeat_payload = {
+        "agent_version": "0.5.0",
+        "capabilities": ["audit", "signed-platform-control-v1"],
+        "policy_version": 1,
+    }
+    heartbeat_body = json.dumps(heartbeat_payload, separators=(",", ":")).encode()
+    heartbeat = client.post(
+        heartbeat_path,
+        headers={
+            **agent_headers("POST", heartbeat_path, heartbeat_body),
+            "Content-Type": "application/json",
+        },
+        content=heartbeat_body,
+    )
+    assert heartbeat.status_code == 200, heartbeat.text
+    assert heartbeat.json()["platform_envelope"]["kind"] == "agent-heartbeat"
+    assert heartbeat.json()["platform_envelope"]["sequence"] == sequence + 1
 
     agents = client.get("/api/v1/agents", headers=headers)
     assert agents.status_code == 200
-    assert agents.json()[0]["hostname"] == "test-agent-01"
+    assert agents.json()[0]["hostname"] == "signed-control-agent"
 
     queued = client.post(
         "/api/v1/agents/actions/run-audit",
@@ -321,9 +444,10 @@ def test_agent_enrollment_and_signed_policy_poll(client):
         },
     )
     assert claimed.status_code == 200, claimed.text
-    assert claimed.json()["status"] == "dispatched"
+    claimed_task = claimed.json()["platform_envelope"]["payload"]["task"]
+    assert claimed_task["status"] == "dispatched"
 
-    completion_path = f"/api/v1/agent/tasks/{claimed.json()['id']}/complete"
+    completion_path = f"/api/v1/agent/tasks/{claimed_task['id']}/complete"
     completion_body = json.dumps(
         {"status": "completed", "result": {"policy_version": 1}, "error": None},
         separators=(",", ":"),
@@ -343,20 +467,9 @@ def test_agent_enrollment_and_signed_policy_poll(client):
         },
     )
     assert completed.status_code == 200, completed.text
-    assert completed.json()["status"] == "completed"
-    assert (
-        client.get(
-            task_path,
-            headers={
-                "X-LSA-Agent-ID": agent_id,
-                "X-LSA-Agent-Timestamp": timestamp,
-                "X-LSA-Agent-Signature": b64encode(
-                    private_key.sign(f"GET\n{task_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}".encode())
-                ).decode(),
-            },
-        ).json()
-        is None
-    )
+    assert completed.json()["platform_envelope"]["payload"]["task"]["status"] == "completed"
+    empty = client.get(task_path, headers=agent_headers("GET", task_path))
+    assert empty.json()["platform_envelope"]["payload"]["task"] is None
 
 
 def test_policy_updates_are_immutable_versions(client):
