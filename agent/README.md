@@ -38,6 +38,8 @@ The installer places the runtime in `/opt/lsa-agent`, configuration in `/etc/lsa
 
 The console-generated command transparently installs the tenant's public Ed25519 platform key in `/etc/lsa-agent/platform-command-key.pub`. This key is public, not a credential. Before storing its ingestion token, the agent verifies a short-lived signed enrollment proof bound to its locally generated identity and rejects a changed key, invalid signature, expired proof, or replayed sequence. The private agent key, host ingestion token, and local state remain mode `0600` under `/var/lib/lsa-agent`.
 
+The same command accepts either a one-time enrollment token or the tenant's reusable automation token. Reusable tokens are intended for secret-managed provisioning systems: LSA never displays them again, can cap their successful uses, tracks their last use, and allows immediate revocation. They do not bypass platform-key pinning or the audit-only safety lock.
+
 The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.4.4 does not validate the gateway certificate or hostname. Platform identity is authenticated during enrollment at the application layer. Ordinary policy polling is not yet signed, so the audit-only protocol lock remains mandatory: policy data cannot carry commands and the agent rejects any response that enables execution. The agent does not use the management console port.
 
 The agent advertises `signed-change-set-planning-v1` so the management plane can verify that it supplies the identity, freshness, policy, and integrity evidence needed for signed governance planning. This capability does not enable configuration writes or change-set execution; task consumption remains restricted to `audit`.

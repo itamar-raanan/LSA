@@ -22,7 +22,7 @@ vi.mock('../api/client', () => ({
     ]),
     controlCatalog: vi.fn().mockResolvedValue([{ control_id: 'CIS-DEBIAN13-1.1.1', title: 'Disable unused filesystem', category: 'filesystem', module: 'cis_debian13' }]),
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
-    createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
+    createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token', token_type: 'one_time', max_uses: null, use_count: 0, platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
     agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
     agentPackages: vi.fn().mockResolvedValue([
       { id: 'linux-deb', version: '0.4.1', filename: 'lsa-agent_0.4.1_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
@@ -90,7 +90,7 @@ describe('Agents', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Deploy agent/ }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Token name' }), { target: { value: 'Production Deployment' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create enrollment token' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create one-time token' }))
     fireEvent.click(await screen.findByRole('button', { name: /Continue to installation/ }))
     expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Download Package' })).toHaveLength(1)
@@ -122,6 +122,36 @@ describe('Agents', () => {
     expect(api.revokeAgent).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Revoke agent' }))
     await waitFor(() => expect(api.revokeAgent).toHaveBeenCalledWith('agent-1'))
+  })
+
+  it('creates a reusable tenant enrollment credential for automated provisioning', async () => {
+    vi.mocked(api.createAgentEnrollmentToken).mockResolvedValueOnce({
+      id: 'tenant-token-1',
+      name: 'Tenant Automation',
+      group_id: 'group-1',
+      token: 'lsa_tenant_enroll_test',
+      token_prefix: 'lsa_tenant_enroll_test',
+      expires_at: '2026-11-01T00:00:00Z',
+      token_type: 'reusable',
+      max_uses: null,
+      use_count: 0,
+      platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) },
+    })
+    render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Deploy agent/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: /Credential type/ }), { target: { value: 'reusable' } })
+    expect(screen.getByRole('spinbutton', { name: /Maximum enrollments/ })).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Token name' }), { target: { value: 'Tenant Automation' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create reusable token' }))
+
+    await waitFor(() => expect(api.createAgentEnrollmentToken).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Tenant Automation',
+      token_type: 'reusable',
+      max_uses: null,
+    })))
+    expect(await screen.findByText('lsa_tenant_enroll_test')).toBeInTheDocument()
+    expect(screen.getByText(/Store it in your deployment secret manager/)).toBeInTheDocument()
   })
 
   it('reviews policy differences before publishing an immutable version', async () => {

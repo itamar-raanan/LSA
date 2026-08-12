@@ -714,9 +714,35 @@ def create_enrollment_token(
     require_admin(user)
     _require_group(db, user.tenant_id, request.group_id)
     expires_at = _aware(request.expires_at)
-    if expires_at <= now_utc() or expires_at > now_utc() + timedelta(days=30):
-        raise HTTPException(status_code=422, detail="Enrollment token expiry must be within the next 30 days")
-    raw_token = f"lsa_enroll_{secrets.token_urlsafe(32)}"
+    maximum_lifetime = timedelta(days=365 if request.token_type == "reusable" else 30)
+    if expires_at <= now_utc() or expires_at > now_utc() + maximum_lifetime:
+        maximum_days = maximum_lifetime.days
+        raise HTTPException(
+            status_code=422,
+            detail=f"{request.token_type.replace('_', ' ').title()} enrollment token expiry must be within the next {maximum_days} days",
+        )
+    if request.token_type == "one_time" and request.max_uses is not None:
+        raise HTTPException(status_code=422, detail="One-time enrollment tokens cannot set a usage limit")
+    if request.token_type == "reusable":
+        active_reusable = db.scalar(
+            select(AgentEnrollmentToken).where(
+                AgentEnrollmentToken.tenant_id == user.tenant_id,
+                AgentEnrollmentToken.token_type == "reusable",
+                AgentEnrollmentToken.revoked_at.is_(None),
+                AgentEnrollmentToken.expires_at > now_utc(),
+                or_(
+                    AgentEnrollmentToken.max_uses.is_(None),
+                    AgentEnrollmentToken.use_count < AgentEnrollmentToken.max_uses,
+                ),
+            )
+        )
+        if active_reusable is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="An active reusable tenant enrollment token already exists; revoke it before creating another",
+            )
+    prefix = "lsa_tenant_enroll_" if request.token_type == "reusable" else "lsa_enroll_"
+    raw_token = f"{prefix}{secrets.token_urlsafe(32)}"
     platform_key, key_created = active_platform_command_key(db, user.tenant_id)
     token = AgentEnrollmentToken(
         tenant_id=user.tenant_id,
@@ -725,6 +751,8 @@ def create_enrollment_token(
         name=request.name.strip(),
         token_prefix=raw_token[:24],
         token_hash=hash_ingestion_token(raw_token),
+        token_type=request.token_type,
+        max_uses=request.max_uses,
         expires_at=expires_at,
     )
     db.add(token)
@@ -740,6 +768,8 @@ def create_enrollment_token(
             details={
                 "group_id": token.group_id,
                 "expires_at": token.expires_at.isoformat(),
+                "token_type": token.token_type,
+                "max_uses": token.max_uses,
                 "platform_command_key_fingerprint": platform_key.fingerprint,
                 "platform_command_key_created": key_created,
             },
@@ -753,6 +783,9 @@ def create_enrollment_token(
         token=raw_token,
         token_prefix=token.token_prefix,
         expires_at=token.expires_at,
+        token_type=token.token_type,
+        max_uses=token.max_uses,
+        use_count=token.use_count,
         platform_trust=platform_trust_descriptor(platform_key),
     )
 
@@ -775,8 +808,12 @@ def list_enrollment_tokens(user: User = Depends(current_user), db: Session = Dep
                 group_id=group.id,
                 group_name=group.name,
                 token_prefix=token.token_prefix,
+                token_type=token.token_type,
+                max_uses=token.max_uses,
+                use_count=token.use_count,
                 expires_at=token.expires_at,
                 used_at=token.used_at,
+                last_used_at=token.last_used_at,
                 revoked_at=token.revoked_at,
                 created_at=token.created_at,
             )
@@ -790,7 +827,7 @@ def revoke_enrollment_token(token_id: str, user: User = Depends(current_user), d
     token = db.get(AgentEnrollmentToken, token_id)
     if token is None or token.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="Enrollment token not found")
-    if token.used_at is not None:
+    if token.token_type == "one_time" and token.used_at is not None:
         raise HTTPException(status_code=409, detail="Enrollment token was already consumed")
     if token.revoked_at is not None:
         raise HTTPException(status_code=409, detail="Enrollment token is already revoked")
@@ -803,7 +840,11 @@ def revoke_enrollment_token(token_id: str, user: User = Depends(current_user), d
             action="agent_enrollment_token.revoked",
             target_type="agent_enrollment_token",
             target_id=token.id,
-            details={"group_id": token.group_id},
+            details={
+                "group_id": token.group_id,
+                "token_type": token.token_type,
+                "use_count": token.use_count,
+            },
         )
     )
     db.commit()
@@ -844,13 +885,24 @@ def enroll_agent(
         .where(AgentEnrollmentToken.token_hash == hash_ingestion_token(credentials.credentials))
         .with_for_update()
     )
+    token_exhausted = (
+        enrollment is not None
+        and enrollment.max_uses is not None
+        and enrollment.use_count >= enrollment.max_uses
+    )
+    token_consumed = (
+        enrollment is not None
+        and enrollment.token_type == "one_time"
+        and enrollment.used_at is not None
+    )
     if (
         enrollment is None
-        or enrollment.used_at is not None
+        or token_consumed
+        or token_exhausted
         or enrollment.revoked_at is not None
         or _aware(enrollment.expires_at) <= now_utc()
     ):
-        raise HTTPException(status_code=401, detail="Invalid, expired, or already used enrollment token")
+        raise HTTPException(status_code=401, detail="Invalid, expired, revoked, consumed, or exhausted enrollment token")
     group = _require_group(db, enrollment.tenant_id, enrollment.group_id)
     if enrollment.platform_command_key_id is None:
         raise HTTPException(
@@ -946,7 +998,11 @@ def enroll_agent(
     )
     db.add(agent)
     db.flush()
-    enrollment.used_at = now_utc()
+    enrollment_used_at = now_utc()
+    enrollment.use_count += 1
+    enrollment.last_used_at = enrollment_used_at
+    if enrollment.token_type == "one_time":
+        enrollment.used_at = enrollment_used_at
     version = _latest_policy_version(db, group.policy_id)
     db.add(
         AuditEvent(
@@ -960,6 +1016,9 @@ def enroll_agent(
                 "group_id": group.id,
                 "policy_version": version.version,
                 "fingerprint": fingerprint,
+                "enrollment_token_id": enrollment.id,
+                "enrollment_token_type": enrollment.token_type,
+                "enrollment_token_use_count": enrollment.use_count,
             },
         )
     )

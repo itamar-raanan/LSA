@@ -703,6 +703,8 @@ class AgentEnrollmentTokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     group_id: str
     expires_at: datetime
+    token_type: Literal["one_time", "reusable"] = "one_time"
+    max_uses: int | None = Field(default=None, ge=2, le=100000)
 
 
 class AgentEnrollmentTokenCreated(BaseModel):
@@ -712,6 +714,9 @@ class AgentEnrollmentTokenCreated(BaseModel):
     token: str
     token_prefix: str
     expires_at: datetime
+    token_type: Literal["one_time", "reusable"]
+    max_uses: int | None
+    use_count: int
     platform_trust: PlatformCommandTrustResponse
 
 
@@ -721,8 +726,12 @@ class AgentEnrollmentTokenResponse(BaseModel):
     group_id: str
     group_name: str
     token_prefix: str
+    token_type: Literal["one_time", "reusable"]
+    max_uses: int | None
+    use_count: int
     expires_at: datetime
     used_at: datetime | None
+    last_used_at: datetime | None
     revoked_at: datetime | None
     created_at: datetime
 

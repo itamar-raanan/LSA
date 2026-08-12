@@ -165,6 +165,9 @@ export function AgentsSettingsPage() {
   const [showDownloads, setShowDownloads] = useState(false)
   const [token, setToken] = useState('')
   const [enrollmentTrust, setEnrollmentTrust] = useState<PlatformCommandTrust | null>(null)
+  const [enrollmentType, setEnrollmentType] = useState<'one_time' | 'reusable'>('one_time')
+  const [createdTokenType, setCreatedTokenType] = useState<'one_time' | 'reusable'>('one_time')
+  const [createdTokenMaxUses, setCreatedTokenMaxUses] = useState<number | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [controlModes, setControlModes] = useState<Record<string, PolicyMode>>({})
@@ -275,13 +278,18 @@ export function AgentsSettingsPage() {
     event.preventDefault()
     const values = new FormData(event.currentTarget)
     void submit(async () => {
+      const maxUsesText = String(values.get('max_uses') ?? '').trim()
       const created = await api.createAgentEnrollmentToken({
         name: String(values.get('name')),
         group_id: String(values.get('group_id')),
         expires_at: new Date(Date.now() + Number(values.get('hours')) * 3600000).toISOString(),
+        token_type: enrollmentType,
+        max_uses: enrollmentType === 'reusable' && maxUsesText ? Number(maxUsesText) : null,
       })
       setToken(created.token)
       setEnrollmentTrust(created.platform_trust)
+      setCreatedTokenType(created.token_type)
+      setCreatedTokenMaxUses(created.max_uses)
     })
   }
 
@@ -342,6 +350,7 @@ export function AgentsSettingsPage() {
   const scopedAgents = data.agents.filter(agent => selectedGroupId === 'all' || agent.group_id === selectedGroupId)
   const visibleAgents = scopedAgents.filter(agent => statusFilter === 'all' || agentStatus(agent) === statusFilter)
   const activeCount = scopedAgents.filter(agent => !agent.revoked_at).length
+  const activeReusableToken = data.enrollmentTokens.find(item => item.token_type === 'reusable' && !item.revoked_at && new Date(item.expires_at).getTime() > Date.now() && (item.max_uses === null || item.use_count < item.max_uses))
   const categoryControls = selectedCategory === 'overview' ? [] : categories.find(([category]) => category === selectedCategory)?.[1] ?? []
 
   return <div className="page-reveal">
@@ -349,7 +358,7 @@ export function AgentsSettingsPage() {
       eyebrow="Managed Linux fleet"
       title="Agents"
       detail="Monitor agent connectivity, review accepted report freshness, and manage group-specific policy and deployment."
-      action={<button className="button-primary" onClick={() => { setActiveTab('deployment'); setToken(''); setEnrollmentTrust(null) }}><Key size={16} /> Deploy agent</button>}
+      action={<button className="button-primary" onClick={() => { setActiveTab('deployment'); setToken(''); setEnrollmentTrust(null); setEnrollmentType('one_time') }}><Key size={16} /> Deploy agent</button>}
     />
     {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
     {showDownloads && <AgentDownloadPanel packages={data.packages} platformUrl={data.connectivity.public_url} platformTrust={enrollmentTrust ?? data.connectivity.platform_trust} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
@@ -402,7 +411,7 @@ export function AgentsSettingsPage() {
             <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
               <p className="section-label">Agent deployment</p>
               <h3 className="mt-2 text-base font-semibold text-stone-100">Enroll Linux hosts</h3>
-              <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-500">Create one short-lived token for the destination group, download the signed package, verify its checksum, then run the generated installation command on each host.</p>
+              <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-500">Use a short-lived token for one host or a controlled reusable tenant token for automated fleet enrollment. Every host enters the selected group and verifies the pinned platform identity.</p>
             </div>
             <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,.8fr)]">
               <section className="min-w-0 border-b border-stone-800 px-5 py-6 sm:px-7 lg:border-b-0 lg:border-r">
@@ -419,16 +428,19 @@ export function AgentsSettingsPage() {
               </section>
 
               <section className="min-w-0 px-5 py-6 sm:px-7">
-                <p className="section-label">One-time enrollment</p>
+                <p className="section-label">Enrollment credential</p>
                 {token ? <div className="mt-4">
-                  <p className="text-xs leading-5 text-stone-500">Copy this token now. It is displayed once and becomes invalid after the first successful enrollment.</p>
+                  <p className="text-xs leading-5 text-stone-500">Copy this token now; it will not be shown again. {createdTokenType === 'one_time' ? 'It becomes invalid after one successful enrollment.' : `It can enroll multiple hosts until expiry${createdTokenMaxUses ? ` or ${createdTokenMaxUses} successful uses` : ''}. Store it in your deployment secret manager.`}</p>
                   <code className="mt-4 block min-w-0 overflow-x-auto rounded-lg border border-stone-800 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code>
                   <div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy token</Button><Button variant="primary" onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> Continue to installation</Button></div>
                 </div> : <form className="mt-4 grid gap-4" onSubmit={createEnrollment}>
+                  {activeReusableToken && <div className="rounded-xl border border-[#b8c5ba] bg-[#edf1eb] p-4 text-xs leading-5 text-stone-600"><div className="flex min-w-0 items-start justify-between gap-4"><div className="min-w-0"><strong className="block truncate font-medium text-stone-800">{activeReusableToken.name}</strong><span className="mt-1 block">Reusable tenant token · {activeReusableToken.group_name}</span><span className="mt-1 block">{activeReusableToken.use_count}{activeReusableToken.max_uses === null ? ' uses' : ` of ${activeReusableToken.max_uses} uses`} · Expires {formatDateTime(activeReusableToken.expires_at)}</span></div><Button type="button" disabled={saving} onClick={() => void submit(() => api.revokeAgentEnrollmentToken(activeReusableToken.id))}><Prohibit size={14} /> Revoke</Button></div></div>}
+                  <label className="form-field">Credential type<select name="token_type" className="select-input w-full" value={enrollmentType} onChange={event => setEnrollmentType(event.target.value as 'one_time' | 'reusable')}><option value="one_time">One-time token</option><option value="reusable">Reusable tenant token</option></select><small>{enrollmentType === 'one_time' ? 'Best for manual enrollment of one host.' : 'Best for automated provisioning. Only one reusable token can be active per tenant.'}</small></label>
                   <label className="form-field">Token name<input name="name" required placeholder="Production enrollment" /></label>
                   <label className="form-field">Destination group<select name="group_id" required className="select-input w-full" defaultValue={selectedGroup?.id ?? data.groups[0]?.id}>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
-                  <label className="form-field">Expires after<select name="hours" className="select-input w-full" defaultValue="24"><option value="1">1 hour</option><option value="24">24 hours</option><option value="168">7 days</option></select></label>
-                  <Button variant="primary" disabled={saving || !data.groups.length}>{saving ? 'Creating token' : 'Create enrollment token'}</Button>
+                  <label className="form-field">Expires after<select name="hours" className="select-input w-full" defaultValue={enrollmentType === 'one_time' ? '24' : '2160'} key={enrollmentType}>{enrollmentType === 'one_time' ? <><option value="1">1 hour</option><option value="24">24 hours</option><option value="168">7 days</option></> : <><option value="720">30 days</option><option value="2160">90 days</option><option value="8760">365 days</option></>}</select></label>
+                  {enrollmentType === 'reusable' && <label className="form-field">Maximum enrollments <input name="max_uses" type="number" min="2" max="100000" placeholder="Unlimited" /><small>Leave blank for unlimited use until expiration.</small></label>}
+                  <Button variant="primary" disabled={saving || !data.groups.length || (enrollmentType === 'reusable' && !!activeReusableToken)}>{saving ? 'Creating token' : enrollmentType === 'reusable' ? 'Create reusable token' : 'Create one-time token'}</Button>
                 </form>}
               </section>
             </div>
