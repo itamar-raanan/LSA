@@ -5,6 +5,8 @@ This module deliberately has no task creation or dispatch behavior.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from lsa.models import PlatformChangeSigningKey, PlatformCommandSigningKey, RemediationChangeSet
@@ -19,6 +21,16 @@ def change_signing_trust_descriptor(key: PlatformChangeSigningKey) -> dict[str, 
         "public_key": key.public_key,
         "fingerprint": key.fingerprint,
     }
+
+
+def validation_contract_digest(contract: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        contract,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def build_validation_contract(

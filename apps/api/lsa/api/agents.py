@@ -31,6 +31,8 @@ from lsa.models import (
     LinuxAgent,
     PolicyMode,
     PlatformCommandSigningKey,
+    RemediationChangeSet,
+    RemediationValidationJob,
     SigningKey,
     Tenant,
     User,
@@ -62,6 +64,7 @@ from lsa.schemas import (
     ControlCatalogItem,
     LinuxAgentResponse,
     PlatformControlResponse,
+    RemediationValidationReceiptSubmission,
 )
 from lsa.security import hash_ingestion_token
 from lsa.services.platform_command_trust import (
@@ -70,13 +73,18 @@ from lsa.services.platform_command_trust import (
     platform_trust_descriptor,
     sign_platform_envelope,
 )
+from lsa.services.remediation_execution_contract import validation_contract_digest
+from lsa.services.remediation_receipts import verify_validation_receipt
 
 
 router = APIRouter(tags=["agents"])
 AGENT_CLOCK_SKEW_SECONDS = 300
 AGENT_TASK_LEASE_SECONDS = 3600
+REMEDIATION_VALIDATION_LEASE_SECONDS = 300
 SIGNED_PLATFORM_CONTROL_CAPABILITY = "signed-platform-control-v1"
 PLATFORM_KEY_ROTATION_CAPABILITY = "platform-key-rotation-v1"
+REMEDIATION_CONTRACT_VALIDATION_CAPABILITY = "remediation-contract-validation-v1"
+REMEDIATION_DRY_RUN_CAPABILITY = "remediation-dry-run-v1"
 
 
 @dataclass(frozen=True)
@@ -1222,6 +1230,201 @@ def agent_heartbeat(
         _signed_control_response(db, agent, "agent-heartbeat", heartbeat.model_dump(mode="json"))
         if signed_control_required
         else heartbeat
+    )
+    db.commit()
+    return response
+
+
+def _require_remediation_validation_agent(agent: LinuxAgent) -> None:
+    capabilities = set(agent.capabilities or [])
+    required = {
+        SIGNED_PLATFORM_CONTROL_CAPABILITY,
+        REMEDIATION_CONTRACT_VALIDATION_CAPABILITY,
+        REMEDIATION_DRY_RUN_CAPABILITY,
+    }
+    if not required <= capabilities:
+        raise HTTPException(
+            status_code=409,
+            detail="Agent has not attested the signed remediation dry-run capabilities",
+        )
+
+
+@router.get(
+    "/agent/remediation-validations/next",
+    response_model=PlatformControlResponse,
+)
+def next_remediation_validation(
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+) -> PlatformControlResponse:
+    _require_remediation_validation_agent(principal.agent)
+    now = now_utc()
+    selected: RemediationValidationJob | None = None
+    jobs = db.scalars(
+        select(RemediationValidationJob)
+        .where(
+            RemediationValidationJob.agent_id == principal.agent.id,
+            RemediationValidationJob.tenant_id == principal.agent.tenant_id,
+            RemediationValidationJob.status.in_(["queued", "delivered"]),
+        )
+        .order_by(RemediationValidationJob.requested_at)
+        .with_for_update()
+    ).all()
+    for job in jobs:
+        change_set = db.get(RemediationChangeSet, job.change_set_id)
+        endorsement = job.contract.get("platform_endorsement", {})
+        if (
+            change_set is None
+            or change_set.status != "authorized"
+            or _aware(change_set.maintenance_window_end) <= now
+            or validation_contract_digest(job.contract) != job.contract_digest
+            or not isinstance(endorsement, dict)
+            or endorsement.get("platform_command_key_id")
+            != principal.agent.platform_command_key_id
+        ):
+            job.status = "expired"
+            job.completed_at = now
+            job.error = "Validation contract is no longer eligible for delivery"
+            continue
+        selected = job
+        break
+    payload: dict[str, object] = {"validation": None}
+    if selected is not None:
+        if selected.status == "queued":
+            selected.status = "delivered"
+            selected.delivered_at = now
+        selected.lease_expires_at = now + timedelta(seconds=REMEDIATION_VALIDATION_LEASE_SECONDS)
+        payload["validation"] = {
+            "validation_id": selected.id,
+            "change_set_id": selected.change_set_id,
+            "contract_digest": selected.contract_digest,
+            "contract": selected.contract,
+        }
+    principal.agent.last_seen_at = now
+    response = _signed_control_response(
+        db,
+        principal.agent,
+        "remediation-validation",
+        payload,
+    )
+    db.commit()
+    return response
+
+
+@router.post(
+    "/agent/remediation-validations/{validation_id}/receipt",
+    response_model=PlatformControlResponse,
+)
+def submit_remediation_validation_receipt(
+    validation_id: str,
+    request: RemediationValidationReceiptSubmission,
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+) -> PlatformControlResponse:
+    _require_remediation_validation_agent(principal.agent)
+    job = db.scalar(
+        select(RemediationValidationJob)
+        .where(
+            RemediationValidationJob.id == validation_id,
+            RemediationValidationJob.agent_id == principal.agent.id,
+            RemediationValidationJob.tenant_id == principal.agent.tenant_id,
+        )
+        .with_for_update()
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Remediation validation job not found")
+    receipt = request.receipt.model_dump(mode="json")
+    if job.status in {"ready", "blocked"}:
+        if job.receipt != receipt or job.receipt_signature != request.signature:
+            raise HTTPException(status_code=409, detail="Validation job already has another receipt")
+        response = _signed_control_response(
+            db,
+            principal.agent,
+            "remediation-validation-receipt",
+            {"validation_id": job.id, "status": job.status, "accepted": True},
+        )
+        db.commit()
+        return response
+    if job.status != "delivered":
+        raise HTTPException(status_code=409, detail="Validation job is not awaiting a receipt")
+    if (
+        validation_contract_digest(job.contract) != job.contract_digest
+        or receipt["validation_id"] != job.id
+        or receipt["change_set_id"] != job.change_set_id
+        or receipt["contract_digest"] != job.contract_digest
+        or receipt["agent_id"] != job.agent_id
+        or receipt["host_id"] != job.host_id
+        or receipt["execution_enabled"] is not False
+        or receipt["changes_applied"] is not False
+        or not verify_validation_receipt(
+            principal.agent.public_key,
+            receipt,
+            request.signature,
+        )
+    ):
+        raise HTTPException(status_code=409, detail="Validation receipt trust binding is invalid")
+    evaluated_at = request.receipt.evaluated_at
+    if evaluated_at.tzinfo is None:
+        raise HTTPException(status_code=409, detail="Validation receipt time must include a timezone")
+    evaluated_at = evaluated_at.astimezone(now_utc().tzinfo)
+    change_set = db.get(RemediationChangeSet, job.change_set_id)
+    if (
+        job.delivered_at is None
+        or evaluated_at < _aware(job.delivered_at) - timedelta(minutes=5)
+        or evaluated_at > now_utc() + timedelta(minutes=5)
+        or change_set is None
+        or evaluated_at > _aware(change_set.maintenance_window_end)
+    ):
+        raise HTTPException(status_code=409, detail="Validation receipt time is outside its contract")
+    expected_actions = {
+        item.get("plan_id"): item.get("action_digest")
+        for item in job.contract.get("actions", [])
+        if isinstance(item, dict)
+    }
+    received_actions = {item.plan_id: item for item in request.receipt.action_results}
+    if len(received_actions) != len(request.receipt.action_results):
+        raise HTTPException(status_code=409, detail="Validation receipt repeats an action result")
+    if any(
+        plan_id not in expected_actions
+        or expected_actions[plan_id] != result.action_digest
+        for plan_id, result in received_actions.items()
+    ):
+        raise HTTPException(status_code=409, detail="Validation receipt action binding is invalid")
+    if receipt["status"] == "ready":
+        if (
+            set(received_actions) != set(expected_actions)
+            or any(result.status != "ready" for result in received_actions.values())
+            or receipt["error"] is not None
+        ):
+            raise HTTPException(status_code=409, detail="Ready receipt has incomplete action results")
+    elif set(received_actions) != set(expected_actions) and not receipt["error"]:
+        raise HTTPException(status_code=409, detail="Blocked receipt must explain incomplete results")
+    job.status = receipt["status"]
+    job.receipt = receipt
+    job.receipt_signature = request.signature
+    job.error = receipt["error"]
+    job.completed_at = now_utc()
+    principal.agent.last_seen_at = job.completed_at
+    db.add(
+        AuditEvent(
+            tenant_id=job.tenant_id,
+            actor_type="agent",
+            actor_id=principal.agent.id,
+            action=f"remediation_validation.{job.status}",
+            target_type="remediation_validation_job",
+            target_id=job.id,
+            details={
+                "change_set_id": job.change_set_id,
+                "contract_digest": job.contract_digest,
+                "changes_applied": False,
+            },
+        )
+    )
+    response = _signed_control_response(
+        db,
+        principal.agent,
+        "remediation-validation-receipt",
+        {"validation_id": job.id, "status": job.status, "accepted": True},
     )
     db.commit()
     return response

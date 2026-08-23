@@ -32,11 +32,23 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 try:
     from .integrity import verify_manifest
+    from .remediation_contract import (
+        RemediationContractError,
+        dry_run_remediation_contract,
+        sign_validation_receipt,
+        validate_remediation_contract_preview,
+    )
 except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
+    from remediation_contract import (
+        RemediationContractError,
+        dry_run_remediation_contract,
+        sign_validation_receipt,
+        validate_remediation_contract_preview,
+    )
 
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -45,6 +57,7 @@ AGENT_CAPABILITIES = (
     "policy-rollback-protection",
     "signed-change-set-planning-v1",
     "remediation-contract-validation-v1",
+    "remediation-dry-run-v1",
     "signed-platform-control-v1",
     "platform-key-rotation-v1",
 )
@@ -620,6 +633,116 @@ def _scan_due(state: dict[str, Any]) -> bool:
         return True
 
 
+def process_remediation_validation(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    key: Ed25519PrivateKey,
+    payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    validation = payload.get("validation")
+    if validation is None:
+        return None
+    if not isinstance(validation, dict) or set(validation) != {
+        "validation_id",
+        "change_set_id",
+        "contract_digest",
+        "contract",
+    }:
+        raise RuntimeError("platform returned an invalid remediation validation wrapper")
+    validation_id = validation["validation_id"]
+    change_set_id = validation["change_set_id"]
+    contract_digest = validation["contract_digest"]
+    contract = validation["contract"]
+    if not all(isinstance(value, str) and value for value in (validation_id, change_set_id)):
+        raise RuntimeError("remediation validation identity is invalid")
+    if not isinstance(contract, dict) or not isinstance(contract_digest, str):
+        raise RuntimeError("remediation validation contract is invalid")
+    calculated_digest = hashlib.sha256(
+        json.dumps(
+            contract,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    if calculated_digest != contract_digest:
+        raise RuntimeError("remediation validation contract digest is invalid")
+    cached_receipts = state.setdefault("remediation_validation_receipts", {})
+    cached = cached_receipts.get(validation_id) if isinstance(cached_receipts, dict) else None
+    if (
+        isinstance(cached, dict)
+        and cached.get("contract_digest") == contract_digest
+        and isinstance(cached.get("receipt"), dict)
+        and isinstance(cached.get("signature"), str)
+    ):
+        receipt = cached["receipt"]
+        receipt_signature = cached["signature"]
+    else:
+        error: str | None = None
+        action_results: list[dict[str, Any]] = []
+        status = "blocked"
+        try:
+            pinned_key, pinned_raw = load_platform_command_key(config)
+            validate_remediation_contract_preview(
+                contract,
+                pinned_platform_key=pinned_key,
+                pinned_platform_raw=pinned_raw,
+                expected_platform_key_id=str(state["platform_command_key_id"]),
+                expected_agent_id=str(state["agent_id"]),
+                expected_host_id=str(state["host_id"]),
+            )
+            dry_run = dry_run_remediation_contract(contract)
+            status = str(dry_run["status"])
+            action_results = list(dry_run["action_results"])
+        except RemediationContractError as exc:
+            error = f"Contract validation failed: {exc}"
+        receipt = {
+            "schema_version": "1.0",
+            "kind": "remediation-validation-receipt",
+            "validation_id": validation_id,
+            "change_set_id": change_set_id,
+            "contract_digest": contract_digest,
+            "agent_id": str(state["agent_id"]),
+            "host_id": str(state["host_id"]),
+            "status": status,
+            "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "execution_enabled": False,
+            "changes_applied": False,
+            "agent_version": VERSION,
+            "agent_integrity_digest": str(state["integrity_manifest_sha256"]),
+            "action_results": action_results,
+            "error": error,
+        }
+        receipt_signature = sign_validation_receipt(key, receipt)
+        if not isinstance(cached_receipts, dict):
+            cached_receipts = {}
+            state["remediation_validation_receipts"] = cached_receipts
+        cached_receipts[validation_id] = {
+            "contract_digest": contract_digest,
+            "receipt": receipt,
+            "signature": receipt_signature,
+        }
+        while len(cached_receipts) > 50:
+            cached_receipts.pop(next(iter(cached_receipts)))
+        atomic_json(state_paths(config)[0], state)
+    path = f"/api/v1/agent/remediation-validations/{validation_id}/receipt"
+    acknowledgement = signed_control_post(
+        config,
+        state,
+        key,
+        path,
+        {"receipt": receipt, "signature": receipt_signature},
+        "remediation-validation-receipt",
+    )
+    if acknowledgement.get("accepted") is not True:
+        raise RuntimeError("platform did not accept the remediation validation receipt")
+    return {
+        "validation_id": validation_id,
+        "status": receipt["status"],
+        "changes_applied": False,
+    }
+
+
 def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[str, Any]:
     if os.geteuid() != 0 and not config.get("allow_unprivileged_development", False):
         raise RuntimeError("LSA agent must run as root to read protected audit evidence")
@@ -650,6 +773,27 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
         "agent-heartbeat",
     )
     state["integrity_manifest_sha256"] = integrity_digest
+    validation_result: dict[str, Any] | None = None
+    try:
+        validation_payload = signed_control_get(
+            config,
+            state,
+            key,
+            "/api/v1/agent/remediation-validations/next",
+            "remediation-validation",
+        )
+        validation_result = process_remediation_validation(
+            config,
+            state,
+            key,
+            validation_payload,
+        )
+    except (httpx.HTTPError, RuntimeError) as exc:
+        print(
+            f"LSA agent remediation dry-run cycle failed without applying changes: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
     task_payload = signed_control_get(
         config, state, key, "/api/v1/agent/tasks/next", "agent-task"
     )
@@ -682,7 +826,13 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
                     print(f"LSA agent could not report failed audit task: {report_error}", file=sys.stderr, flush=True)
             raise
     atomic_json(state_path, state)
-    return {"policy": policy, "heartbeat": heartbeat, "task": task, "scanned": should_scan}
+    return {
+        "policy": policy,
+        "heartbeat": heartbeat,
+        "validation": validation_result,
+        "task": task,
+        "scanned": should_scan,
+    }
 
 
 def run_once(config: dict[str, Any]) -> dict[str, Any]:

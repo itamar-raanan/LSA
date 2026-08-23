@@ -1,8 +1,8 @@
 import {
-  CalendarClock, CheckCircle2, CircleSlash2, Fingerprint, KeyRound,
+  CalendarClock, CheckCircle2, CircleSlash2, Fingerprint, KeyRound, ScanSearch,
   Layers3, LockKeyhole, ShieldCheck, ShieldX, TriangleAlert,
 } from 'lucide-react'
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/useAuth'
@@ -12,7 +12,7 @@ import { Button } from '../components/ui/Button'
 import { Dialog } from '../components/ui/Dialog'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime } from '../lib/dateTime'
-import type { RemediationChangeSet, RemediationPlan } from '../types'
+import type { RemediationChangeSet, RemediationPlan, RemediationValidationJob } from '../types'
 
 function localDateTime(hoursFromNow: number) {
   const date = new Date(Date.now() + hoursFromNow * 60 * 60_000)
@@ -94,14 +94,26 @@ function CancelDialog({ busy, error, close, submit }: { busy: boolean; error: st
   </Dialog>
 }
 
-function ChangeSetDossier({ changeSet, admin, currentUserId, authorize, cancel }: { changeSet: RemediationChangeSet; admin: boolean; currentUserId?: string; authorize: () => void; cancel: () => void }) {
+function ValidationStatus({ job }: { job: RemediationValidationJob }) {
+  const label = job.status === 'ready' ? 'Ready' : job.status === 'blocked' ? 'Blocked' : job.status === 'delivered' ? 'Evaluating' : job.status === 'queued' ? 'Queued' : job.status === 'expired' ? 'Expired' : 'Canceled'
+  const Icon = job.status === 'ready' ? CheckCircle2 : job.status === 'blocked' ? TriangleAlert : job.status === 'queued' || job.status === 'delivered' ? ScanSearch : CircleSlash2
+  return <span className={`validation-status validation-status-${job.status}`}><Icon size={13} />{label}</span>
+}
+
+function ChangeSetDossier({ changeSet, admin, currentUserId, validations, validationLoading, validationError, validationBusyAgent, authorize, cancel, queueValidation }: { changeSet: RemediationChangeSet; admin: boolean; currentUserId?: string; validations: RemediationValidationJob[]; validationLoading: boolean; validationError: string | null; validationBusyAgent: string | null; authorize: () => void; cancel: () => void; queueValidation: (agentId: string) => void }) {
   const operationalBlocks = changeSet.gates.filter(gate => gate.status === 'blocked' && gate.code !== 'four_eyes')
   const independent = currentUserId !== changeSet.requested_by && changeSet.plans.every(plan => plan.plan_approved_by !== currentUserId)
+  const latestByAgent = new Map<string, RemediationValidationJob>()
+  validations.forEach(job => { if (!latestByAgent.has(job.agent_id)) latestByAgent.set(job.agent_id, job) })
   return <aside className="change-set-dossier" aria-label={`Change Set ${changeSet.id} Dossier`}>
     <header><div><ChangeSetStatus changeSet={changeSet} /><h2>{changeSet.plans.length} Reviewed Change{changeSet.plans.length === 1 ? '' : 's'}</h2><p>{changeSet.targets.length} Target{changeSet.targets.length === 1 ? '' : 's'} · Requested By {changeSet.requested_by_name}</p></div><span className="change-set-short-id">{changeSet.id.slice(0, 8)}</span></header>
     <div className="remediation-execution-lock"><ShieldX size={17} /><div><strong>Signed Governance Record Only</strong><p>{changeSet.execution_reason}</p></div></div>
     <section className="change-set-section"><div className="change-set-section-heading"><h3>Readiness Gates</h3><span>{changeSet.gates.filter(gate => gate.status === 'passed').length} Of {changeSet.gates.length} Passed</span></div><ul className="change-set-gates">{changeSet.gates.map(gate => <li key={gate.code} className={gate.status === 'passed' ? 'change-set-gate-passed' : 'change-set-gate-blocked'}>{gate.status === 'passed' ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}<div><strong>{gate.code.replaceAll('_', ' ')}</strong><p>{gate.detail}</p></div></li>)}</ul></section>
-    <section className="change-set-section"><div className="change-set-section-heading"><h3>Canary Rollout</h3><span>Batch {changeSet.batch_size} · Every {changeSet.batch_interval_minutes} Minutes</span></div><div className="change-set-targets">{changeSet.targets.map(target => <div key={target.host_id}><span className={`change-set-phase change-set-phase-${target.rollout_phase}`}>{target.rollout_phase}</span><div><strong>{target.hostname}</strong><p>{target.group_name} · {target.policy_name} V{target.policy_version}</p></div><span>{target.capability_attested ? 'Capability Attested' : 'Capability Missing'}</span></div>)}</div><div className="change-set-window"><CalendarClock size={16} /><span><strong>{formatDateTime(changeSet.maintenance_window_start)}</strong><small>Through {formatDateTime(changeSet.maintenance_window_end)}</small></span></div></section>
+    <section className="change-set-section"><div className="change-set-section-heading"><h3>Canary Rollout And Read-Only Preflight</h3><span>Batch {changeSet.batch_size} · Every {changeSet.batch_interval_minutes} Minutes</span></div><div className="change-set-targets">{changeSet.targets.map(target => {
+      const job = latestByAgent.get(target.agent_id)
+      const active = job?.status === 'queued' || job?.status === 'delivered'
+      return <div key={target.host_id}><span className={`change-set-phase change-set-phase-${target.rollout_phase}`}>{target.rollout_phase}</span><div><strong>{target.hostname}</strong><p>{target.group_name} · {target.policy_name} V{target.policy_version}</p>{job?.receipt && <small>{job.receipt.action_results.filter(result => result.status === 'ready').length} Of {job.receipt.action_results.length} Actions Ready · No Changes Applied</small>}{job?.error && <small>{job.error}</small>}</div><div className="change-set-target-validation">{job ? <ValidationStatus job={job} /> : <span>{validationLoading ? 'Loading Preflight' : target.capability_attested ? 'Not Evaluated' : 'Capability Missing'}</span>}{admin && changeSet.status === 'authorized' && !active && job?.status !== 'ready' && <Button variant="ghost" disabled={validationBusyAgent === target.agent_id} onClick={() => queueValidation(target.agent_id)}>{validationBusyAgent === target.agent_id ? 'Queueing' : job ? 'Run Again' : 'Run Read-Only Preflight'}</Button>}</div></div>
+    })}</div>{validationError && <p className="remediation-decision-error" role="alert">{validationError}</p>}<div className="change-set-validation-note"><ShieldX size={15} /><p><strong>Validation Cannot Change The Host.</strong> It reads local readiness and returns an agent-signed receipt with Changes Applied set to False.</p></div><div className="change-set-window"><CalendarClock size={16} /><span><strong>{formatDateTime(changeSet.maintenance_window_start)}</strong><small>Through {formatDateTime(changeSet.maintenance_window_end)}</small></span></div></section>
     <section className="change-set-section"><div className="change-set-section-heading"><h3>Signed Envelope</h3><span>{changeSet.signature ? 'Signature Verified' : 'Pending Authorization'}</span></div><dl className="change-set-integrity"><div><dt>Payload Digest</dt><dd>{changeSet.digest}</dd></div><div><dt>Signing Key</dt><dd>{changeSet.signing_key_fingerprint ?? 'Created Only After Independent Authorization'}</dd></div>{changeSet.signature && <div><dt>Ed25519 Signature</dt><dd>{changeSet.signature}</dd></div>}</dl></section>
     <section className="change-set-section"><div className="change-set-section-heading"><h3>Included Plans</h3><span>{changeSet.plans.length}</span></div><div className="change-set-plans">{changeSet.plans.map(plan => <div key={plan.plan_id}><Layers3 size={15} /><span><strong>{plan.title}</strong><small>{plan.hostname} · {plan.control_id} · {plan.action_id} V{plan.action_version}</small></span></div>)}</div></section>
     <footer className="change-set-actions">
@@ -126,7 +138,17 @@ export function ChangeSetsPage() {
   const [mutationError, setMutationError] = useState('')
   const changeSets = useMemo(() => workspace.data?.changeSets ?? [], [workspace.data?.changeSets])
   const selected = useMemo(() => changeSets.find(item => item.id === selectedId) ?? changeSets[0] ?? null, [changeSets, selectedId])
+  const validations = useApi(() => selected ? api.remediationValidationJobs(selected.id) : Promise.resolve([]), [selected?.id])
   const eligiblePlans = (workspace.data?.plans ?? []).filter(plan => plan.action_catalog_status === 'matched' && plan.action !== null)
+  const [validationBusyAgent, setValidationBusyAgent] = useState<string | null>(null)
+  const hasActiveValidations = validations.data?.some(job => job.status === 'queued' || job.status === 'delivered') ?? false
+  const refreshValidations = validations.refresh
+
+  useEffect(() => {
+    if (!hasActiveValidations) return
+    const interval = window.setInterval(() => { void refreshValidations() }, 10_000)
+    return () => window.clearInterval(interval)
+  }, [hasActiveValidations, refreshValidations])
 
   async function mutate(action: () => Promise<RemediationChangeSet>, close?: () => void) {
     setBusy(true); setMutationError('')
@@ -135,13 +157,21 @@ export function ChangeSetsPage() {
     finally { setBusy(false) }
   }
 
+  async function queueValidation(agentId: string) {
+    if (!selected) return
+    setValidationBusyAgent(agentId); setMutationError('')
+    try { await api.queueRemediationValidation(selected.id, agentId); await validations.reload() }
+    catch (error) { setMutationError(error instanceof Error ? error.message : 'The Read-Only Preflight Could Not Be Queued.') }
+    finally { setValidationBusyAgent(null) }
+  }
+
   return <div className="page-reveal">
     <PageHeader eyebrow="Change Governance" title="Signed Change Sets" detail="Compile approved plans into immutable canary envelopes, verify every readiness gate, and require independent authorization before signing." action={user?.role === 'admin' ? <Button variant="primary" onClick={() => { setMutationError(''); setCreating(true) }}>Prepare Change Set</Button> : undefined} />
     <nav className="findings-view-tabs" aria-label="Security Finding Workspaces"><Link className="findings-view-tab" to="/findings">Findings Queue</Link><Link className="findings-view-tab" to="/findings?view=remediation">Remediation Review</Link><Link className="findings-view-tab findings-view-tab-active" to="/findings?view=change-sets" aria-current="page">Change Sets</Link></nav>
-    <div className="remediation-safety-banner"><KeyRound size={18} /><div><strong>Signing Does Not Enable Execution</strong><p>Change sets are retained governance artifacts. The agent protocol remains audit-only and the agent gateway does not expose this workflow.</p></div></div>
+    <div className="remediation-safety-banner"><KeyRound size={18} /><div><strong>Signing Does Not Enable Execution</strong><p>Change sets remain governed artifacts. Read-only preflight uses a separate signed validation route and cannot create an audit task or modify host configuration.</p></div></div>
     {workspace.loading && !workspace.data ? <LoadingState variant="table" /> : workspace.error ? <ErrorState message={workspace.error} retry={() => void workspace.reload()} /> : <section className="panel change-set-workspace" aria-label="Signed Change Set Workspace">
       <div className="change-set-queue"><header><div><h2>Authorization Queue</h2><p>{changeSets.length} Retained Envelope{changeSets.length === 1 ? '' : 's'}</p></div><Fingerprint size={18} /></header><ul>{changeSets.map(changeSet => <li key={changeSet.id}><button className={selected?.id === changeSet.id ? 'change-set-row change-set-row-active' : 'change-set-row'} onClick={() => setSelectedId(changeSet.id)}><ChangeSetStatus changeSet={changeSet} /><strong>{changeSet.plans.length} Change{changeSet.plans.length === 1 ? '' : 's'} · {changeSet.targets.length} Target{changeSet.targets.length === 1 ? '' : 's'}</strong><small>{formatDateTime(changeSet.maintenance_window_start)} · {changeSet.id.slice(0, 8)}</small></button></li>)}{!changeSets.length && <li className="change-set-empty"><LockKeyhole size={24} /><h2>No Change Sets Yet</h2><p>Approve a catalog-backed remediation plan, then prepare its canary and maintenance boundaries here.</p></li>}</ul></div>
-      {selected ? <ChangeSetDossier changeSet={selected} admin={user?.role === 'admin'} currentUserId={user?.id} authorize={() => void mutate(() => api.authorizeRemediationChangeSet(selected.id))} cancel={() => { setMutationError(''); setCanceling(true) }} /> : <aside className="change-set-dossier change-set-dossier-empty"><ShieldCheck size={24} /><h2>Select Or Prepare A Change Set</h2><p>Readiness gates, canary scope, cryptographic proof, and authorization history will appear here.</p></aside>}
+      {selected ? <ChangeSetDossier changeSet={selected} admin={user?.role === 'admin'} currentUserId={user?.id} validations={validations.data ?? []} validationLoading={validations.loading} validationError={validations.error || mutationError || null} validationBusyAgent={validationBusyAgent} authorize={() => void mutate(() => api.authorizeRemediationChangeSet(selected.id))} cancel={() => { setMutationError(''); setCanceling(true) }} queueValidation={agentId => void queueValidation(agentId)} /> : <aside className="change-set-dossier change-set-dossier-empty"><ShieldCheck size={24} /><h2>Select Or Prepare A Change Set</h2><p>Readiness gates, canary scope, cryptographic proof, and authorization history will appear here.</p></aside>}
     </section>}
     {creating && <CreateChangeSetDialog plans={eligiblePlans} busy={busy} error={mutationError} close={() => setCreating(false)} submit={input => void mutate(() => api.createRemediationChangeSet(input), () => setCreating(false))} />}
     {canceling && selected && <CancelDialog busy={busy} error={mutationError} close={() => setCanceling(false)} submit={reason => void mutate(() => api.cancelRemediationChangeSet(selected.id, reason), () => setCanceling(false))} />}

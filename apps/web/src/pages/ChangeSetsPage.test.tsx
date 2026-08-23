@@ -1,15 +1,17 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RemediationChangeSet } from '../types'
+import type { RemediationChangeSet, RemediationValidationJob } from '../types'
 import { ChangeSetsPage } from './ChangeSetsPage'
 
-const { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, remediationChangeSets, remediationPlans, session } = vi.hoisted(() => ({
+const { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, queueRemediationValidation, remediationChangeSets, remediationPlans, remediationValidationJobs, session } = vi.hoisted(() => ({
   authorizeRemediationChangeSet: vi.fn(),
   cancelRemediationChangeSet: vi.fn(),
   createRemediationChangeSet: vi.fn(),
   remediationChangeSets: vi.fn(),
   remediationPlans: vi.fn(),
+  remediationValidationJobs: vi.fn(),
+  queueRemediationValidation: vi.fn(),
   session: { userId: 'authorizer-1', role: 'admin' },
 }))
 
@@ -18,7 +20,7 @@ vi.mock('../auth/useAuth', () => ({
 }))
 
 vi.mock('../api/client', () => ({
-  api: { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, remediationChangeSets, remediationPlans },
+  api: { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, queueRemediationValidation, remediationChangeSets, remediationPlans, remediationValidationJobs },
 }))
 
 const pendingChangeSet: RemediationChangeSet = {
@@ -47,12 +49,26 @@ const pendingChangeSet: RemediationChangeSet = {
   created_at: '2026-08-11T08:00:00Z', updated_at: '2026-08-11T08:00:00Z',
 }
 
+const authorizedChangeSet: RemediationChangeSet = {
+  ...pendingChangeSet,
+  status: 'authorized',
+  signature: 'signed-envelope',
+  signing_key_id: 'key-1',
+  signing_key_fingerprint: 'SHA256:change-signing-key',
+  signing_public_key: 'public-key',
+  authorized_by: 'authorizer-1',
+  authorized_by_name: 'Security Administrator',
+  authorized_at: '2026-08-11T09:00:00Z',
+}
+
 describe('Signed Change Sets', () => {
   beforeEach(() => {
     session.userId = 'authorizer-1'
     session.role = 'admin'
     remediationChangeSets.mockReset().mockResolvedValue([pendingChangeSet])
     remediationPlans.mockReset().mockResolvedValue([])
+    remediationValidationJobs.mockReset().mockResolvedValue([])
+    queueRemediationValidation.mockReset()
     authorizeRemediationChangeSet.mockReset()
     cancelRemediationChangeSet.mockReset()
     createRemediationChangeSet.mockReset()
@@ -78,21 +94,10 @@ describe('Signed Change Sets', () => {
 
     view.unmount()
     session.userId = 'authorizer-1'
-    const authorized = {
-      ...pendingChangeSet,
-      status: 'authorized' as const,
-      signature: 'signed-envelope',
-      signing_key_id: 'key-1',
-      signing_key_fingerprint: 'SHA256:change-signing-key',
-      signing_public_key: 'public-key',
-      authorized_by: 'authorizer-1',
-      authorized_by_name: 'Security Administrator',
-      authorized_at: '2026-08-11T09:00:00Z',
-    }
     remediationChangeSets.mockResolvedValue([pendingChangeSet])
     authorizeRemediationChangeSet.mockImplementation(async () => {
-      remediationChangeSets.mockResolvedValue([authorized])
-      return authorized
+      remediationChangeSets.mockResolvedValue([authorizedChangeSet])
+      return authorizedChangeSet
     })
     render(<MemoryRouter><ChangeSetsPage /></MemoryRouter>)
 
@@ -102,8 +107,30 @@ describe('Signed Change Sets', () => {
     expect(screen.getByText('SHA256:change-signing-key')).toBeInTheDocument()
   })
 
+  it('queues one explicit read-only preflight and shows its signed workflow state', async () => {
+    const queued: RemediationValidationJob = {
+      id: 'validation-1', change_set_id: pendingChangeSet.id, host_id: 'host-1', agent_id: 'agent-1', status: 'queued',
+      contract_digest: 'c'.repeat(64), contract: {}, requested_by: 'authorizer-1', requested_by_name: 'Security Administrator', requested_at: '2026-08-11T09:05:00Z',
+      delivered_at: null, lease_expires_at: null, completed_at: null, receipt: null, receipt_signature: null, error: null,
+      execution_enabled: false, changes_applied: false,
+    }
+    remediationChangeSets.mockResolvedValue([authorizedChangeSet])
+    queueRemediationValidation.mockImplementation(async () => {
+      remediationValidationJobs.mockResolvedValue([queued])
+      return queued
+    })
+    render(<MemoryRouter><ChangeSetsPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Read-Only Preflight' }))
+
+    await waitFor(() => expect(queueRemediationValidation).toHaveBeenCalledWith('change-set-12345678', 'agent-1'))
+    expect(await screen.findByText('Queued')).toBeInTheDocument()
+    expect(screen.getByText('Validation Cannot Change The Host.')).toBeInTheDocument()
+  })
+
   it('closes preparation without submitting a change set', async () => {
     render(<MemoryRouter><ChangeSetsPage /></MemoryRouter>)
+    await screen.findByText('Not Evaluated')
     fireEvent.click(await screen.findByRole('button', { name: 'Prepare Change Set' }))
     const dialog = screen.getByRole('dialog', { name: 'Prepare A Change Set' })
 

@@ -24,6 +24,7 @@ from lsa.models import (
     RemediationChangeSetPlan,
     RemediationChangeSetTarget,
     RemediationPlan,
+    RemediationValidationJob,
     Report,
     User,
     now_utc,
@@ -37,6 +38,8 @@ from lsa.schemas import (
     RemediationChangeSetResponse,
     RemediationChangeSetTargetResponse,
     RemediationExecutionContractPreview,
+    RemediationValidationJobCreate,
+    RemediationValidationJobResponse,
 )
 from lsa.services.change_set_signing import (
     active_change_signing_key,
@@ -45,12 +48,16 @@ from lsa.services.change_set_signing import (
     verify_change_set_signature,
 )
 from lsa.services.remediation_catalog import RemediationCatalogError
-from lsa.services.remediation_execution_contract import build_validation_contract
+from lsa.services.remediation_execution_contract import (
+    build_validation_contract,
+    validation_contract_digest,
+)
 
 
 router = APIRouter(prefix="/remediation-change-sets", tags=["remediation change sets"])
 ACTIVE_STATUSES = ("pending_authorization", "authorized")
 REMEDIATION_CONTRACT_VALIDATION_CAPABILITY = "remediation-contract-validation-v1"
+REMEDIATION_DRY_RUN_CAPABILITY = "remediation-dry-run-v1"
 DEFAULT_LIMITS = {
     "remediation_four_eyes": True,
     "remediation_required_capability": "signed-change-set-planning-v1",
@@ -763,18 +770,12 @@ def get_change_set(
     return _serialize(db, _change_set(db, user, change_set_id))
 
 
-@router.get(
-    "/{change_set_id}/execution-contract-preview/{agent_id}",
-    response_model=RemediationExecutionContractPreview,
-)
-def execution_contract_preview(
-    change_set_id: str,
+def _validation_contract_for_agent(
+    db: Session,
+    change_set: RemediationChangeSet,
+    tenant_id: str,
     agent_id: str,
-    user: User = Depends(current_user),
-    db: Session = Depends(get_db),
-) -> RemediationExecutionContractPreview:
-    require_admin(user)
-    change_set = _change_set(db, user, change_set_id)
+) -> tuple[RemediationExecutionContractPreview, LinuxAgent]:
     if change_set.status != "authorized":
         raise HTTPException(
             status_code=409,
@@ -789,7 +790,7 @@ def execution_contract_preview(
     change_signing_key = db.get(PlatformChangeSigningKey, change_set.signing_key_id)
     if (
         change_signing_key is None
-        or change_signing_key.tenant_id != user.tenant_id
+        or change_signing_key.tenant_id != tenant_id
         or change_signing_key.revoked_at is not None
         or not verify_change_set_signature(
             change_signing_key.public_key,
@@ -809,7 +810,7 @@ def execution_contract_preview(
     agent = db.get(LinuxAgent, target_link.agent_id)
     if (
         agent is None
-        or agent.tenant_id != user.tenant_id
+        or agent.tenant_id != tenant_id
         or agent.revoked_at is not None
         or REMEDIATION_CONTRACT_VALIDATION_CAPABILITY not in (agent.capabilities or [])
     ):
@@ -824,7 +825,7 @@ def execution_contract_preview(
     )
     if (
         platform_key is None
-        or platform_key.tenant_id != user.tenant_id
+        or platform_key.tenant_id != tenant_id
         or platform_key.status != "active"
         or platform_key.revoked_at is not None
         or platform_key.fingerprint != agent.platform_command_key_fingerprint
@@ -869,13 +870,151 @@ def execution_contract_preview(
         )
     if not actions:
         raise HTTPException(status_code=409, detail="Target has no reviewed remediation actions")
-    return build_validation_contract(
-        change_set=change_set,
-        change_signing_key=change_signing_key,
-        platform_command_key=platform_key,
-        target=dict(target),
-        actions=sorted(actions, key=lambda item: str(item["plan_id"])),
+    return (
+        build_validation_contract(
+            change_set=change_set,
+            change_signing_key=change_signing_key,
+            platform_command_key=platform_key,
+            target=dict(target),
+            actions=sorted(actions, key=lambda item: str(item["plan_id"])),
+        ),
+        agent,
     )
+
+
+def _validation_job_response(
+    db: Session,
+    job: RemediationValidationJob,
+    *,
+    include_contract: bool = True,
+) -> RemediationValidationJobResponse:
+    return RemediationValidationJobResponse(
+        id=job.id,
+        change_set_id=job.change_set_id,
+        host_id=job.host_id,
+        agent_id=job.agent_id,
+        status=job.status,
+        contract_digest=job.contract_digest,
+        contract=job.contract if include_contract else None,
+        requested_by=job.requested_by,
+        requested_by_name=_user_name(db, job.requested_by) or "Unknown User",
+        requested_at=job.requested_at,
+        delivered_at=job.delivered_at,
+        lease_expires_at=job.lease_expires_at,
+        completed_at=job.completed_at,
+        receipt=job.receipt,
+        receipt_signature=job.receipt_signature,
+        error=job.error,
+    )
+
+
+@router.get(
+    "/{change_set_id}/execution-contract-preview/{agent_id}",
+    response_model=RemediationExecutionContractPreview,
+)
+def execution_contract_preview(
+    change_set_id: str,
+    agent_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> RemediationExecutionContractPreview:
+    require_admin(user)
+    contract, _ = _validation_contract_for_agent(
+        db,
+        _change_set(db, user, change_set_id),
+        user.tenant_id,
+        agent_id,
+    )
+    return contract
+
+
+@router.get(
+    "/{change_set_id}/validation-jobs",
+    response_model=list[RemediationValidationJobResponse],
+)
+def list_validation_jobs(
+    change_set_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[RemediationValidationJobResponse]:
+    require_admin(user)
+    change_set = _change_set(db, user, change_set_id)
+    jobs = db.scalars(
+        select(RemediationValidationJob)
+        .where(
+            RemediationValidationJob.tenant_id == user.tenant_id,
+            RemediationValidationJob.change_set_id == change_set.id,
+        )
+        .order_by(RemediationValidationJob.requested_at.desc())
+    ).all()
+    return [_validation_job_response(db, job) for job in jobs]
+
+
+@router.post(
+    "/{change_set_id}/validation-jobs",
+    response_model=RemediationValidationJobResponse,
+    status_code=202,
+)
+def queue_validation_job(
+    change_set_id: str,
+    request: RemediationValidationJobCreate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> RemediationValidationJobResponse:
+    require_admin(user)
+    change_set = _change_set(db, user, change_set_id, lock=True)
+    contract, agent = _validation_contract_for_agent(
+        db,
+        change_set,
+        user.tenant_id,
+        request.agent_id,
+    )
+    if REMEDIATION_DRY_RUN_CAPABILITY not in (agent.capabilities or []):
+        raise HTTPException(
+            status_code=409,
+            detail="Target agent has not attested read-only remediation dry-run support",
+        )
+    existing = db.scalar(
+        select(RemediationValidationJob).where(
+            RemediationValidationJob.change_set_id == change_set.id,
+            RemediationValidationJob.agent_id == agent.id,
+            RemediationValidationJob.status.in_(["queued", "delivered"]),
+        )
+    )
+    if existing is not None:
+        return _validation_job_response(db, existing)
+    contract_payload = contract.model_dump(mode="json")
+    job = RemediationValidationJob(
+        tenant_id=user.tenant_id,
+        change_set_id=change_set.id,
+        host_id=agent.host_id,
+        agent_id=agent.id,
+        status="queued",
+        contract=contract_payload,
+        contract_digest=validation_contract_digest(contract_payload),
+        requested_by=user.id,
+    )
+    db.add(job)
+    db.flush()
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="remediation_validation.queued",
+            target_type="remediation_validation_job",
+            target_id=job.id,
+            details={
+                "change_set_id": change_set.id,
+                "agent_id": agent.id,
+                "host_id": agent.host_id,
+                "contract_digest": job.contract_digest,
+                "execution_enabled": False,
+            },
+        )
+    )
+    db.commit()
+    return _validation_job_response(db, job)
 
 
 @router.post("/{change_set_id}/authorize", response_model=RemediationChangeSetResponse)
@@ -953,6 +1092,15 @@ def cancel_change_set(
     change_set.canceled_at = now_utc()
     change_set.cancellation_reason = request.reason.strip()
     change_set.updated_at = change_set.canceled_at
+    for job in db.scalars(
+        select(RemediationValidationJob).where(
+            RemediationValidationJob.change_set_id == change_set.id,
+            RemediationValidationJob.status.in_(["queued", "delivered"]),
+        )
+    ).all():
+        job.status = "canceled"
+        job.completed_at = change_set.canceled_at
+        job.error = "Parent change set was canceled before validation completed"
     db.add(
         AuditEvent(
             tenant_id=user.tenant_id,
