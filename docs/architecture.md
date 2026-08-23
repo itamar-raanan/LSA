@@ -55,6 +55,8 @@ Stage 4C adds deterministic recovery planning to that same no-change receipt. Th
 
 Stage 4D adds a second explicit job ledger for encrypted agent-local checkpoints. Only a ready signed validation job can be selected. Delivery remains agent-initiated and platform-signed. The agent writes AES-256-GCM blobs and an atomic progress journal only beneath its private state directory, then returns signed evidence without backup contents or keys. The API verifies job, validation, contract, agent, host, checkpoint coverage, encryption, and journal bindings. This introduces durable recovery material but still no host mutation or restore interface.
 
+Stage 4E adds a third explicit ledger for recovery-readiness verification. A verification can reference only a ready accepted checkpoint. The agent authenticates the exact accepted journal, key, encrypted blob digest, AES-GCM tag, and decrypted original source digest, then signs a metadata-only receipt. Plaintext never leaves agent memory. Checkpoints are retained until an explicit future cleanup workflow proves they are no longer attached to an active recovery boundary. Verification does not inspect or change current host configuration and introduces no restore or execution interface.
+
 Capability freshness is tracked separately from general agent activity and advances only when a signed enrollment or heartbeat supplies the capability list. Policy reads and task polling may refresh online status but cannot make an old capability attestation current. Change-set creation locks the selected plan rows through the active-ownership check and insert so concurrent requests cannot place one plan in multiple active envelopes.
 
 ## Container topology

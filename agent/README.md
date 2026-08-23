@@ -11,14 +11,14 @@ From **Agents** in the console, choose **Install agent** and download the Debian
 For Debian 13 or Ubuntu 24.04+:
 
 ```bash
-sudo apt install ./lsa-agent_0.10.0_all.deb
+sudo apt install ./lsa-agent_0.11.0_all.deb
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
 For RHEL, Rocky Linux, or AlmaLinux 9+:
 
 ```bash
-sudo dnf install ./lsa-agent-0.10.0-1.noarch.rpm
+sudo dnf install ./lsa-agent-0.11.0-1.noarch.rpm
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
@@ -29,8 +29,8 @@ For the universal archive:
 Create a one-time enrollment token for the target group, then run:
 
 ```bash
-tar -xzf lsa-agent-0.10.0-linux-universal.tar.gz
-cd lsa-agent-0.10.0
+tar -xzf lsa-agent-0.11.0-linux-universal.tar.gz
+cd lsa-agent-0.11.0
 sudo ./install.sh --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
@@ -40,9 +40,9 @@ The console-generated command transparently installs the tenant's public Ed25519
 
 The same command accepts either a one-time enrollment token or the tenant's reusable automation token. Reusable tokens are intended for secret-managed provisioning systems: LSA never displays them again, can cap their successful uses, tracks their last use, and allows immediate revocation. They do not bypass platform-key pinning or the audit-only safety lock.
 
-The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.10.0 does not validate the gateway certificate or hostname. Instead, platform identity is authenticated at the application layer. Enrollment, policy, heartbeat, task, remediation-validation, checkpoint, and acknowledgement responses use short-lived Ed25519-signed envelopes bound to the agent identity and a strictly increasing persisted sequence. The agent rejects unsigned, altered, expired, future-dated, misbound, or replayed control responses. Two-phase key rotation accepts a replacement only after both the current and next platform keys sign the same proposal, then acknowledges it before activation. The audit task protocol remains restricted to `audit`. The agent does not use the management console port.
+The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.11.0 does not validate the gateway certificate or hostname. Instead, platform identity is authenticated at the application layer. Enrollment, policy, heartbeat, task, remediation-validation, checkpoint, recovery-verification, and acknowledgement responses use short-lived Ed25519-signed envelopes bound to the agent identity and a strictly increasing persisted sequence. The agent rejects unsigned, altered, expired, future-dated, misbound, or replayed control responses. Two-phase key rotation accepts a replacement only after both the current and next platform keys sign the same proposal, then acknowledges it before activation. The audit task protocol remains restricted to `audit`. The agent does not use the management console port.
 
-The agent advertises `signed-change-set-planning-v1` plus validation, dry-run, recovery-planning, and checkpoint capabilities. Release 0.10.0 permits a separate explicit checkpoint request only after the platform has accepted a ready signed preflight. The agent revalidates the complete contract and recovery-plan binding, reopens each source without following symbolic links, and refuses files that changed after preflight. Regular-file content is encrypted locally with AES-256-GCM and authenticated metadata; absent files receive a journal marker. The key, blobs, and crash-safe journal are root-only under `/var/lib/lsa-agent`, and the total blob store is capped at 256 MiB. Receipts contain only identities, encrypted-blob digests, sizes, and state—never file contents or the encryption key. Restore and host mutation primitives do not exist.
+The agent advertises `signed-change-set-planning-v1` plus validation, dry-run, recovery-planning, checkpoint, and recovery-verification capabilities. Release 0.11.0 permits a separate explicit checkpoint request only after the platform has accepted a ready signed preflight. The agent revalidates the complete contract and recovery-plan binding, reopens each source without following symbolic links, and refuses files that changed after preflight. Regular-file content is encrypted locally with AES-256-GCM and authenticated metadata; absent files receive a journal marker. A later explicit verification authenticates the accepted journal and blob digests, verifies the AES-GCM tag, decrypts only in memory, and compares the original source digest. The key, blobs, and crash-safe journal are root-only under `/var/lib/lsa-agent`, and the total blob store is capped at 256 MiB. Receipts contain only identities, encrypted-blob digests, sizes, and state—never file contents or the encryption key. Checkpoints are not deleted automatically; future cleanup must be explicit and must not remove evidence needed by an active change set. Restore and host mutation primitives do not exist.
 
 The daemon polls every 60 seconds by default while scheduled audits continue to follow the group policy interval and jitter. **Run audit now** queues only the built-in `audit` task. The signed protocol cannot carry a command, script, or remediation payload, and the agent reports completion or a bounded failure message back to the console.
 

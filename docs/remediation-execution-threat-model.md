@@ -7,7 +7,8 @@ added a validation-only protocol contract. Stage 4B can deliver that immutable
 contract only through a separate signed validation route and accept an agent-signed
 read-only preflight receipt. Stage 4C adds deterministic recovery planning to that
 receipt. Stage 4D can create encrypted backup material only inside the agent's
-private state directory after a separate explicit request. It does not create a
+private state directory after a separate explicit request. Stage 4E can authenticate
+and decrypt that material in memory to prove recovery readiness. It does not create a
 remediation task, write host configuration, restore a backup, reload a service,
 change a kernel setting, or expose a privileged executor.
 
@@ -138,6 +139,26 @@ with a signed receipt.
   before accepting the agent signature.
 - `execution_enabled` and `changes_applied` remain false. There is no restore,
   configuration mutation, service control, sysctl write, or command execution path.
+
+## Stage 4E invariants
+
+- Recovery verification is a separate administrator action and job ledger allowed
+  only for a ready, accepted encrypted checkpoint receipt.
+- The signed delivery binds the verification job to the checkpoint, validation,
+  change set, contract digest, immutable recovery plan, agent, host, and accepted
+  journal digest.
+- The agent refuses missing or permissive keys, altered journals, incomplete
+  coverage, unexpected blobs for absent paths, and blob metadata drift.
+- Every regular-file blob must match its accepted SHA-256 and size, authenticate its
+  AES-256-GCM tag and bound metadata, and decrypt to the original source digest.
+- Decrypted bytes remain in agent process memory and never enter a receipt, log,
+  platform response, or host configuration path.
+- The signed receipt reports exact checkpoint coverage and only encrypted-blob
+  metadata. The platform compares it with the accepted checkpoint evidence.
+- Checkpoint deletion is not automatic. A future cleanup operation must be explicit
+  and prove that no active or recoverable change references the material.
+- `execution_enabled` and `changes_applied` remain false. No restore, configuration
+  mutation, service control, sysctl write, command, or execution route exists.
 
 Actual mutation requires a later review covering privilege separation, durable and
 encrypted write-ahead backup storage, idempotency, crash recovery, automatic

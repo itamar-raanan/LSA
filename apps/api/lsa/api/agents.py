@@ -33,6 +33,7 @@ from lsa.models import (
     PlatformCommandSigningKey,
     RemediationChangeSet,
     RemediationCheckpointJob,
+    RemediationRecoveryVerificationJob,
     RemediationValidationJob,
     SigningKey,
     Tenant,
@@ -66,6 +67,7 @@ from lsa.schemas import (
     LinuxAgentResponse,
     PlatformControlResponse,
     RemediationCheckpointReceiptSubmission,
+    RemediationRecoveryVerificationReceiptSubmission,
     RemediationValidationReceiptSubmission,
 )
 from lsa.security import hash_ingestion_token
@@ -93,6 +95,7 @@ REMEDIATION_CONTRACT_VALIDATION_CAPABILITY = "remediation-contract-validation-v1
 REMEDIATION_DRY_RUN_CAPABILITY = "remediation-dry-run-v1"
 REMEDIATION_RECOVERY_PLANNING_CAPABILITY = "remediation-recovery-planning-v1"
 REMEDIATION_CHECKPOINT_CAPABILITY = "remediation-checkpoint-v1"
+REMEDIATION_RECOVERY_VERIFICATION_CAPABILITY = "remediation-recovery-verification-v1"
 
 
 @dataclass(frozen=True)
@@ -1267,6 +1270,15 @@ def _require_remediation_checkpoint_agent(agent: LinuxAgent) -> None:
         )
 
 
+def _require_recovery_verification_agent(agent: LinuxAgent) -> None:
+    _require_remediation_checkpoint_agent(agent)
+    if REMEDIATION_RECOVERY_VERIFICATION_CAPABILITY not in set(agent.capabilities or []):
+        raise HTTPException(
+            status_code=409,
+            detail="Agent has not attested encrypted recovery verification support",
+        )
+
+
 @router.get(
     "/agent/remediation-validations/next",
     response_model=PlatformControlResponse,
@@ -1659,6 +1671,209 @@ def submit_remediation_checkpoint_receipt(
         principal.agent,
         "remediation-checkpoint-receipt",
         {"checkpoint_job_id": job.id, "status": job.status, "accepted": True},
+    )
+    db.commit()
+    return response
+
+
+@router.get(
+    "/agent/remediation-recovery-verifications/next",
+    response_model=PlatformControlResponse,
+)
+def next_recovery_verification(
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+) -> PlatformControlResponse:
+    _require_recovery_verification_agent(principal.agent)
+    now = now_utc()
+    selected: RemediationRecoveryVerificationJob | None = None
+    jobs = db.scalars(
+        select(RemediationRecoveryVerificationJob)
+        .where(
+            RemediationRecoveryVerificationJob.agent_id == principal.agent.id,
+            RemediationRecoveryVerificationJob.tenant_id == principal.agent.tenant_id,
+            RemediationRecoveryVerificationJob.status.in_(["queued", "delivered"]),
+        )
+        .order_by(RemediationRecoveryVerificationJob.requested_at)
+        .with_for_update()
+    ).all()
+    for job in jobs:
+        change_set = db.get(RemediationChangeSet, job.change_set_id)
+        checkpoint = db.get(RemediationCheckpointJob, job.checkpoint_job_id)
+        if (
+            change_set is None
+            or change_set.status != "authorized"
+            or _aware(change_set.maintenance_window_end) <= now
+            or checkpoint is None
+            or checkpoint.status != "ready"
+            or not isinstance(checkpoint.receipt, dict)
+            or checkpoint.receipt.get("journal_digest") != job.checkpoint_journal_digest
+            or validation_contract_digest(job.contract) != job.contract_digest
+            or not validate_recovery_plan(job.contract, job.recovery_plan)
+            or job.recovery_plan.get("status") != "ready"
+        ):
+            job.status = "expired"
+            job.completed_at = now
+            job.error = "Recovery verification contract is no longer eligible for delivery"
+            continue
+        selected = job
+        break
+    payload: dict[str, object] = {"verification": None}
+    if selected is not None:
+        if selected.status == "queued":
+            selected.status = "delivered"
+            selected.delivered_at = now
+        selected.lease_expires_at = now + timedelta(seconds=REMEDIATION_VALIDATION_LEASE_SECONDS)
+        payload["verification"] = {
+            "verification_job_id": selected.id,
+            "checkpoint_job_id": selected.checkpoint_job_id,
+            "validation_id": selected.validation_job_id,
+            "change_set_id": selected.change_set_id,
+            "contract_digest": selected.contract_digest,
+            "contract": selected.contract,
+            "recovery_plan": selected.recovery_plan,
+            "checkpoint_journal_digest": selected.checkpoint_journal_digest,
+        }
+    principal.agent.last_seen_at = now
+    response = _signed_control_response(
+        db, principal.agent, "remediation-recovery-verification", payload
+    )
+    db.commit()
+    return response
+
+
+@router.post(
+    "/agent/remediation-recovery-verifications/{verification_job_id}/receipt",
+    response_model=PlatformControlResponse,
+)
+def submit_recovery_verification_receipt(
+    verification_job_id: str,
+    request: RemediationRecoveryVerificationReceiptSubmission,
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+) -> PlatformControlResponse:
+    _require_recovery_verification_agent(principal.agent)
+    job = db.scalar(
+        select(RemediationRecoveryVerificationJob)
+        .where(
+            RemediationRecoveryVerificationJob.id == verification_job_id,
+            RemediationRecoveryVerificationJob.agent_id == principal.agent.id,
+            RemediationRecoveryVerificationJob.tenant_id == principal.agent.tenant_id,
+        )
+        .with_for_update()
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Recovery verification job not found")
+    receipt = request.receipt.model_dump(mode="json")
+    if job.status in {"ready", "blocked"}:
+        if job.receipt != receipt or job.receipt_signature != request.signature:
+            raise HTTPException(status_code=409, detail="Recovery verification job already has another receipt")
+        response = _signed_control_response(
+            db,
+            principal.agent,
+            "remediation-recovery-verification-receipt",
+            {"verification_job_id": job.id, "status": job.status, "accepted": True},
+        )
+        db.commit()
+        return response
+    if job.status != "delivered":
+        raise HTTPException(status_code=409, detail="Recovery verification job is not awaiting a receipt")
+    if (
+        validation_contract_digest(job.contract) != job.contract_digest
+        or not validate_recovery_plan(job.contract, job.recovery_plan)
+        or receipt["verification_job_id"] != job.id
+        or receipt["checkpoint_job_id"] != job.checkpoint_job_id
+        or receipt["validation_id"] != job.validation_job_id
+        or receipt["change_set_id"] != job.change_set_id
+        or receipt["contract_digest"] != job.contract_digest
+        or receipt["checkpoint_journal_digest"] != job.checkpoint_journal_digest
+        or receipt["agent_id"] != job.agent_id
+        or receipt["host_id"] != job.host_id
+        or not verify_validation_receipt(principal.agent.public_key, receipt, request.signature)
+    ):
+        raise HTTPException(status_code=409, detail="Recovery verification receipt trust binding is invalid")
+    verified_at = request.receipt.verified_at
+    change_set = db.get(RemediationChangeSet, job.change_set_id)
+    if (
+        verified_at.tzinfo is None
+        or job.delivered_at is None
+        or verified_at < _aware(job.delivered_at) - timedelta(minutes=5)
+        or verified_at > now_utc() + timedelta(minutes=5)
+        or change_set is None
+        or verified_at > _aware(change_set.maintenance_window_end)
+    ):
+        raise HTTPException(status_code=409, detail="Recovery verification time is outside its contract")
+    expected = {entry["checkpoint_id"]: entry for entry in job.recovery_plan["entries"]}
+    checkpoint = db.get(RemediationCheckpointJob, job.checkpoint_job_id)
+    checkpoint_results = {
+        item["checkpoint_id"]: item
+        for item in (checkpoint.receipt or {}).get("checkpoint_results", [])
+        if isinstance(item, dict)
+    } if checkpoint is not None else {}
+    received = {item.checkpoint_id: item for item in request.receipt.verification_results}
+    if len(received) != len(request.receipt.verification_results) or set(received) != set(expected):
+        raise HTTPException(status_code=409, detail="Recovery verification coverage is invalid")
+    for checkpoint_id, result in received.items():
+        source_state = expected[checkpoint_id]["source_state"]
+        if result.source_state != source_state:
+            raise HTTPException(status_code=409, detail="Recovery verification source binding is invalid")
+        if result.status == "blocked" and (
+            result.encrypted_blob_digest is not None
+            or result.encrypted_size_bytes is not None
+            or not result.error
+        ):
+            raise HTTPException(status_code=409, detail="Blocked recovery verification evidence is invalid")
+        if result.status == "verified" and result.error is not None:
+            raise HTTPException(status_code=409, detail="Verified recovery evidence is invalid")
+        checkpoint_result = checkpoint_results.get(checkpoint_id, {})
+        if source_state == "regular_file" and result.status == "verified" and (
+            result.encrypted_blob_digest != checkpoint_result.get("encrypted_blob_digest")
+            or result.encrypted_size_bytes != checkpoint_result.get("encrypted_size_bytes")
+        ):
+            raise HTTPException(status_code=409, detail="Encrypted checkpoint verification evidence is invalid")
+        if source_state == "absent" and (
+            result.encrypted_blob_digest is not None or result.encrypted_size_bytes is not None
+        ):
+            raise HTTPException(status_code=409, detail="Absent-source verification evidence is invalid")
+    if receipt["status"] == "ready" and (
+        receipt["verification_state"] != "verified"
+        or any(item.status != "verified" for item in received.values())
+        or receipt["error"] is not None
+    ):
+        raise HTTPException(status_code=409, detail="Ready recovery verification receipt is incomplete")
+    if receipt["status"] == "blocked" and (
+        receipt["verification_state"] != "blocked"
+        or not receipt["error"]
+        or not any(item.status == "blocked" for item in received.values())
+    ):
+        raise HTTPException(status_code=409, detail="Blocked recovery verification receipt lacks failure evidence")
+    job.status = receipt["status"]
+    job.receipt = receipt
+    job.receipt_signature = request.signature
+    job.error = receipt["error"]
+    job.completed_at = now_utc()
+    principal.agent.last_seen_at = job.completed_at
+    db.add(
+        AuditEvent(
+            tenant_id=job.tenant_id,
+            actor_type="agent",
+            actor_id=principal.agent.id,
+            action=f"remediation_recovery_verification.{job.status}",
+            target_type="remediation_recovery_verification_job",
+            target_id=job.id,
+            details={
+                "change_set_id": job.change_set_id,
+                "checkpoint_job_id": job.checkpoint_job_id,
+                "verification_count": len(received),
+                "changes_applied": False,
+            },
+        )
+    )
+    response = _signed_control_response(
+        db,
+        principal.agent,
+        "remediation-recovery-verification-receipt",
+        {"verification_job_id": job.id, "status": job.status, "accepted": True},
     )
     db.commit()
     return response
