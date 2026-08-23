@@ -359,6 +359,38 @@ export interface RemediationValidationActionResult {
   checks: RemediationValidationCheck[]
 }
 
+export interface RemediationRecoveryEntry {
+  checkpoint_id: string
+  plan_id: string
+  action_digest: string
+  operation_index: number
+  rollback_index: number
+  path: string
+  source_state: 'regular_file' | 'absent' | 'blocked'
+  source_digest: string | null
+  size_bytes: number | null
+  mode: string | null
+  uid: number | null
+  gid: number | null
+  status: 'ready' | 'blocked'
+  detail: string
+  backup_created: false
+}
+
+export interface RemediationRecoveryPlan {
+  schema_version: '1.0'
+  kind: 'remediation-recovery-plan'
+  status: 'ready' | 'blocked'
+  backup_before_write: true
+  automatic_rollback_required: true
+  stop_on_failure: true
+  journal_state: 'planned'
+  entries: RemediationRecoveryEntry[]
+  rollback_order: string[]
+  execution_enabled: false
+  changes_applied: false
+}
+
 export interface RemediationValidationReceipt {
   schema_version: '1.0'
   kind: 'remediation-validation-receipt'
@@ -374,6 +406,7 @@ export interface RemediationValidationReceipt {
   agent_version: string
   agent_integrity_digest: string
   action_results: RemediationValidationActionResult[]
+  recovery_plan: RemediationRecoveryPlan | null
   error: string | null
 }
 

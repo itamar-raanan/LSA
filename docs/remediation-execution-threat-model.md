@@ -5,7 +5,8 @@
 This document defines the security boundary for Stage 4 remediation work. Stage 4A
 added a validation-only protocol contract. Stage 4B can deliver that immutable
 contract only through a separate signed validation route and accept an agent-signed
-read-only preflight receipt. It does not create a remediation task, write a file,
+read-only preflight receipt. Stage 4C adds deterministic recovery planning to that
+receipt. It does not create a remediation task, create a backup, write a file,
 reload a service, change a kernel setting, or expose a privileged executor.
 
 The protected outcome is narrower than “the platform requested a change.” A future
@@ -93,6 +94,26 @@ with a signed receipt.
 - Cancellation closes queued and delivered validation jobs.
 - `AgentTask.task_type` remains exactly `audit`.
 
-Actual mutation requires a later review covering privilege separation, write-ahead
-backups, idempotency, crash recovery, automatic rollback, stop thresholds, and
-receipt reconciliation.
+## Stage 4C invariants
+
+- Recovery plans are derived locally from the already validated immutable contract.
+- Every backup-required operation maps to exactly one reviewed restore operation.
+- Checkpoint identities bind the plan, action digest, operation index, rollback
+  index, and reviewed path using canonical SHA-256.
+- Existing sources are regular files opened without following the final symbolic
+  link; their digest, size, owner, group, and mode are included in the signed receipt.
+- Absent sources are explicit so a future rollback can remove a newly created file.
+- Symbolic links, unsafe parents, non-regular files, sources over 8 MiB, ambiguous
+  restore coverage, and overlapping target paths block readiness.
+- Rollback order is the exact reverse of checkpoint order and is reconstructed by
+  the platform before receipt acceptance.
+- Agents advertising `remediation-recovery-planning-v1` must include a valid plan,
+  except when the signed receipt reports that contract validation itself failed.
+- `backup_created`, `execution_enabled`, and `changes_applied` remain false, and
+  recovery journal state remains `planned`.
+- The agent still contains no backup writer, restore primitive, configuration
+  mutation, service controller, sysctl writer, or generic subprocess path.
+
+Actual mutation requires a later review covering privilege separation, durable and
+encrypted write-ahead backup storage, idempotency, crash recovery, automatic
+rollback, stop thresholds, and receipt reconciliation.
