@@ -26,10 +26,16 @@ Replace both S3 credential placeholders as well. MinIO is private to the Docker 
 Validate and start the stack:
 
 ```bash
+make staging-check
 make docker-config
-make up
+make stage-up
 make ps
 ```
+
+After trusted management TLS and the restore drill are complete, `make up` enforces
+the final production check. See the complete
+[internal production readiness checklist](production-readiness.md) before changing
+either listener bind address.
 
 The only published service is the TLS gateway. Management is available on `127.0.0.1:8443`, while the restricted agent data plane is available on `127.0.0.1:8444`; no plaintext HTTP port is exposed. Open `https://localhost:8443`, then sign in with `LSA_BOOTSTRAP_EMAIL` and `LSA_BOOTSTRAP_PASSWORD`. Configure agents with `LSA_AGENT_PUBLIC_URL`, which must resolve to the agent listener from managed hosts.
 

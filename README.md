@@ -91,7 +91,7 @@ The server host also requires Docker Engine with the Compose plugin. It must be 
 - Immutable policy versions and restore history; restoring an earlier policy publishes a new version.
 - Original-evidence retention, verified download, and deletion audit events.
 
-See [the architecture document](docs/architecture.md) for trust boundaries and design decisions, [the Docker deployment guide](docs/docker-deployment.md) for production operations, and [the evidence-vault guide](docs/evidence-vault.md) for integrity and retention behavior.
+See [the architecture document](docs/architecture.md) for trust boundaries and design decisions, [the Docker deployment guide](docs/docker-deployment.md) for operations, the [internal production readiness checklist](docs/production-readiness.md) for release gates, and [the evidence-vault guide](docs/evidence-vault.md) for integrity and retention behavior.
 
 ## 3. Client side: offline reports and managed agents
 
@@ -156,10 +156,13 @@ Requirements: Docker Engine with the Compose plugin.
 ```bash
 cp deploy/.env.example deploy/.env
 # Replace every placeholder secret in deploy/.env.
-make up
+# Complete the staging acknowledgements, validate them, and start the restricted stack.
+make stage-up
 ```
 
-Open `https://localhost:8443` and sign in with the bootstrap email and password from `deploy/.env`. The first boot uses a self-signed localhost certificate. API documentation is available at `https://localhost:8443/docs`.
+Install the trusted management certificate, complete and verify a backup/restore drill, then record those acknowledgements in `deploy/.env`. `make up` is the final production-gated start. Follow the [production readiness checklist](docs/production-readiness.md) for the required values, internal port 8444 firewall boundary, TLS validation, signed evidence test, and release acceptance steps.
+
+Open the configured management URL on port 8443 and sign in with the bootstrap email and password from `deploy/.env`. API documentation is available at `/docs` on the same management origin.
 
 The database and evidence objects are stored in named Docker volumes. Migrations run automatically before the API starts, and Compose waits for PostgreSQL, MinIO, the API, and the web gateway to become healthy. Use `make logs`, `make ps`, and `make down` for routine operation.
 

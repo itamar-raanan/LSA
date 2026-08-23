@@ -1,4 +1,4 @@
-.PHONY: dev install test lint build docker-config docker-env up down logs ps
+.PHONY: dev install test lint build docker-config docker-env staging-check stage-up production-check up down logs ps
 
 COMPOSE = docker compose --env-file deploy/.env -f deploy/docker-compose.yml
 
@@ -28,7 +28,16 @@ docker-env:
 docker-config: docker-env
 	$(COMPOSE) config --quiet
 
-up: docker-env
+production-check: docker-env
+	python3 deploy/production_check.py deploy/.env
+
+staging-check: docker-env
+	python3 deploy/production_check.py deploy/.env --staging
+
+stage-up: staging-check docker-config
+	$(COMPOSE) up --build -d --wait --wait-timeout 180
+
+up: production-check docker-config
 	$(COMPOSE) up --build -d --wait --wait-timeout 180
 
 down: docker-env
