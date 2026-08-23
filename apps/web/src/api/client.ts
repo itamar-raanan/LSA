@@ -40,6 +40,7 @@ import type {
   RemediationChangeSet,
   RemediationChangeSetStatus,
   RemediationValidationJob,
+  RemediationCheckpointJob,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -418,6 +419,15 @@ export const api = {
     return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/validation-jobs`, {
       method: 'POST',
       body: JSON.stringify({ agent_id: agentId }),
+    })
+  },
+  remediationCheckpointJobs(changeSetId: string): Promise<RemediationCheckpointJob[]> {
+    return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/checkpoint-jobs`)
+  },
+  queueRemediationCheckpoint(changeSetId: string, validationJobId: string): Promise<RemediationCheckpointJob> {
+    return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/checkpoint-jobs`, {
+      method: 'POST',
+      body: JSON.stringify({ validation_job_id: validationJobId }),
     })
   },
   async uploadBundle(file: File, ingestionToken: string): Promise<Record<string, unknown>> {

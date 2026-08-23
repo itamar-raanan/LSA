@@ -6,8 +6,10 @@ This document defines the security boundary for Stage 4 remediation work. Stage 
 added a validation-only protocol contract. Stage 4B can deliver that immutable
 contract only through a separate signed validation route and accept an agent-signed
 read-only preflight receipt. Stage 4C adds deterministic recovery planning to that
-receipt. It does not create a remediation task, create a backup, write a file,
-reload a service, change a kernel setting, or expose a privileged executor.
+receipt. Stage 4D can create encrypted backup material only inside the agent's
+private state directory after a separate explicit request. It does not create a
+remediation task, write host configuration, restore a backup, reload a service,
+change a kernel setting, or expose a privileged executor.
 
 The protected outcome is narrower than “the platform requested a change.” A future
 executor must prove that one exact, reviewed catalog action was independently
@@ -113,6 +115,29 @@ with a signed receipt.
   recovery journal state remains `planned`.
 - The agent still contains no backup writer, restore primitive, configuration
   mutation, service controller, sysctl writer, or generic subprocess path.
+
+## Stage 4D invariants
+
+- Checkpoint preparation is a separate administrator action and job ledger, allowed
+  only after a ready signed validation receipt with a valid recovery plan.
+- Delivery binds one checkpoint job to one validation job, change set, agent, host,
+  contract digest, and immutable recovery plan in a signed platform envelope.
+- The agent repeats contract and recovery-plan validation and rejects any source
+  whose digest or metadata changed after preflight.
+- Regular-file content is encrypted with AES-256-GCM. Authenticated data binds job,
+  contract, checkpoint, reviewed path, and original source digest.
+- The encryption key is generated locally, stored root-only, and never sent to the
+  platform. Receipts contain only encrypted blob digests and sizes.
+- An atomic journal is written before checkpoint creation and after every completed
+  entry. A repeated delivery returns the terminal journal and exact cached receipt.
+- Absent paths create a journal marker and no blob. Symbolic links and non-regular
+  files remain blocked.
+- Encrypted blobs and journals live only beneath `/var/lib/lsa-agent`; total blob
+  storage is capped at 256 MiB.
+- The platform independently verifies exact checkpoint coverage and evidence shape
+  before accepting the agent signature.
+- `execution_enabled` and `changes_applied` remain false. There is no restore,
+  configuration mutation, service control, sysctl write, or command execution path.
 
 Actual mutation requires a later review covering privilege separation, durable and
 encrypted write-ahead backup storage, idempotency, crash recovery, automatic

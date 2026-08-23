@@ -12,7 +12,7 @@ import { Button } from '../components/ui/Button'
 import { Dialog } from '../components/ui/Dialog'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime } from '../lib/dateTime'
-import type { RemediationChangeSet, RemediationPlan, RemediationValidationJob } from '../types'
+import type { RemediationChangeSet, RemediationCheckpointJob, RemediationPlan, RemediationValidationJob } from '../types'
 
 function localDateTime(hoursFromNow: number) {
   const date = new Date(Date.now() + hoursFromNow * 60 * 60_000)
@@ -112,7 +112,7 @@ function validationSummary(job: RemediationValidationJob) {
   return `${actionSummary} · ${recoverySummary} · No Changes Applied`
 }
 
-function ChangeSetDossier({ changeSet, admin, currentUserId, validations, validationLoading, validationError, validationBusyAgent, authorize, cancel, queueValidation }: { changeSet: RemediationChangeSet; admin: boolean; currentUserId?: string; validations: RemediationValidationJob[]; validationLoading: boolean; validationError: string | null; validationBusyAgent: string | null; authorize: () => void; cancel: () => void; queueValidation: (agentId: string) => void }) {
+function ChangeSetDossier({ changeSet, admin, currentUserId, validations, checkpoints, validationLoading, validationError, validationBusyAgent, checkpointBusyValidation, authorize, cancel, queueValidation, queueCheckpoint }: { changeSet: RemediationChangeSet; admin: boolean; currentUserId?: string; validations: RemediationValidationJob[]; checkpoints: RemediationCheckpointJob[]; validationLoading: boolean; validationError: string | null; validationBusyAgent: string | null; checkpointBusyValidation: string | null; authorize: () => void; cancel: () => void; queueValidation: (agentId: string) => void; queueCheckpoint: (validationId: string) => void }) {
   const operationalBlocks = changeSet.gates.filter(gate => gate.status === 'blocked' && gate.code !== 'four_eyes')
   const independent = currentUserId !== changeSet.requested_by && changeSet.plans.every(plan => plan.plan_approved_by !== currentUserId)
   const latestByAgent = new Map<string, RemediationValidationJob>()
@@ -124,8 +124,10 @@ function ChangeSetDossier({ changeSet, admin, currentUserId, validations, valida
     <section className="change-set-section"><div className="change-set-section-heading"><h3>Canary Rollout And Read-Only Preflight</h3><span>Batch {changeSet.batch_size} · Every {changeSet.batch_interval_minutes} Minutes</span></div><div className="change-set-targets">{changeSet.targets.map(target => {
       const job = latestByAgent.get(target.agent_id)
       const active = job?.status === 'queued' || job?.status === 'delivered'
-      return <div key={target.host_id}><span className={`change-set-phase change-set-phase-${target.rollout_phase}`}>{target.rollout_phase}</span><div><strong>{target.hostname}</strong><p>{target.group_name} · {target.policy_name} V{target.policy_version}</p>{job?.receipt && <small>{validationSummary(job)}</small>}{job?.error && <small>{job.error}</small>}</div><div className="change-set-target-validation">{job ? <ValidationStatus job={job} /> : <span>{validationLoading ? 'Loading Preflight' : target.capability_attested ? 'Not Evaluated' : 'Capability Missing'}</span>}{admin && changeSet.status === 'authorized' && !active && job?.status !== 'ready' && <Button variant="ghost" disabled={validationBusyAgent === target.agent_id} onClick={() => queueValidation(target.agent_id)}>{validationBusyAgent === target.agent_id ? 'Queueing' : job ? 'Run Again' : 'Run Read-Only Preflight'}</Button>}</div></div>
-    })}</div>{validationError && <p className="remediation-decision-error" role="alert">{validationError}</p>}<div className="change-set-validation-note"><ShieldX size={15} /><p><strong>Validation Cannot Change The Host.</strong> It reads local readiness, maps backup and rollback requirements, and returns an agent-signed receipt with Changes Applied set to False.</p></div><div className="change-set-window"><CalendarClock size={16} /><span><strong>{formatDateTime(changeSet.maintenance_window_start)}</strong><small>Through {formatDateTime(changeSet.maintenance_window_end)}</small></span></div></section>
+      const checkpoint = job ? checkpoints.find(item => item.validation_job_id === job.id) : undefined
+      const checkpointActive = checkpoint?.status === 'queued' || checkpoint?.status === 'delivered'
+      return <div key={target.host_id}><span className={`change-set-phase change-set-phase-${target.rollout_phase}`}>{target.rollout_phase}</span><div><strong>{target.hostname}</strong><p>{target.group_name} · {target.policy_name} V{target.policy_version}</p>{job?.receipt && <small>{validationSummary(job)}</small>}{checkpoint && <small>{checkpoint.status === 'ready' ? `${checkpoint.receipt?.checkpoint_results.length ?? 0} Encrypted Checkpoint${checkpoint.receipt?.checkpoint_results.length === 1 ? '' : 's'} Prepared On The Agent` : checkpoint.status === 'blocked' ? `Checkpoint Blocked · ${checkpoint.error ?? 'Run It Again After Resolving The Reported Condition'}` : 'Encrypted Checkpoint Is Being Prepared'}</small>}{job?.error && <small>{job.error}</small>}</div><div className="change-set-target-validation">{job ? <ValidationStatus job={job} /> : <span>{validationLoading ? 'Loading Preflight' : target.capability_attested ? 'Not Evaluated' : 'Capability Missing'}</span>}{admin && changeSet.status === 'authorized' && !active && job?.status !== 'ready' && <Button variant="ghost" disabled={validationBusyAgent === target.agent_id} onClick={() => queueValidation(target.agent_id)}>{validationBusyAgent === target.agent_id ? 'Queueing' : job ? 'Run Again' : 'Run Read-Only Preflight'}</Button>}{admin && job?.status === 'ready' && !checkpointActive && checkpoint?.status !== 'ready' && <Button variant="ghost" disabled={checkpointBusyValidation === job.id} onClick={() => queueCheckpoint(job.id)}>{checkpointBusyValidation === job.id ? 'Queueing Checkpoint' : checkpoint ? 'Retry Encrypted Checkpoint' : 'Prepare Encrypted Checkpoint'}</Button>}</div></div>
+    })}</div>{validationError && <p className="remediation-decision-error" role="alert">{validationError}</p>}<div className="change-set-validation-note"><ShieldX size={15} /><p><strong>Checkpointing Cannot Change Host Configuration.</strong> After a successful preflight, an administrator may store encrypted recovery material only inside the agent state directory. Restore and remediation execution remain unavailable.</p></div><div className="change-set-window"><CalendarClock size={16} /><span><strong>{formatDateTime(changeSet.maintenance_window_start)}</strong><small>Through {formatDateTime(changeSet.maintenance_window_end)}</small></span></div></section>
     <section className="change-set-section"><div className="change-set-section-heading"><h3>Signed Envelope</h3><span>{changeSet.signature ? 'Signature Verified' : 'Pending Authorization'}</span></div><dl className="change-set-integrity"><div><dt>Payload Digest</dt><dd>{changeSet.digest}</dd></div><div><dt>Signing Key</dt><dd>{changeSet.signing_key_fingerprint ?? 'Created Only After Independent Authorization'}</dd></div>{changeSet.signature && <div><dt>Ed25519 Signature</dt><dd>{changeSet.signature}</dd></div>}</dl></section>
     <section className="change-set-section"><div className="change-set-section-heading"><h3>Included Plans</h3><span>{changeSet.plans.length}</span></div><div className="change-set-plans">{changeSet.plans.map(plan => <div key={plan.plan_id}><Layers3 size={15} /><span><strong>{plan.title}</strong><small>{plan.hostname} · {plan.control_id} · {plan.action_id} V{plan.action_version}</small></span></div>)}</div></section>
     <footer className="change-set-actions">
@@ -151,16 +153,19 @@ export function ChangeSetsPage() {
   const changeSets = useMemo(() => workspace.data?.changeSets ?? [], [workspace.data?.changeSets])
   const selected = useMemo(() => changeSets.find(item => item.id === selectedId) ?? changeSets[0] ?? null, [changeSets, selectedId])
   const validations = useApi(() => selected ? api.remediationValidationJobs(selected.id) : Promise.resolve([]), [selected?.id])
+  const checkpoints = useApi(() => selected ? api.remediationCheckpointJobs(selected.id) : Promise.resolve([]), [selected?.id])
   const eligiblePlans = (workspace.data?.plans ?? []).filter(plan => plan.action_catalog_status === 'matched' && plan.action !== null)
   const [validationBusyAgent, setValidationBusyAgent] = useState<string | null>(null)
-  const hasActiveValidations = validations.data?.some(job => job.status === 'queued' || job.status === 'delivered') ?? false
+  const [checkpointBusyValidation, setCheckpointBusyValidation] = useState<string | null>(null)
+  const hasActiveValidations = (validations.data?.some(job => job.status === 'queued' || job.status === 'delivered') ?? false) || (checkpoints.data?.some(job => job.status === 'queued' || job.status === 'delivered') ?? false)
   const refreshValidations = validations.refresh
+  const refreshCheckpoints = checkpoints.refresh
 
   useEffect(() => {
     if (!hasActiveValidations) return
-    const interval = window.setInterval(() => { void refreshValidations() }, 10_000)
+    const interval = window.setInterval(() => { void refreshValidations(); void refreshCheckpoints() }, 10_000)
     return () => window.clearInterval(interval)
-  }, [hasActiveValidations, refreshValidations])
+  }, [hasActiveValidations, refreshCheckpoints, refreshValidations])
 
   async function mutate(action: () => Promise<RemediationChangeSet>, close?: () => void) {
     setBusy(true); setMutationError('')
@@ -177,13 +182,21 @@ export function ChangeSetsPage() {
     finally { setValidationBusyAgent(null) }
   }
 
+  async function queueCheckpoint(validationId: string) {
+    if (!selected) return
+    setCheckpointBusyValidation(validationId); setMutationError('')
+    try { await api.queueRemediationCheckpoint(selected.id, validationId); await checkpoints.reload() }
+    catch (error) { setMutationError(error instanceof Error ? error.message : 'The Encrypted Recovery Checkpoint Could Not Be Queued.') }
+    finally { setCheckpointBusyValidation(null) }
+  }
+
   return <div className="page-reveal">
     <PageHeader eyebrow="Change Governance" title="Signed Change Sets" detail="Compile approved plans into immutable canary envelopes, verify every readiness gate, and require independent authorization before signing." action={user?.role === 'admin' ? <Button variant="primary" onClick={() => { setMutationError(''); setCreating(true) }}>Prepare Change Set</Button> : undefined} />
     <nav className="findings-view-tabs" aria-label="Security Finding Workspaces"><Link className="findings-view-tab" to="/findings">Findings Queue</Link><Link className="findings-view-tab" to="/findings?view=remediation">Remediation Review</Link><Link className="findings-view-tab findings-view-tab-active" to="/findings?view=change-sets" aria-current="page">Change Sets</Link></nav>
     <div className="remediation-safety-banner"><KeyRound size={18} /><div><strong>Signing Does Not Enable Execution</strong><p>Change sets remain governed artifacts. Read-only preflight uses a separate signed validation route and cannot create an audit task or modify host configuration.</p></div></div>
     {workspace.loading && !workspace.data ? <LoadingState variant="table" /> : workspace.error ? <ErrorState message={workspace.error} retry={() => void workspace.reload()} /> : <section className="panel change-set-workspace" aria-label="Signed Change Set Workspace">
       <div className="change-set-queue"><header><div><h2>Authorization Queue</h2><p>{changeSets.length} Retained Envelope{changeSets.length === 1 ? '' : 's'}</p></div><Fingerprint size={18} /></header><ul>{changeSets.map(changeSet => <li key={changeSet.id}><button className={selected?.id === changeSet.id ? 'change-set-row change-set-row-active' : 'change-set-row'} onClick={() => setSelectedId(changeSet.id)}><ChangeSetStatus changeSet={changeSet} /><strong>{changeSet.plans.length} Change{changeSet.plans.length === 1 ? '' : 's'} · {changeSet.targets.length} Target{changeSet.targets.length === 1 ? '' : 's'}</strong><small>{formatDateTime(changeSet.maintenance_window_start)} · {changeSet.id.slice(0, 8)}</small></button></li>)}{!changeSets.length && <li className="change-set-empty"><LockKeyhole size={24} /><h2>No Change Sets Yet</h2><p>Approve a catalog-backed remediation plan, then prepare its canary and maintenance boundaries here.</p></li>}</ul></div>
-      {selected ? <ChangeSetDossier changeSet={selected} admin={user?.role === 'admin'} currentUserId={user?.id} validations={validations.data ?? []} validationLoading={validations.loading} validationError={validations.error || mutationError || null} validationBusyAgent={validationBusyAgent} authorize={() => void mutate(() => api.authorizeRemediationChangeSet(selected.id))} cancel={() => { setMutationError(''); setCanceling(true) }} queueValidation={agentId => void queueValidation(agentId)} /> : <aside className="change-set-dossier change-set-dossier-empty"><ShieldCheck size={24} /><h2>Select Or Prepare A Change Set</h2><p>Readiness gates, canary scope, cryptographic proof, and authorization history will appear here.</p></aside>}
+      {selected ? <ChangeSetDossier changeSet={selected} admin={user?.role === 'admin'} currentUserId={user?.id} validations={validations.data ?? []} checkpoints={checkpoints.data ?? []} validationLoading={validations.loading || checkpoints.loading} validationError={validations.error || checkpoints.error || mutationError || null} validationBusyAgent={validationBusyAgent} checkpointBusyValidation={checkpointBusyValidation} authorize={() => void mutate(() => api.authorizeRemediationChangeSet(selected.id))} cancel={() => { setMutationError(''); setCanceling(true) }} queueValidation={agentId => void queueValidation(agentId)} queueCheckpoint={validationId => void queueCheckpoint(validationId)} /> : <aside className="change-set-dossier change-set-dossier-empty"><ShieldCheck size={24} /><h2>Select Or Prepare A Change Set</h2><p>Readiness gates, canary scope, cryptographic proof, and authorization history will appear here.</p></aside>}
     </section>}
     {creating && <CreateChangeSetDialog plans={eligiblePlans} busy={busy} error={mutationError} close={() => setCreating(false)} submit={input => void mutate(() => api.createRemediationChangeSet(input), () => setCreating(false))} />}
     {canceling && selected && <CancelDialog busy={busy} error={mutationError} close={() => setCanceling(false)} submit={reason => void mutate(() => api.cancelRemediationChangeSet(selected.id, reason), () => setCanceling(false))} />}

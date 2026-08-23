@@ -53,6 +53,8 @@ Stage 4B adds an explicitly queued, validation-only data-plane path that remains
 
 Stage 4C adds deterministic recovery planning to that same no-change receipt. The agent maps every backup-required operation to one reviewed restore operation, records original regular-file evidence or explicit absence, and orders rollback in reverse. The API independently reconstructs the expected checkpoint identities and rejects missing, reordered, duplicated, or contract-divergent plans. Recovery state remains `planned`; no backup content, mutation interface, or privileged executor exists.
 
+Stage 4D adds a second explicit job ledger for encrypted agent-local checkpoints. Only a ready signed validation job can be selected. Delivery remains agent-initiated and platform-signed. The agent writes AES-256-GCM blobs and an atomic progress journal only beneath its private state directory, then returns signed evidence without backup contents or keys. The API verifies job, validation, contract, agent, host, checkpoint coverage, encryption, and journal bindings. This introduces durable recovery material but still no host mutation or restore interface.
+
 Capability freshness is tracked separately from general agent activity and advances only when a signed enrollment or heartbeat supplies the capability list. Policy reads and task polling may refresh online status but cannot make an old capability attestation current. Change-set creation locks the selected plan rows through the active-ownership check and insert so concurrent requests cannot place one plan in multiple active envelopes.
 
 ## Container topology

@@ -21,6 +21,7 @@ from lsa.models import (
     PlatformChangeSigningKey,
     PlatformCommandSigningKey,
     RemediationChangeSet,
+    RemediationCheckpointJob,
     RemediationChangeSetPlan,
     RemediationChangeSetTarget,
     RemediationPlan,
@@ -37,6 +38,8 @@ from lsa.schemas import (
     RemediationChangeSetPlanResponse,
     RemediationChangeSetResponse,
     RemediationChangeSetTargetResponse,
+    RemediationCheckpointJobCreate,
+    RemediationCheckpointJobResponse,
     RemediationExecutionContractPreview,
     RemediationValidationJobCreate,
     RemediationValidationJobResponse,
@@ -52,12 +55,14 @@ from lsa.services.remediation_execution_contract import (
     build_validation_contract,
     validation_contract_digest,
 )
+from lsa.services.remediation_receipts import validate_recovery_plan
 
 
 router = APIRouter(prefix="/remediation-change-sets", tags=["remediation change sets"])
 ACTIVE_STATUSES = ("pending_authorization", "authorized")
 REMEDIATION_CONTRACT_VALIDATION_CAPABILITY = "remediation-contract-validation-v1"
 REMEDIATION_DRY_RUN_CAPABILITY = "remediation-dry-run-v1"
+REMEDIATION_CHECKPOINT_CAPABILITY = "remediation-checkpoint-v1"
 DEFAULT_LIMITS = {
     "remediation_four_eyes": True,
     "remediation_required_capability": "signed-change-set-planning-v1",
@@ -908,6 +913,27 @@ def _validation_job_response(
     )
 
 
+def _checkpoint_job_response(db: Session, job: RemediationCheckpointJob) -> RemediationCheckpointJobResponse:
+    return RemediationCheckpointJobResponse(
+        id=job.id,
+        change_set_id=job.change_set_id,
+        validation_job_id=job.validation_job_id,
+        host_id=job.host_id,
+        agent_id=job.agent_id,
+        status=job.status,
+        contract_digest=job.contract_digest,
+        requested_by=job.requested_by,
+        requested_by_name=_user_name(db, job.requested_by) or "Unknown User",
+        requested_at=job.requested_at,
+        delivered_at=job.delivered_at,
+        lease_expires_at=job.lease_expires_at,
+        completed_at=job.completed_at,
+        receipt=job.receipt,
+        receipt_signature=job.receipt_signature,
+        error=job.error,
+    )
+
+
 @router.get(
     "/{change_set_id}/execution-contract-preview/{agent_id}",
     response_model=RemediationExecutionContractPreview,
@@ -1017,6 +1043,105 @@ def queue_validation_job(
     return _validation_job_response(db, job)
 
 
+@router.get(
+    "/{change_set_id}/checkpoint-jobs",
+    response_model=list[RemediationCheckpointJobResponse],
+)
+def list_checkpoint_jobs(
+    change_set_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[RemediationCheckpointJobResponse]:
+    require_admin(user)
+    change_set = _change_set(db, user, change_set_id)
+    jobs = db.scalars(
+        select(RemediationCheckpointJob)
+        .where(
+            RemediationCheckpointJob.tenant_id == user.tenant_id,
+            RemediationCheckpointJob.change_set_id == change_set.id,
+        )
+        .order_by(RemediationCheckpointJob.requested_at.desc())
+    ).all()
+    return [_checkpoint_job_response(db, job) for job in jobs]
+
+
+@router.post(
+    "/{change_set_id}/checkpoint-jobs",
+    response_model=RemediationCheckpointJobResponse,
+    status_code=202,
+)
+def queue_checkpoint_job(
+    change_set_id: str,
+    request: RemediationCheckpointJobCreate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> RemediationCheckpointJobResponse:
+    require_admin(user)
+    change_set = _change_set(db, user, change_set_id, lock=True)
+    if change_set.status != "authorized" or _aware(change_set.maintenance_window_end) <= now_utc():
+        raise HTTPException(status_code=409, detail="Change set is not eligible for checkpointing")
+    validation = db.scalar(
+        select(RemediationValidationJob)
+        .where(
+            RemediationValidationJob.id == request.validation_job_id,
+            RemediationValidationJob.change_set_id == change_set.id,
+            RemediationValidationJob.tenant_id == user.tenant_id,
+        )
+        .with_for_update()
+    )
+    if validation is None or validation.status != "ready" or not isinstance(validation.receipt, dict):
+        raise HTTPException(status_code=409, detail="A successful signed preflight is required")
+    recovery_plan = validation.receipt.get("recovery_plan")
+    if not isinstance(recovery_plan, dict) or not validate_recovery_plan(
+        validation.contract, recovery_plan
+    ) or recovery_plan.get("status") != "ready":
+        raise HTTPException(status_code=409, detail="Preflight has no valid ready recovery plan")
+    agent = db.get(LinuxAgent, validation.agent_id)
+    if agent is None or REMEDIATION_CHECKPOINT_CAPABILITY not in (agent.capabilities or []):
+        raise HTTPException(status_code=409, detail="Target agent has not attested checkpoint support")
+    existing = db.scalar(
+        select(RemediationCheckpointJob).where(
+            RemediationCheckpointJob.validation_job_id == validation.id,
+            RemediationCheckpointJob.status.in_(["queued", "delivered", "ready"]),
+        )
+    )
+    if existing is not None:
+        return _checkpoint_job_response(db, existing)
+    job = RemediationCheckpointJob(
+        tenant_id=user.tenant_id,
+        change_set_id=change_set.id,
+        validation_job_id=validation.id,
+        host_id=validation.host_id,
+        agent_id=validation.agent_id,
+        status="queued",
+        contract=validation.contract,
+        contract_digest=validation.contract_digest,
+        recovery_plan=recovery_plan,
+        requested_by=user.id,
+    )
+    db.add(job)
+    db.flush()
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="remediation_checkpoint.queued",
+            target_type="remediation_checkpoint_job",
+            target_id=job.id,
+            details={
+                "change_set_id": change_set.id,
+                "validation_job_id": validation.id,
+                "agent_id": validation.agent_id,
+                "storage_scope": "agent_local_encrypted",
+                "execution_enabled": False,
+            },
+        )
+    )
+    db.commit()
+    return _checkpoint_job_response(db, job)
+
+
 @router.post("/{change_set_id}/authorize", response_model=RemediationChangeSetResponse)
 def authorize_change_set(
     change_set_id: str,
@@ -1101,6 +1226,15 @@ def cancel_change_set(
         job.status = "canceled"
         job.completed_at = change_set.canceled_at
         job.error = "Parent change set was canceled before validation completed"
+    for job in db.scalars(
+        select(RemediationCheckpointJob).where(
+            RemediationCheckpointJob.change_set_id == change_set.id,
+            RemediationCheckpointJob.status.in_(["queued", "delivered"]),
+        )
+    ).all():
+        job.status = "canceled"
+        job.completed_at = change_set.canceled_at
+        job.error = "Parent change set was canceled before checkpointing completed"
     db.add(
         AuditEvent(
             tenant_id=user.tenant_id,

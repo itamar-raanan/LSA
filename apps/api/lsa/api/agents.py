@@ -32,6 +32,7 @@ from lsa.models import (
     PolicyMode,
     PlatformCommandSigningKey,
     RemediationChangeSet,
+    RemediationCheckpointJob,
     RemediationValidationJob,
     SigningKey,
     Tenant,
@@ -64,6 +65,7 @@ from lsa.schemas import (
     ControlCatalogItem,
     LinuxAgentResponse,
     PlatformControlResponse,
+    RemediationCheckpointReceiptSubmission,
     RemediationValidationReceiptSubmission,
 )
 from lsa.security import hash_ingestion_token
@@ -74,7 +76,11 @@ from lsa.services.platform_command_trust import (
     sign_platform_envelope,
 )
 from lsa.services.remediation_execution_contract import validation_contract_digest
-from lsa.services.remediation_receipts import validate_recovery_plan, verify_validation_receipt
+from lsa.services.remediation_receipts import (
+    checkpoint_journal_digest,
+    validate_recovery_plan,
+    verify_validation_receipt,
+)
 
 
 router = APIRouter(tags=["agents"])
@@ -86,6 +92,7 @@ PLATFORM_KEY_ROTATION_CAPABILITY = "platform-key-rotation-v1"
 REMEDIATION_CONTRACT_VALIDATION_CAPABILITY = "remediation-contract-validation-v1"
 REMEDIATION_DRY_RUN_CAPABILITY = "remediation-dry-run-v1"
 REMEDIATION_RECOVERY_PLANNING_CAPABILITY = "remediation-recovery-planning-v1"
+REMEDIATION_CHECKPOINT_CAPABILITY = "remediation-checkpoint-v1"
 
 
 @dataclass(frozen=True)
@@ -1250,6 +1257,16 @@ def _require_remediation_validation_agent(agent: LinuxAgent) -> None:
         )
 
 
+def _require_remediation_checkpoint_agent(agent: LinuxAgent) -> None:
+    _require_remediation_validation_agent(agent)
+    capabilities = set(agent.capabilities or [])
+    if not {REMEDIATION_RECOVERY_PLANNING_CAPABILITY, REMEDIATION_CHECKPOINT_CAPABILITY} <= capabilities:
+        raise HTTPException(
+            status_code=409,
+            detail="Agent has not attested encrypted remediation checkpoint support",
+        )
+
+
 @router.get(
     "/agent/remediation-validations/next",
     response_model=PlatformControlResponse,
@@ -1443,6 +1460,205 @@ def submit_remediation_validation_receipt(
         principal.agent,
         "remediation-validation-receipt",
         {"validation_id": job.id, "status": job.status, "accepted": True},
+    )
+    db.commit()
+    return response
+
+
+@router.get("/agent/remediation-checkpoints/next", response_model=PlatformControlResponse)
+def next_remediation_checkpoint(
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+) -> PlatformControlResponse:
+    _require_remediation_checkpoint_agent(principal.agent)
+    now = now_utc()
+    selected: RemediationCheckpointJob | None = None
+    jobs = db.scalars(
+        select(RemediationCheckpointJob)
+        .where(
+            RemediationCheckpointJob.agent_id == principal.agent.id,
+            RemediationCheckpointJob.tenant_id == principal.agent.tenant_id,
+            RemediationCheckpointJob.status.in_(["queued", "delivered"]),
+        )
+        .order_by(RemediationCheckpointJob.requested_at)
+        .with_for_update()
+    ).all()
+    for job in jobs:
+        change_set = db.get(RemediationChangeSet, job.change_set_id)
+        if (
+            change_set is None
+            or change_set.status != "authorized"
+            or _aware(change_set.maintenance_window_end) <= now
+            or validation_contract_digest(job.contract) != job.contract_digest
+            or not validate_recovery_plan(job.contract, job.recovery_plan)
+            or job.recovery_plan.get("status") != "ready"
+        ):
+            job.status = "expired"
+            job.completed_at = now
+            job.error = "Checkpoint contract is no longer eligible for delivery"
+            continue
+        selected = job
+        break
+    payload: dict[str, object] = {"checkpoint": None}
+    if selected is not None:
+        if selected.status == "queued":
+            selected.status = "delivered"
+            selected.delivered_at = now
+        selected.lease_expires_at = now + timedelta(seconds=REMEDIATION_VALIDATION_LEASE_SECONDS)
+        payload["checkpoint"] = {
+            "checkpoint_job_id": selected.id,
+            "validation_id": selected.validation_job_id,
+            "change_set_id": selected.change_set_id,
+            "contract_digest": selected.contract_digest,
+            "contract": selected.contract,
+            "recovery_plan": selected.recovery_plan,
+        }
+    principal.agent.last_seen_at = now
+    response = _signed_control_response(db, principal.agent, "remediation-checkpoint", payload)
+    db.commit()
+    return response
+
+
+@router.post(
+    "/agent/remediation-checkpoints/{checkpoint_job_id}/receipt",
+    response_model=PlatformControlResponse,
+)
+def submit_remediation_checkpoint_receipt(
+    checkpoint_job_id: str,
+    request: RemediationCheckpointReceiptSubmission,
+    principal: AgentPrincipal = Depends(signed_agent_principal),
+    db: Session = Depends(get_db),
+) -> PlatformControlResponse:
+    _require_remediation_checkpoint_agent(principal.agent)
+    job = db.scalar(
+        select(RemediationCheckpointJob)
+        .where(
+            RemediationCheckpointJob.id == checkpoint_job_id,
+            RemediationCheckpointJob.agent_id == principal.agent.id,
+            RemediationCheckpointJob.tenant_id == principal.agent.tenant_id,
+        )
+        .with_for_update()
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Remediation checkpoint job not found")
+    receipt = request.receipt.model_dump(mode="json")
+    if job.status in {"ready", "blocked"}:
+        if job.receipt != receipt or job.receipt_signature != request.signature:
+            raise HTTPException(status_code=409, detail="Checkpoint job already has another receipt")
+        response = _signed_control_response(
+            db,
+            principal.agent,
+            "remediation-checkpoint-receipt",
+            {"checkpoint_job_id": job.id, "status": job.status, "accepted": True},
+        )
+        db.commit()
+        return response
+    if job.status != "delivered":
+        raise HTTPException(status_code=409, detail="Checkpoint job is not awaiting a receipt")
+    if (
+        validation_contract_digest(job.contract) != job.contract_digest
+        or not validate_recovery_plan(job.contract, job.recovery_plan)
+        or receipt["checkpoint_job_id"] != job.id
+        or receipt["validation_id"] != job.validation_job_id
+        or receipt["change_set_id"] != job.change_set_id
+        or receipt["contract_digest"] != job.contract_digest
+        or receipt["agent_id"] != job.agent_id
+        or receipt["host_id"] != job.host_id
+        or not verify_validation_receipt(principal.agent.public_key, receipt, request.signature)
+    ):
+        raise HTTPException(status_code=409, detail="Checkpoint receipt trust binding is invalid")
+    prepared_at = request.receipt.prepared_at
+    change_set = db.get(RemediationChangeSet, job.change_set_id)
+    if (
+        prepared_at.tzinfo is None
+        or job.delivered_at is None
+        or prepared_at < _aware(job.delivered_at) - timedelta(minutes=5)
+        or prepared_at > now_utc() + timedelta(minutes=5)
+        or change_set is None
+        or prepared_at > _aware(change_set.maintenance_window_end)
+    ):
+        raise HTTPException(status_code=409, detail="Checkpoint receipt time is outside its contract")
+    expected = {entry["checkpoint_id"]: entry for entry in job.recovery_plan["entries"]}
+    received = {item.checkpoint_id: item for item in request.receipt.checkpoint_results}
+    if len(received) != len(request.receipt.checkpoint_results) or set(received) != set(expected):
+        raise HTTPException(status_code=409, detail="Checkpoint receipt coverage is invalid")
+    for checkpoint_id, result in received.items():
+        source_state = expected[checkpoint_id]["source_state"]
+        if result.source_state != source_state:
+            raise HTTPException(status_code=409, detail="Checkpoint source binding is invalid")
+        if result.status == "blocked" and (
+            result.backup_created is not False
+            or result.encrypted_blob_digest is not None
+            or result.encrypted_size_bytes is not None
+            or not result.error
+        ):
+            raise HTTPException(status_code=409, detail="Blocked checkpoint evidence is invalid")
+        if result.status == "ready" and result.error is not None:
+            raise HTTPException(status_code=409, detail="Ready checkpoint evidence is invalid")
+        if source_state == "regular_file" and result.status == "ready" and (
+            result.backup_created is not True
+            or result.encrypted_blob_digest is None
+            or result.encrypted_size_bytes is None
+        ):
+            raise HTTPException(status_code=409, detail="Regular-file checkpoint evidence is incomplete")
+        if source_state == "absent" and (
+            result.backup_created is not False
+            or result.encrypted_blob_digest is not None
+            or result.encrypted_size_bytes is not None
+        ):
+            raise HTTPException(status_code=409, detail="Absent-file checkpoint evidence is invalid")
+    if receipt["status"] == "ready" and (
+        receipt["journal_state"] != "checkpointed"
+        or any(item.status != "ready" for item in received.values())
+        or receipt["error"] is not None
+    ):
+        raise HTTPException(status_code=409, detail="Ready checkpoint receipt is incomplete")
+    if receipt["status"] == "blocked" and (
+        receipt["journal_state"] != "blocked"
+        or not receipt["error"]
+        or not any(item.status == "blocked" for item in received.values())
+    ):
+        raise HTTPException(status_code=409, detail="Blocked checkpoint receipt lacks failure evidence")
+    result_documents = [item.model_dump(mode="json") for item in request.receipt.checkpoint_results]
+    if receipt["journal_digest"] != checkpoint_journal_digest(
+        checkpoint_job_id=job.id,
+        validation_id=job.validation_job_id,
+        contract_digest=job.contract_digest,
+        recovery_plan=job.recovery_plan,
+        state=receipt["journal_state"],
+        checkpoint_results=result_documents,
+        error=receipt["error"],
+    ):
+        raise HTTPException(status_code=409, detail="Checkpoint journal digest is invalid")
+    job.status = receipt["status"]
+    job.receipt = receipt
+    job.receipt_signature = request.signature
+    job.error = receipt["error"]
+    job.completed_at = now_utc()
+    principal.agent.last_seen_at = job.completed_at
+    db.add(
+        AuditEvent(
+            tenant_id=job.tenant_id,
+            actor_type="agent",
+            actor_id=principal.agent.id,
+            action=f"remediation_checkpoint.{job.status}",
+            target_type="remediation_checkpoint_job",
+            target_id=job.id,
+            details={
+                "change_set_id": job.change_set_id,
+                "validation_job_id": job.validation_job_id,
+                "journal_state": receipt["journal_state"],
+                "checkpoint_count": len(received),
+                "storage_scope": "agent_local_encrypted",
+                "changes_applied": False,
+            },
+        )
+    )
+    response = _signed_control_response(
+        db,
+        principal.agent,
+        "remediation-checkpoint-receipt",
+        {"checkpoint_job_id": job.id, "status": job.status, "accepted": True},
     )
     db.commit()
     return response

@@ -52,6 +52,9 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Sun Aug 23 2026 Linux Security Auditor - 0.10.0-1
+- Add encrypted local remediation checkpoints and crash-safe journals.
+
 * Sun Aug 23 2026 Linux Security Auditor - 0.9.0-1
 - Add deterministic read-only recovery planning and checkpoint evidence.
 

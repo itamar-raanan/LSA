@@ -34,7 +34,7 @@ from lsa.seed import DEMO_TOKEN, bootstrap
 from lsa.security import hash_ingestion_token, hash_password
 from lsa.schemas import RemediationValidationReceiptSubmission
 from lsa.services.platform_command_trust import active_platform_command_key
-from lsa.services.remediation_receipts import verify_validation_receipt
+from lsa.services.remediation_receipts import checkpoint_journal_digest, verify_validation_receipt
 from sqlalchemy import select
 from scanner.scripts.build_bundle import build
 
@@ -1222,13 +1222,14 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
                 name=host.hostname,
                 public_key=signing_key.public_key,
                 fingerprint=signing_key.fingerprint,
-                agent_version="0.9.0",
+                agent_version="0.10.0",
                 capabilities=[
                     "audit",
                     "signed-change-set-planning-v1",
                     "remediation-contract-validation-v1",
                     "remediation-dry-run-v1",
                     "remediation-recovery-planning-v1",
+                    "remediation-checkpoint-v1",
                     "signed-platform-control-v1",
                 ],
                 capabilities_attested_at=now_utc(),
@@ -1305,13 +1306,14 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
 
     heartbeat_body = json.dumps(
         {
-            "agent_version": "0.9.0",
+            "agent_version": "0.10.0",
             "capabilities": [
                 "audit",
                 "signed-change-set-planning-v1",
                 "remediation-contract-validation-v1",
                 "remediation-dry-run-v1",
                 "remediation-recovery-planning-v1",
+                "remediation-checkpoint-v1",
                 "signed-platform-control-v1",
             ],
             "policy_version": 1,
@@ -1523,7 +1525,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
         "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "execution_enabled": False,
         "changes_applied": False,
-        "agent_version": "0.9.0",
+        "agent_version": "0.10.0",
         "agent_integrity_digest": f"sha256:{'a' * 64}",
         "action_results": [
             {
@@ -1645,6 +1647,154 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
     assert stored_validations.status_code == 200
     assert stored_validations.json()[0]["receipt"] == receipt
     assert stored_validations.json()[0]["receipt_signature"] == receipt_signature
+    queued_checkpoint = client.post(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/checkpoint-jobs",
+        headers=reviewer_headers,
+        json={"validation_job_id": validation_job["id"]},
+    )
+    assert queued_checkpoint.status_code == 202, queued_checkpoint.text
+    checkpoint_job = queued_checkpoint.json()
+    assert checkpoint_job["status"] == "queued"
+    assert checkpoint_job["execution_enabled"] is False
+    checkpoint_path = "/api/v1/agent/remediation-checkpoints/next"
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    checkpoint_message = (
+        f"GET\n{checkpoint_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}"
+    ).encode()
+    checkpoint_delivery = client.get(
+        checkpoint_path,
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(checkpoint_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert checkpoint_delivery.status_code == 200, checkpoint_delivery.text
+    checkpoint_payload = checkpoint_delivery.json()["platform_envelope"]["payload"]["checkpoint"]
+    assert checkpoint_payload["checkpoint_job_id"] == checkpoint_job["id"]
+    assert checkpoint_payload["recovery_plan"] == recovery_plan
+    checkpoint_receipt = {
+        "schema_version": "1.0",
+        "kind": "remediation-checkpoint-receipt",
+        "checkpoint_job_id": checkpoint_job["id"],
+        "validation_id": validation_job["id"],
+        "change_set_id": change_set["id"],
+        "contract_digest": validation_job["contract_digest"],
+        "agent_id": agent_id,
+        "host_id": plan["host_id"],
+        "status": "ready",
+        "journal_state": "checkpointed",
+        "journal_digest": "0" * 64,
+        "storage_scope": "agent_local_encrypted",
+        "encryption": "AES-256-GCM",
+        "prepared_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "agent_version": "0.10.0",
+        "agent_integrity_digest": f"sha256:{'a' * 64}",
+        "checkpoint_results": [
+            {
+                "checkpoint_id": checkpoint_id,
+                "source_state": "absent",
+                "status": "ready",
+                "backup_created": False,
+                "encrypted_blob_digest": None,
+                "encrypted_size_bytes": None,
+                "error": None,
+            }
+        ],
+        "error": None,
+        "execution_enabled": False,
+        "changes_applied": False,
+    }
+    checkpoint_receipt["journal_digest"] = checkpoint_journal_digest(
+        checkpoint_job_id=checkpoint_job["id"],
+        validation_id=validation_job["id"],
+        contract_digest=validation_job["contract_digest"],
+        recovery_plan=recovery_plan,
+        state="checkpointed",
+        checkpoint_results=checkpoint_receipt["checkpoint_results"],
+        error=None,
+    )
+    checkpoint_signature = b64encode(
+        change_agent_private_key.sign(
+            json.dumps(
+                checkpoint_receipt,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        )
+    ).decode()
+    checkpoint_receipt_path = (
+        f"/api/v1/agent/remediation-checkpoints/{checkpoint_job['id']}/receipt"
+    )
+    invalid_journal_receipt = {**checkpoint_receipt, "journal_digest": "0" * 64}
+    invalid_journal_signature = b64encode(
+        change_agent_private_key.sign(
+            json.dumps(
+                invalid_journal_receipt,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        )
+    ).decode()
+    invalid_journal_body = json.dumps(
+        {"receipt": invalid_journal_receipt, "signature": invalid_journal_signature},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    invalid_journal_message = (
+        f"POST\n{checkpoint_receipt_path}\n{timestamp}\n"
+        f"{hashlib.sha256(invalid_journal_body).hexdigest()}"
+    ).encode()
+    invalid_journal_response = client.post(
+        checkpoint_receipt_path,
+        content=invalid_journal_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(invalid_journal_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert invalid_journal_response.status_code == 409
+    assert invalid_journal_response.json()["detail"] == "Checkpoint journal digest is invalid"
+    checkpoint_body = json.dumps(
+        {"receipt": checkpoint_receipt, "signature": checkpoint_signature},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    checkpoint_receipt_message = (
+        f"POST\n{checkpoint_receipt_path}\n{timestamp}\n"
+        f"{hashlib.sha256(checkpoint_body).hexdigest()}"
+    ).encode()
+    accepted_checkpoint = client.post(
+        checkpoint_receipt_path,
+        content=checkpoint_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(checkpoint_receipt_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert accepted_checkpoint.status_code == 200, accepted_checkpoint.text
+    stored_checkpoints = client.get(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/checkpoint-jobs",
+        headers=reviewer_headers,
+    )
+    assert stored_checkpoints.status_code == 200
+    assert stored_checkpoints.json()[0]["status"] == "ready"
+    assert stored_checkpoints.json()[0]["receipt"] == checkpoint_receipt
     with SessionLocal() as db:
         assert db.scalar(select(AgentTask)) is None
         events = db.scalars(select(AuditEvent).where(AuditEvent.target_id == change_set["id"])).all()

@@ -26,6 +26,8 @@ The API exposes these management routes:
 - `GET /api/v1/remediation-change-sets/{change_set_id}/execution-contract-preview/{agent_id}`
 - `GET /api/v1/remediation-change-sets/{change_set_id}/validation-jobs`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/validation-jobs`
+- `GET /api/v1/remediation-change-sets/{change_set_id}/checkpoint-jobs`
+- `POST /api/v1/remediation-change-sets/{change_set_id}/checkpoint-jobs`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/authorize`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/cancel`
 
@@ -174,3 +176,25 @@ This is still planning only. `backup_created`, `execution_enabled`, and
 `changes_applied` remain `false`; the journal state is fixed to `planned`. There is
 no backup store, mutation primitive, service controller, sysctl writer, subprocess,
 or execution dispatch route.
+
+#### Stage 4D — encrypted local checkpoints and durable journals
+
+After a ready signed preflight, an administrator can explicitly queue a separate
+checkpoint job for that exact validation receipt. The platform revalidates the
+contract, recovery plan, agent capability, change-set authorization, and maintenance
+window before delivery. The signed agent envelope binds the checkpoint job,
+validation job, contract digest, and recovery plan.
+
+Agent 0.10.0 revalidates the full contract and reconstructs the recovery-plan
+binding before reading a source. It refuses source drift after preflight. Existing
+regular files are encrypted with AES-256-GCM using a root-only, agent-local key;
+authenticated data binds the job, contract, checkpoint, reviewed path, and original
+digest. Absent paths receive a durable marker rather than an invented backup. An
+atomic journal is persisted before work and after each checkpoint, making retries
+idempotent after a crash. The local blob store is capped at 256 MiB.
+
+The agent-signed receipt contains checkpoint identities, encrypted blob digests and
+sizes, journal state, and errors. It never includes source content or the encryption
+key. The platform independently verifies exact checkpoint coverage and evidence
+shape. No decrypt-for-restore API, rollback operation, configuration write, service
+reload, sysctl mutation, arbitrary command, or remediation executor exists.

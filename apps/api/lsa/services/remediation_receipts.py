@@ -111,3 +111,30 @@ def validate_recovery_plan(contract: dict[str, Any], plan: dict[str, Any]) -> bo
         for entry in entries
     )
     return plan.get("status") == ("ready" if expected_ready else "blocked")
+
+
+def checkpoint_journal_digest(
+    *,
+    checkpoint_job_id: str,
+    validation_id: str,
+    contract_digest: str,
+    recovery_plan: dict[str, Any],
+    state: str,
+    checkpoint_results: list[dict[str, Any]],
+    error: str | None,
+) -> str:
+    journal = {
+        "schema_version": "1.0",
+        "kind": "remediation-checkpoint-journal",
+        "checkpoint_job_id": checkpoint_job_id,
+        "validation_id": validation_id,
+        "contract_digest": contract_digest,
+        "recovery_plan_digest": hashlib.sha256(canonical_receipt(recovery_plan)).hexdigest(),
+        "recovery_plan": recovery_plan,
+        "state": state,
+        "checkpoint_results": checkpoint_results,
+        "error": error,
+        "execution_enabled": False,
+        "changes_applied": False,
+    }
+    return hashlib.sha256(canonical_receipt(journal)).hexdigest()
