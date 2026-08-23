@@ -1114,3 +1114,70 @@ class RemediationValidationJobResponse(BaseModel):
     error: str | None
     execution_enabled: Literal[False] = False
     changes_applied: Literal[False] = False
+
+
+class RemediationCheckpointJobCreate(BaseModel):
+    validation_job_id: str = Field(min_length=1, max_length=36)
+
+
+class RemediationCheckpointResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    checkpoint_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_state: Literal["regular_file", "absent"]
+    status: Literal["ready", "blocked"]
+    backup_created: bool
+    encrypted_blob_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    encrypted_size_bytes: int | None = Field(default=None, ge=0, le=9 * 1024 * 1024)
+    error: str | None = Field(default=None, max_length=1000)
+
+
+class RemediationCheckpointReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    kind: Literal["remediation-checkpoint-receipt"] = "remediation-checkpoint-receipt"
+    checkpoint_job_id: str = Field(min_length=1, max_length=36)
+    validation_id: str = Field(min_length=1, max_length=36)
+    change_set_id: str = Field(min_length=1, max_length=36)
+    contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    agent_id: str = Field(min_length=1, max_length=36)
+    host_id: str = Field(min_length=1, max_length=36)
+    status: Literal["ready", "blocked"]
+    journal_state: Literal["checkpointed", "blocked"]
+    journal_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    storage_scope: Literal["agent_local_encrypted"] = "agent_local_encrypted"
+    encryption: Literal["AES-256-GCM"] = "AES-256-GCM"
+    prepared_at: datetime
+    agent_version: str = Field(min_length=1, max_length=40)
+    agent_integrity_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    checkpoint_results: list[RemediationCheckpointResult]
+    error: str | None = Field(default=None, max_length=4000)
+    execution_enabled: Literal[False] = False
+    changes_applied: Literal[False] = False
+
+
+class RemediationCheckpointReceiptSubmission(BaseModel):
+    receipt: RemediationCheckpointReceipt
+    signature: str = Field(min_length=1, max_length=256)
+
+
+class RemediationCheckpointJobResponse(BaseModel):
+    id: str
+    change_set_id: str
+    validation_job_id: str
+    host_id: str
+    agent_id: str
+    status: Literal["queued", "delivered", "ready", "blocked", "expired", "canceled"]
+    contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    requested_by: str
+    requested_by_name: str
+    requested_at: datetime
+    delivered_at: datetime | None
+    lease_expires_at: datetime | None
+    completed_at: datetime | None
+    receipt: RemediationCheckpointReceipt | None
+    receipt_signature: str | None
+    error: str | None
+    execution_enabled: Literal[False] = False
+    changes_applied: Literal[False] = False

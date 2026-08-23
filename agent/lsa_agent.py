@@ -32,7 +32,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 try:
     from .integrity import verify_manifest
-    from .remediation_recovery import compile_recovery_plan
+    from .remediation_recovery import (
+        compile_recovery_plan,
+        create_encrypted_checkpoints,
+        validate_recovery_plan_binding,
+    )
     from .remediation_contract import (
         RemediationContractError,
         dry_run_remediation_contract,
@@ -41,7 +45,11 @@ try:
     )
 except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
-    from remediation_recovery import compile_recovery_plan
+    from remediation_recovery import (
+        compile_recovery_plan,
+        create_encrypted_checkpoints,
+        validate_recovery_plan_binding,
+    )
     from remediation_contract import (
         RemediationContractError,
         dry_run_remediation_contract,
@@ -50,7 +58,7 @@ except ImportError:  # executed directly by the systemd unit
     )
 
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -61,6 +69,7 @@ AGENT_CAPABILITIES = (
     "remediation-contract-validation-v1",
     "remediation-dry-run-v1",
     "remediation-recovery-planning-v1",
+    "remediation-checkpoint-v1",
     "signed-platform-control-v1",
     "platform-key-rotation-v1",
 )
@@ -751,6 +760,150 @@ def process_remediation_validation(
     }
 
 
+def process_remediation_checkpoint(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    key: Ed25519PrivateKey,
+    payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    checkpoint = payload.get("checkpoint")
+    if checkpoint is None:
+        return None
+    expected_keys = {
+        "checkpoint_job_id",
+        "validation_id",
+        "change_set_id",
+        "contract_digest",
+        "contract",
+        "recovery_plan",
+    }
+    if not isinstance(checkpoint, dict) or set(checkpoint) != expected_keys:
+        raise RuntimeError("platform returned an invalid remediation checkpoint wrapper")
+    checkpoint_job_id = checkpoint["checkpoint_job_id"]
+    validation_id = checkpoint["validation_id"]
+    change_set_id = checkpoint["change_set_id"]
+    contract_digest = checkpoint["contract_digest"]
+    contract = checkpoint["contract"]
+    recovery_plan = checkpoint["recovery_plan"]
+    if not all(
+        isinstance(value, str) and value
+        for value in (checkpoint_job_id, validation_id, change_set_id, contract_digest)
+    ) or not isinstance(contract, dict) or not isinstance(recovery_plan, dict):
+        raise RuntimeError("remediation checkpoint identity is invalid")
+    calculated_digest = hashlib.sha256(
+        json.dumps(contract, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    if calculated_digest != contract_digest:
+        raise RuntimeError("remediation checkpoint contract digest is invalid")
+    cached_receipts = state.setdefault("remediation_checkpoint_receipts", {})
+    cached = cached_receipts.get(checkpoint_job_id) if isinstance(cached_receipts, dict) else None
+    if (
+        isinstance(cached, dict)
+        and cached.get("contract_digest") == contract_digest
+        and isinstance(cached.get("receipt"), dict)
+        and isinstance(cached.get("signature"), str)
+    ):
+        receipt = cached["receipt"]
+        signature = cached["signature"]
+    else:
+        journal: dict[str, Any]
+        try:
+            pinned_key, pinned_raw = load_platform_command_key(config)
+            validate_remediation_contract_preview(
+                contract,
+                pinned_platform_key=pinned_key,
+                pinned_platform_raw=pinned_raw,
+                expected_platform_key_id=str(state["platform_command_key_id"]),
+                expected_agent_id=str(state["agent_id"]),
+                expected_host_id=str(state["host_id"]),
+            )
+            validate_recovery_plan_binding(contract, recovery_plan)
+            journal = create_encrypted_checkpoints(
+                checkpoint_job_id=checkpoint_job_id,
+                validation_id=validation_id,
+                contract_digest=contract_digest,
+                recovery_plan=recovery_plan,
+                state_dir=Path(config.get("state_dir", DEFAULT_STATE_DIR)),
+                root=Path(config.get("inspection_root", "/")),
+            )
+        except (RemediationContractError, OSError, RuntimeError, ValueError) as exc:
+            journal = {
+                "state": "blocked",
+                "checkpoint_results": [
+                    {
+                        "checkpoint_id": entry["checkpoint_id"],
+                        "source_state": entry["source_state"],
+                        "status": "blocked",
+                        "backup_created": False,
+                        "encrypted_blob_digest": None,
+                        "encrypted_size_bytes": None,
+                        "error": str(exc)[:1000],
+                    }
+                    for entry in recovery_plan.get("entries", [])
+                    if isinstance(entry, dict)
+                ],
+                "error": str(exc)[:1000],
+            }
+        status = "ready" if journal["state"] == "checkpointed" else "blocked"
+        receipt = {
+            "schema_version": "1.0",
+            "kind": "remediation-checkpoint-receipt",
+            "checkpoint_job_id": checkpoint_job_id,
+            "validation_id": validation_id,
+            "change_set_id": change_set_id,
+            "contract_digest": contract_digest,
+            "agent_id": str(state["agent_id"]),
+            "host_id": str(state["host_id"]),
+            "status": status,
+            "journal_state": journal["state"],
+            "journal_digest": hashlib.sha256(
+                json.dumps(
+                    journal,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode()
+            ).hexdigest(),
+            "storage_scope": "agent_local_encrypted",
+            "encryption": "AES-256-GCM",
+            "prepared_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "agent_version": VERSION,
+            "agent_integrity_digest": str(state["integrity_manifest_sha256"]),
+            "checkpoint_results": journal["checkpoint_results"],
+            "error": journal.get("error"),
+            "execution_enabled": False,
+            "changes_applied": False,
+        }
+        signature = sign_validation_receipt(key, receipt)
+        if not isinstance(cached_receipts, dict):
+            cached_receipts = {}
+            state["remediation_checkpoint_receipts"] = cached_receipts
+        cached_receipts[checkpoint_job_id] = {
+            "contract_digest": contract_digest,
+            "receipt": receipt,
+            "signature": signature,
+        }
+        while len(cached_receipts) > 50:
+            cached_receipts.pop(next(iter(cached_receipts)))
+        atomic_json(state_paths(config)[0], state)
+    path = f"/api/v1/agent/remediation-checkpoints/{checkpoint_job_id}/receipt"
+    acknowledgement = signed_control_post(
+        config,
+        state,
+        key,
+        path,
+        {"receipt": receipt, "signature": signature},
+        "remediation-checkpoint-receipt",
+    )
+    if acknowledgement.get("accepted") is not True:
+        raise RuntimeError("platform did not accept the remediation checkpoint receipt")
+    return {
+        "checkpoint_job_id": checkpoint_job_id,
+        "status": receipt["status"],
+        "changes_applied": False,
+    }
+
+
 def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[str, Any]:
     if os.geteuid() != 0 and not config.get("allow_unprivileged_development", False):
         raise RuntimeError("LSA agent must run as root to read protected audit evidence")
@@ -802,6 +955,27 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
             file=sys.stderr,
             flush=True,
         )
+    checkpoint_result: dict[str, Any] | None = None
+    try:
+        checkpoint_payload = signed_control_get(
+            config,
+            state,
+            key,
+            "/api/v1/agent/remediation-checkpoints/next",
+            "remediation-checkpoint",
+        )
+        checkpoint_result = process_remediation_checkpoint(
+            config,
+            state,
+            key,
+            checkpoint_payload,
+        )
+    except (httpx.HTTPError, RuntimeError) as exc:
+        print(
+            f"LSA agent checkpoint cycle failed without applying changes: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
     task_payload = signed_control_get(
         config, state, key, "/api/v1/agent/tasks/next", "agent-task"
     )
@@ -838,6 +1012,7 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
         "policy": policy,
         "heartbeat": heartbeat,
         "validation": validation_result,
+        "checkpoint": checkpoint_result,
         "task": task,
         "scanned": should_scan,
     }
