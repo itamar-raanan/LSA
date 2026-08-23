@@ -52,6 +52,9 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Sun Aug 23 2026 Linux Security Auditor - 0.7.0-1
+- Add fail-closed validation for signed, non-executable remediation contract previews.
+
 * Wed Aug 12 2026 Linux Security Auditor - 0.6.0-1
   - Add cross-signed, agent-acknowledged platform command key rotation.
 * Wed Aug 12 2026 Linux Security Auditor - 0.5.0-1

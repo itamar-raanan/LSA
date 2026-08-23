@@ -23,6 +23,7 @@ The API exposes these management routes:
 - `GET /api/v1/remediation-change-sets`
 - `POST /api/v1/remediation-change-sets`
 - `GET /api/v1/remediation-change-sets/{change_set_id}`
+- `GET /api/v1/remediation-change-sets/{change_set_id}/execution-contract-preview/{agent_id}`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/authorize`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/cancel`
 
@@ -119,3 +120,15 @@ Compile approved plans into signed declarative change sets. Require fresh eviden
 ### Stage 4 — constrained execution
 
 Add a separate remediation capability to the agent with least-privilege execution, action-level allow-listing, tamper-evident receipts, post-change verification, automatic stop conditions, and rollback. This stage requires a new threat model and must not reuse the audit task payload.
+
+#### Stage 4A — validation-only execution contract
+
+The first execution-stage increment defines the trust contract without enabling
+execution. The management API can compile an authorized change set into a
+target-specific validation preview. The current platform-control identity endorses
+the change-signing key, and the agent contains fail-closed validation for the
+endorsement, change-set signature and digest, target binding, action snapshot
+digests, operation vocabulary, reviewed paths, backups, validation, and rollback.
+The preview remains management-only, creates no agent task, and carries explicit
+`execution_enabled: false` and `dispatch_enabled: false` locks. See
+[the remediation execution threat model](remediation-execution-threat-model.md).

@@ -21,6 +21,7 @@ from lsa.models import (
     Host,
     IngestionToken,
     LinuxAgent,
+    PlatformCommandSigningKey,
     RemediationChangeSet,
     RemediationPlan,
     Report,
@@ -31,6 +32,7 @@ from lsa.models import (
 )
 from lsa.seed import DEMO_TOKEN, bootstrap
 from lsa.security import hash_ingestion_token, hash_password
+from lsa.services.platform_command_trust import active_platform_command_key
 from sqlalchemy import select
 from scanner.scripts.build_bundle import build
 
@@ -1170,6 +1172,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
         )
         db.add_all([ingestion_token, signing_key, reviewer])
         db.flush()
+        platform_key, _ = active_platform_command_key(db, tenant.id)
         db.add(
             LinuxAgent(
                 tenant_id=tenant.id,
@@ -1180,10 +1183,16 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
                 name=host.hostname,
                 public_key=signing_key.public_key,
                 fingerprint=signing_key.fingerprint,
-                agent_version="0.1.0",
-                capabilities=["audit", "signed-change-set-planning-v1"],
+                agent_version="0.7.0",
+                capabilities=[
+                    "audit",
+                    "signed-change-set-planning-v1",
+                    "remediation-contract-validation-v1",
+                ],
                 capabilities_attested_at=now_utc(),
                 last_seen_at=now_utc(),
+                platform_command_key_id=platform_key.id,
+                platform_command_key_fingerprint=platform_key.fingerprint,
             )
         )
         db.commit()
@@ -1208,6 +1217,12 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
     assert change_set["signature"] is None
     assert change_set["targets"][0]["rollout_phase"] == "canary"
     assert change_set["targets"][0]["capability_attested"] is True
+    pending_preview = client.get(
+        f"/api/v1/remediation-change-sets/{change_set['id']}"
+        f"/execution-contract-preview/{change_set['targets'][0]['agent_id']}",
+        headers=owner_headers,
+    )
+    assert pending_preview.status_code == 409
     assert {gate["code"]: gate["status"] for gate in change_set["gates"]} == {
         "action_integrity": "passed",
         "evidence_freshness": "passed",
@@ -1248,8 +1263,12 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
 
     heartbeat_body = json.dumps(
         {
-            "agent_version": "0.4.3",
-            "capabilities": ["audit", "signed-change-set-planning-v1"],
+            "agent_version": "0.7.0",
+            "capabilities": [
+                "audit",
+                "signed-change-set-planning-v1",
+                "remediation-contract-validation-v1",
+            ],
             "policy_version": 1,
         },
         separators=(",", ":"),
@@ -1347,6 +1366,33 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
     assert hashlib.sha256(canonical_payload).hexdigest() == signed["digest"]
     Ed25519PublicKey.from_public_bytes(b64decode(signed["signing_public_key"])).verify(
         b64decode(signed["signature"]), canonical_payload
+    )
+    preview = client.get(
+        f"/api/v1/remediation-change-sets/{change_set['id']}"
+        f"/execution-contract-preview/{agent_id}",
+        headers=reviewer_headers,
+    )
+    assert preview.status_code == 200, preview.text
+    contract = preview.json()
+    assert contract["mode"] == "validate_only"
+    assert contract["execution_enabled"] is False
+    assert contract["dispatch_enabled"] is False
+    assert contract["target"] in contract["change_set"]["payload"]["targets"]
+    assert len(contract["actions"]) == 1
+    assert contract["actions"][0]["action_digest"] == signed["payload"]["plans"][0][
+        "action_digest"
+    ]
+    with SessionLocal() as db:
+        agent = db.get(LinuxAgent, agent_id)
+        platform_key = db.get(PlatformCommandSigningKey, agent.platform_command_key_id)
+    endorsement_bytes = json.dumps(
+        contract["platform_endorsement"],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    Ed25519PublicKey.from_public_bytes(b64decode(platform_key.public_key)).verify(
+        b64decode(contract["platform_endorsement_signature"]), endorsement_bytes
     )
     with SessionLocal() as db:
         assert db.scalar(select(AgentTask)) is None
