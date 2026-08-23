@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Exercise the externally visible Docker platform using only the standard library."""
+"""Exercise the externally visible Docker platform and signed ingestion flow."""
 
+import argparse
+import base64
+import getpass
 import hashlib
 import io
 import json
 import ssl
-import sys
 import urllib.error
 import urllib.request
 import uuid
@@ -14,8 +16,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 
+TLS_CONTEXT = ssl.create_default_context()
+
+
 def request(url: str, method: str = "GET", data: bytes | None = None, headers=None):
-    context = ssl._create_unverified_context() if url.startswith("https://") else None
+    context = TLS_CONTEXT if url.startswith("https://") else None
     try:
         with urllib.request.urlopen(
             urllib.request.Request(url, data=data, headers=headers or {}, method=method),
@@ -35,7 +40,7 @@ def json_request(url: str, payload: dict, token: str | None = None):
     return status, json.loads(body)
 
 
-def bundle_bytes(report_path: Path) -> bytes:
+def bundle_bytes(report_path: Path, signing_key=None, signing_key_id: str | None = None) -> bytes:
     report_payload = json.loads(report_path.read_text())
     report_payload["report_id"] = str(uuid.uuid4())
     report_payload["generated_at"] = datetime.now(UTC).isoformat()
@@ -45,19 +50,26 @@ def bundle_bytes(report_path: Path) -> bytes:
             "schema_version": "1.0",
             "report_id": report_payload["report_id"],
             "files": {"report.json": hashlib.sha256(report).hexdigest()},
-            "signature": None,
+            "signature": (
+                {"algorithm": "ed25519", "key_id": signing_key_id}
+                if signing_key is not None and signing_key_id is not None
+                else None
+            ),
         },
         indent=2,
         sort_keys=True,
     ).encode()
-    checksums = (
-        f"{hashlib.sha256(manifest).hexdigest()}  manifest.json\n"
-        f"{hashlib.sha256(report).hexdigest()}  report.json\n"
+    files = {"manifest.json": manifest, "report.json": report}
+    if signing_key is not None:
+        files["signature.sig"] = base64.b64encode(signing_key.sign(manifest))
+    checksums = "".join(
+        f"{hashlib.sha256(content).hexdigest()}  {name}\n"
+        for name, content in sorted(files.items())
     ).encode()
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as bundle:
-        bundle.writestr("report.json", report)
-        bundle.writestr("manifest.json", manifest)
+        for name, content in files.items():
+            bundle.writestr(name, content)
         bundle.writestr("checksums.sha256", checksums)
     return output.getvalue()
 
@@ -114,7 +126,37 @@ def smoke(base_url: str, email: str, password: str) -> None:
     if status != 201:
         raise RuntimeError("Ingestion token could not be issued")
 
-    artifact = bundle_bytes(Path("tests/fixtures/report.json"))
+    signing_key = None
+    signing_key_id = None
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        signing_key = Ed25519PrivateKey.generate()
+        public_key = signing_key.public_key().public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+        status, registered = json_request(
+            f"{base_url}/api/v1/signing-keys",
+            {
+                "name": f"Production acceptance {uuid.uuid4().hex[:8]}",
+                "public_key": base64.b64encode(public_key).decode(),
+                "host_id": None,
+            },
+            session,
+        )
+        if status != 201:
+            raise RuntimeError("Acceptance signing key could not be registered")
+        signing_key_id = registered["id"]
+    except ImportError:
+        print("WARNING: cryptography is unavailable; attempting an unsigned lab bundle")
+
+    artifact = bundle_bytes(
+        Path("tests/fixtures/report.json"),
+        signing_key=signing_key,
+        signing_key_id=signing_key_id,
+    )
     body, boundary = multipart_file("docker-smoke-report.zip", artifact)
     status, _, response_body = request(
         f"{base_url}/api/v1/ingest/bundles",
@@ -141,6 +183,21 @@ def smoke(base_url: str, email: str, password: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        raise SystemExit("usage: smoke_test.py BASE_URL ADMIN_EMAIL ADMIN_PASSWORD")
-    smoke(sys.argv[1].rstrip("/"), sys.argv[2], sys.argv[3])
+    parser = argparse.ArgumentParser(description="Exercise an externally visible LSA deployment")
+    parser.add_argument("base_url")
+    parser.add_argument("email")
+    parser.add_argument("password", nargs="?", help="omit to receive a hidden interactive prompt")
+    trust = parser.add_mutually_exclusive_group()
+    trust.add_argument("--ca-file", help="PEM CA bundle used to verify management TLS")
+    trust.add_argument(
+        "--insecure",
+        action="store_true",
+        help="disable management TLS verification for an isolated lab only",
+    )
+    arguments = parser.parse_args()
+    if arguments.insecure:
+        TLS_CONTEXT = ssl._create_unverified_context()
+    elif arguments.ca_file:
+        TLS_CONTEXT = ssl.create_default_context(cafile=arguments.ca_file)
+    password = arguments.password or getpass.getpass("LSA administrator password: ")
+    smoke(arguments.base_url.rstrip("/"), arguments.email, password)

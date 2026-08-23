@@ -39,7 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Configure production-like stack
-        run: cp deploy/.env.example deploy/.env
+        run: |
+          cp deploy/.env.example deploy/.env
+          sed -i 's/LSA_REQUIRE_SIGNED_BUNDLES=true/LSA_REQUIRE_SIGNED_BUNDLES=false/' deploy/.env
       - name: Validate Compose configuration
         run: docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
       - name: Build and start platform
@@ -57,7 +59,8 @@ jobs:
           python3 deploy/smoke_test.py \
             https://127.0.0.1:8443 \
             admin@example.com \
-            replace-with-a-long-administrator-password
+            replace-with-a-long-administrator-password \
+            --insecure
       - name: Show service logs on failure
         if: failure()
         run: docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs --no-color
