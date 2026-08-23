@@ -176,6 +176,7 @@ export function AgentsSettingsPage() {
   const [draftDefaultMode, setDraftDefaultMode] = useState<PolicyMode>('audit')
   const [draftSchedule, setDraftSchedule] = useState(60)
   const [policyStage, setPolicyStage] = useState<PolicyStage>('configure')
+  const [rotationDecision, setRotationDecision] = useState<'activate' | 'abort' | null>(null)
 
   const selectedGroup = data?.groups.find(group => group.id === selectedGroupId) ?? null
 
@@ -424,6 +425,25 @@ export function AgentsSettingsPage() {
                   <div><span className="detail-label">Operating mode</span><strong className="mt-2 block text-sm font-semibold text-stone-200">Audit only</strong><span className="table-subtitle">Host configuration is not changed</span></div>
                 </div>
                 <div className="mt-4 border-t border-stone-800 pt-4"><span className="detail-label">Platform identity fingerprint</span><code className="mt-2 block break-all text-[10px] text-stone-500">SHA256:{data.connectivity.platform_trust.fingerprint}</code></div>
+                <div className="mt-5 border-t border-stone-800 pt-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <span className="detail-label">Signing Key Rotation</span>
+                      {data.connectivity.key_rotation ? <>
+                        <strong className="mt-2 block text-sm font-semibold text-stone-200">{data.connectivity.key_rotation.status === 'ready' ? 'Ready To Activate' : 'Waiting For Agent Acknowledgement'}</strong>
+                        <p className="mt-1 text-xs leading-5 text-stone-500">{data.connectivity.key_rotation.acknowledged_agents} of {data.connectivity.key_rotation.eligible_agents} supported agents acknowledged version {data.connectivity.key_rotation.next_key.key_version}. {data.connectivity.key_rotation.blocking_agents > 0 ? `${data.connectivity.key_rotation.blocking_agents} agent(s) still block activation.` : 'Every managed agent can verify the new identity.'}</p>
+                        <code className="mt-3 block break-all text-[10px] text-stone-500">Next SHA256:{data.connectivity.key_rotation.next_key.fingerprint}</code>
+                      </> : <>
+                        <strong className="mt-2 block text-sm font-semibold text-stone-200">Version {data.connectivity.platform_trust.key_version} Active</strong>
+                        <p className="mt-1 text-xs leading-5 text-stone-500">Stage a replacement without interrupting agents. Activation remains locked until every active agent acknowledges it.</p>
+                      </>}
+                    </div>
+                    {data.connectivity.key_rotation ? <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button disabled={saving} onClick={() => setRotationDecision('abort')}>Abort</Button>
+                      <Button variant="primary" disabled={saving || data.connectivity.key_rotation.blocking_agents > 0} onClick={() => setRotationDecision('activate')}>Activate</Button>
+                    </div> : <Button className="shrink-0" disabled={saving} onClick={() => void submit(() => api.stagePlatformCommandKeyRotation())}>Stage New Key</Button>}
+                  </div>
+                </div>
                 <Button className="mt-6" disabled={!data.packages.length} onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> View packages and commands</Button>
               </section>
 
@@ -587,6 +607,16 @@ export function AgentsSettingsPage() {
         </div>
       </div>
     </section>
+    <Dialog
+      open={rotationDecision !== null}
+      onOpenChange={(open) => { if (!open && !saving) setRotationDecision(null) }}
+      eyebrow="Platform Trust"
+      title={rotationDecision === 'activate' ? 'Activate The New Signing Key?' : 'Abort This Key Rotation?'}
+      description={rotationDecision === 'activate' ? 'The platform will sign future agent control responses with the acknowledged key. Enrollment tokens tied to the previous identity will be revoked.' : 'Agents will keep the current signing key. Any staged acknowledgements will be cleared safely.'}
+    >
+      {rotationDecision === 'activate' && <div className="rounded-lg border border-amber-900/30 bg-amber-950/10 px-4 py-3 text-xs leading-5 text-amber-900">Create a new enrollment token after activation. Existing hosts remain connected because they acknowledged the replacement key before this action became available.</div>}
+      <div className="mt-6 flex justify-end gap-3"><Button disabled={saving} onClick={() => setRotationDecision(null)}>Cancel</Button><Button variant={rotationDecision === 'activate' ? 'primary' : 'danger'} disabled={saving} onClick={() => void submit(() => rotationDecision === 'activate' ? api.activatePlatformCommandKeyRotation() : api.abortPlatformCommandKeyRotation()).then(() => setRotationDecision(null))}>{saving ? 'Updating Trust' : rotationDecision === 'activate' ? 'Activate Key' : 'Abort Rotation'}</Button></div>
+    </Dialog>
     <Dialog
       open={confirmBulkRevoke}
       onOpenChange={(open) => { if (!open && !saving) setConfirmBulkRevoke(false) }}

@@ -353,8 +353,8 @@ def test_new_agent_receives_signed_monotonic_control_responses(client):
         json={
             "name": "signed-control-agent",
             "public_key": b64encode(public_key).decode(),
-            "agent_version": "0.5.0",
-            "capabilities": ["audit", "signed-platform-control-v1"],
+            "agent_version": "0.6.0",
+            "capabilities": ["audit", "signed-platform-control-v1", "platform-key-rotation-v1"],
             "hostname": "signed-control-agent",
             "machine_id_hash": f"sha256:{hashlib.sha256(b'signed-control-agent').hexdigest()}",
             "operating_system": "Debian GNU/Linux",
@@ -403,8 +403,8 @@ def test_new_agent_receives_signed_monotonic_control_responses(client):
 
     heartbeat_path = "/api/v1/agent/heartbeat"
     heartbeat_payload = {
-        "agent_version": "0.5.0",
-        "capabilities": ["audit", "signed-platform-control-v1"],
+        "agent_version": "0.6.0",
+        "capabilities": ["audit", "signed-platform-control-v1", "platform-key-rotation-v1"],
         "policy_version": 1,
     }
     heartbeat_body = json.dumps(heartbeat_payload, separators=(",", ":")).encode()
@@ -470,6 +470,148 @@ def test_new_agent_receives_signed_monotonic_control_responses(client):
     assert completed.json()["platform_envelope"]["payload"]["task"]["status"] == "completed"
     empty = client.get(task_path, headers=agent_headers("GET", task_path))
     assert empty.json()["platform_envelope"]["payload"]["task"] is None
+
+
+def test_platform_command_key_rotation_waits_for_agent_acknowledgement(client):
+    admin_headers = {"Authorization": f"Bearer {login(client)}"}
+    group = client.get("/api/v1/agent-groups", headers=admin_headers).json()[0]
+    enrollment_token = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=admin_headers,
+        json={
+            "name": "rotation enrollment",
+            "group_id": group["id"],
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+    ).json()
+    reusable_token = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=admin_headers,
+        json={
+            "name": "rotation automation",
+            "group_id": group["id"],
+            "token_type": "reusable",
+            "max_uses": 10,
+            "expires_at": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+        },
+    ).json()
+    agent_key = Ed25519PrivateKey.generate()
+    agent_public = agent_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    enrollment = client.post(
+        "/api/v1/agent/enroll",
+        headers={"Authorization": f"Bearer {enrollment_token['token']}"},
+        json={
+            "name": "rotation-agent",
+            "public_key": b64encode(agent_public).decode(),
+            "agent_version": "0.6.0",
+            "capabilities": ["audit", "signed-platform-control-v1", "platform-key-rotation-v1"],
+            "hostname": "rotation-agent",
+            "machine_id_hash": f"sha256:{hashlib.sha256(b'rotation-agent').hexdigest()}",
+            "operating_system": "Debian GNU/Linux",
+            "os_family": "debian",
+            "os_version": "13",
+            "kernel": "6.12.0",
+            "architecture": "x86_64",
+        },
+    ).json()
+    agent_id = enrollment["agent_id"]
+    current_public = Ed25519PublicKey.from_public_bytes(
+        b64decode(enrollment["platform_trust"]["public_key"])
+    )
+
+    def signed_headers(method: str, path: str, body: bytes = b""):
+        timestamp = str(int(datetime.now(UTC).timestamp()))
+        message = f"{method}\n{path}\n{timestamp}\n{hashlib.sha256(body).hexdigest()}".encode()
+        return {
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(agent_key.sign(message)).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        }
+
+    staged = client.post("/api/v1/platform-command-key-rotation", headers=admin_headers)
+    assert staged.status_code == 201, staged.text
+    rotation = staged.json()
+    assert rotation["status"] == "staged"
+    assert rotation["eligible_agents"] == 1
+    assert rotation["acknowledged_agents"] == 0
+    assert rotation["blocking_agents"] == 1
+
+    blocked = client.post(
+        "/api/v1/platform-command-key-rotation/activate", headers=admin_headers
+    )
+    assert blocked.status_code == 409
+
+    policy_path = "/api/v1/agent/policy"
+    policy = client.get(policy_path, headers=signed_headers("GET", policy_path)).json()
+    envelope = policy["platform_envelope"]
+    current_public.verify(
+        b64decode(policy["platform_signature"]),
+        json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(),
+    )
+    proposal = envelope["payload"]["platform_key_rotation"]
+    assert proposal["phase"] == "staged"
+    assert proposal["proposal"]["next_key"]["fingerprint"] == rotation["next_key"]["fingerprint"]
+
+    heartbeat_path = "/api/v1/agent/heartbeat"
+    heartbeat_payload = {
+        "agent_version": "0.6.0",
+        "capabilities": ["audit", "signed-platform-control-v1", "platform-key-rotation-v1"],
+        "policy_version": 1,
+        "platform_key_ack_fingerprint": rotation["next_key"]["fingerprint"],
+    }
+    heartbeat_body = json.dumps(heartbeat_payload, separators=(",", ":")).encode()
+    heartbeat = client.post(
+        heartbeat_path,
+        content=heartbeat_body,
+        headers={
+            **signed_headers("POST", heartbeat_path, heartbeat_body),
+            "Content-Type": "application/json",
+        },
+    )
+    assert heartbeat.status_code == 200, heartbeat.text
+    readiness = client.get("/api/v1/agent-connectivity", headers=admin_headers).json()
+    assert readiness["key_rotation"]["status"] == "ready"
+    assert readiness["key_rotation"]["acknowledged_agents"] == 1
+
+    activated = client.post(
+        "/api/v1/platform-command-key-rotation/activate", headers=admin_headers
+    )
+    assert activated.status_code == 200, activated.text
+    assert activated.json()["platform_trust"]["fingerprint"] == rotation["next_key"]["fingerprint"]
+
+    new_policy = client.get(policy_path, headers=signed_headers("GET", policy_path)).json()
+    next_public = Ed25519PublicKey.from_public_bytes(b64decode(rotation["next_key"]["public_key"]))
+    next_public.verify(
+        b64decode(new_policy["platform_signature"]),
+        json.dumps(
+            new_policy["platform_envelope"],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode(),
+    )
+    assert new_policy["platform_envelope"]["payload"]["platform_key_rotation"]["phase"] == "activated"
+    tokens = client.get("/api/v1/agent-enrollment-tokens", headers=admin_headers).json()
+    retired_token = next(token for token in tokens if token["id"] == reusable_token["id"])
+    assert retired_token["revoked_at"] is not None
+
+
+def test_platform_command_key_rotation_can_be_aborted_before_activation(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    initial = client.get("/api/v1/agent-connectivity", headers=headers).json()
+    staged = client.post("/api/v1/platform-command-key-rotation", headers=headers)
+    assert staged.status_code == 201, staged.text
+    assert staged.json()["status"] == "ready"
+    assert staged.json()["current_key"]["fingerprint"] == initial["platform_trust"]["fingerprint"]
+
+    aborted = client.delete("/api/v1/platform-command-key-rotation", headers=headers)
+    assert aborted.status_code == 204, aborted.text
+    connectivity = client.get("/api/v1/agent-connectivity", headers=headers).json()
+    assert connectivity["platform_trust"]["fingerprint"] == initial["platform_trust"]["fingerprint"]
+    assert connectivity["key_rotation"] is None
 
 
 def test_policy_updates_are_immutable_versions(client):

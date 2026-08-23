@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from agent.integrity import build_manifest, verify_manifest, write_manifest
 from agent.lsa_agent import (
     AGENT_CAPABILITIES,
+    apply_platform_key_rotation,
     VERSION,
     _scan_due,
     accept_policy_version,
@@ -31,6 +32,7 @@ def test_runtime_version_matches_packaging_release():
 def test_agent_attests_governance_planning_without_write_execution():
     assert "signed-change-set-planning-v1" in AGENT_CAPABILITIES
     assert "signed-platform-control-v1" in AGENT_CAPABILITIES
+    assert "platform-key-rotation-v1" in AGENT_CAPABILITIES
     assert all("execute" not in capability and "write" not in capability for capability in AGENT_CAPABILITIES)
 
 
@@ -248,6 +250,114 @@ def test_control_response_persists_sequence_before_returning(tmp_path, monkeypat
     assert payload["agent_id"] == "agent-1"
     persisted = json.loads((tmp_path / "state" / "state.json").read_text())
     assert persisted["platform_envelope_sequence"] == 2
+
+
+def test_platform_key_rotation_requires_both_signatures_and_promotes_atomically(tmp_path):
+    current = Ed25519PrivateKey.generate()
+    current_raw = current.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    next_key = Ed25519PrivateKey.generate()
+    next_raw = next_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    next_trust = {
+        "key_id": "platform-key-2",
+        "key_version": 2,
+        "algorithm": "Ed25519",
+        "public_key": base64.b64encode(next_raw).decode(),
+        "fingerprint": hashlib.sha256(next_raw).hexdigest(),
+    }
+    proposal = {
+        "schema_version": "1.0",
+        "kind": "platform-key-rotation",
+        "previous_key_id": "platform-key-1",
+        "next_key": next_trust,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    canonical = json.dumps(
+        proposal, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    state = {
+        "platform_command_key_id": "platform-key-1",
+        "platform_command_key_version": 1,
+        "platform_command_key_fingerprint": hashlib.sha256(current_raw).hexdigest(),
+    }
+    pin = tmp_path / "platform.pub"
+    pin.write_text(base64.b64encode(current_raw).decode(), encoding="utf-8")
+    config = {"platform_command_key_file": str(pin)}
+    apply_platform_key_rotation(
+        {
+            "platform_key_rotation": {
+                "phase": "staged",
+                "proposal": proposal,
+                "previous_key_signature": base64.b64encode(current.sign(canonical)).decode(),
+                "next_key_signature": base64.b64encode(next_key.sign(canonical)).decode(),
+            }
+        },
+        config,
+        state,
+        current_raw,
+    )
+    assert state["pending_platform_trust"] == next_trust
+    assert pin.read_text() == base64.b64encode(current_raw).decode()
+
+    apply_platform_key_rotation(
+        {
+            "platform_key_rotation": {"phase": "activated", "next_key": next_trust},
+            "platform_command_key_id": next_trust["key_id"],
+            "platform_command_key_version": next_trust["key_version"],
+        },
+        config,
+        state,
+        next_raw,
+    )
+    assert state["platform_command_key_fingerprint"] == next_trust["fingerprint"]
+    assert "pending_platform_trust" not in state
+    assert pin.read_text().strip() == next_trust["public_key"]
+
+
+def test_platform_key_rotation_rejects_missing_next_key_proof(tmp_path):
+    current = Ed25519PrivateKey.generate()
+    current_raw = current.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    next_key = Ed25519PrivateKey.generate()
+    next_raw = next_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    next_trust = {
+        "key_id": "platform-key-2",
+        "key_version": 2,
+        "algorithm": "Ed25519",
+        "public_key": base64.b64encode(next_raw).decode(),
+        "fingerprint": hashlib.sha256(next_raw).hexdigest(),
+    }
+    proposal = {
+        "schema_version": "1.0",
+        "kind": "platform-key-rotation",
+        "previous_key_id": "platform-key-1",
+        "next_key": next_trust,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    canonical = json.dumps(proposal, sort_keys=True, separators=(",", ":")).encode()
+    with pytest.raises(RuntimeError, match="rotation proof is invalid"):
+        apply_platform_key_rotation(
+            {
+                "platform_key_rotation": {
+                    "phase": "staged",
+                    "proposal": proposal,
+                    "previous_key_signature": base64.b64encode(current.sign(canonical)).decode(),
+                    "next_key_signature": base64.b64encode(b"x" * 64).decode(),
+                }
+            },
+            {},
+            {
+                "platform_command_key_id": "platform-key-1",
+                "platform_command_key_fingerprint": hashlib.sha256(current_raw).hexdigest(),
+            },
+            current_raw,
+        )
 
 
 @pytest.mark.parametrize(

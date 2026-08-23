@@ -36,7 +36,7 @@ except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
 
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -45,6 +45,7 @@ AGENT_CAPABILITIES = (
     "policy-rollback-protection",
     "signed-change-set-planning-v1",
     "signed-platform-control-v1",
+    "platform-key-rotation-v1",
 )
 
 
@@ -60,6 +61,21 @@ def atomic_json(path: Path, value: dict[str, Any], mode: int = 0o600) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(value, handle, indent=2, sort_keys=True)
             handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def atomic_text(path: Path, value: str, mode: int = 0o644) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(value)
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
@@ -232,18 +248,117 @@ def verify_control_response(
 ) -> dict[str, Any]:
     pinned_key, pinned_raw = load_platform_command_key(config)
     try:
-        return verify_platform_envelope(
+        trust = result["platform_trust"]
+        advertised_fingerprint = trust.get("fingerprint")
+        pending = state.get("pending_platform_trust")
+        verification_key = pinned_key
+        verification_raw = pinned_raw
+        if advertised_fingerprint != hashlib.sha256(pinned_raw).hexdigest():
+            if not isinstance(pending, dict) or pending.get("fingerprint") != advertised_fingerprint:
+                raise RuntimeError("platform identity does not match the pinned or staged key")
+            try:
+                verification_raw = base64.b64decode(str(pending["public_key"]), validate=True)
+                if len(verification_raw) != 32:
+                    raise ValueError
+                verification_key = Ed25519PublicKey.from_public_bytes(verification_raw)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError("staged platform identity is invalid") from exc
+        payload = verify_platform_envelope(
             result["platform_envelope"],
             result["platform_signature"],
-            result["platform_trust"],
-            pinned_key,
-            pinned_raw,
+            trust,
+            verification_key,
+            verification_raw,
             expected_kind=expected_kind,
             expected_identity_fingerprint=str(state["agent_identity_fingerprint"]),
             state=state,
         )
+        apply_platform_key_rotation(payload, config, state, verification_raw)
+        return payload
     except (KeyError, TypeError) as exc:
         raise RuntimeError(f"platform did not return a signed {expected_kind} response") from exc
+
+
+def apply_platform_key_rotation(
+    payload: dict[str, Any],
+    config: dict[str, Any],
+    state: dict[str, Any],
+    signer_raw: bytes,
+) -> None:
+    rotation = payload.get("platform_key_rotation")
+    if rotation is None:
+        state.pop("pending_platform_trust", None)
+        return
+    if not isinstance(rotation, dict):
+        raise RuntimeError("platform key rotation metadata is invalid")
+    phase = rotation.get("phase")
+    signer_fingerprint = hashlib.sha256(signer_raw).hexdigest()
+    if phase == "staged":
+        proposal = rotation.get("proposal")
+        next_key = proposal.get("next_key") if isinstance(proposal, dict) else None
+        if (
+            not isinstance(proposal, dict)
+            or proposal.get("schema_version") != "1.0"
+            or proposal.get("kind") != "platform-key-rotation"
+            or proposal.get("previous_key_id") != state.get("platform_command_key_id")
+            or not isinstance(next_key, dict)
+            or next_key.get("algorithm") != "Ed25519"
+            or next_key.get("key_id") == state.get("platform_command_key_id")
+            or not isinstance(next_key.get("key_version"), int)
+            or next_key["key_version"] <= state.get("platform_command_key_version", 0)
+        ):
+            raise RuntimeError("platform key rotation proposal is invalid")
+        try:
+            next_raw = base64.b64decode(str(next_key["public_key"]), validate=True)
+            previous_signature = base64.b64decode(
+                str(rotation["previous_key_signature"]), validate=True
+            )
+            next_signature = base64.b64decode(
+                str(rotation["next_key_signature"]), validate=True
+            )
+            if (
+                len(next_raw) != 32
+                or next_key.get("fingerprint") != hashlib.sha256(next_raw).hexdigest()
+                or signer_fingerprint != state.get("platform_command_key_fingerprint")
+            ):
+                raise ValueError
+            canonical = canonical_envelope(proposal)
+            Ed25519PublicKey.from_public_bytes(signer_raw).verify(previous_signature, canonical)
+            Ed25519PublicKey.from_public_bytes(next_raw).verify(next_signature, canonical)
+        except (InvalidSignature, KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("platform key rotation proof is invalid") from exc
+        state["pending_platform_trust"] = next_key
+        return
+    if phase == "activated":
+        next_key = rotation.get("next_key")
+        pending = state.get("pending_platform_trust")
+        try:
+            next_raw = base64.b64decode(str(next_key["public_key"]), validate=True)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("platform key activation descriptor is invalid") from exc
+        if (
+            not isinstance(next_key, dict)
+            or next_key.get("algorithm") != "Ed25519"
+            or next_raw != signer_raw
+            or next_key.get("fingerprint") != signer_fingerprint
+            or next_key.get("key_id") != payload.get("platform_command_key_id")
+            or next_key.get("key_version") != payload.get("platform_command_key_version")
+            or (
+                state.get("platform_command_key_fingerprint") != signer_fingerprint
+                and (not isinstance(pending, dict) or pending.get("fingerprint") != signer_fingerprint)
+            )
+        ):
+            raise RuntimeError("platform key activation is not acknowledged locally")
+        key_path = Path(
+            config.get("platform_command_key_file", "/etc/lsa-agent/platform-command-key.pub")
+        )
+        atomic_text(key_path, str(next_key["public_key"]).strip() + "\n")
+        state["platform_command_key_id"] = next_key["key_id"]
+        state["platform_command_key_version"] = next_key["key_version"]
+        state["platform_command_key_fingerprint"] = signer_fingerprint
+        state.pop("pending_platform_trust", None)
+        return
+    raise RuntimeError("platform key rotation phase is invalid")
 
 
 def os_release() -> dict[str, str]:
@@ -384,6 +499,7 @@ def enroll(config: dict[str, Any], token: str) -> None:
         raise RuntimeError("platform did not return a signed enrollment proof") from exc
     if state.get("signed_control_required") is not True:
         raise RuntimeError("platform did not require signed control responses")
+    apply_platform_key_rotation(state, config, state, pinned_raw)
     state["enrolled_at"] = datetime.now(UTC).isoformat()
     state["highest_policy_version"] = state.get("policy_version", 0)
     atomic_json(state_path, state)
@@ -524,6 +640,11 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
             "agent_version": VERSION,
             "capabilities": capabilities,
             "policy_version": policy_version,
+            "platform_key_ack_fingerprint": (
+                state.get("pending_platform_trust", {}).get("fingerprint")
+                if isinstance(state.get("pending_platform_trust"), dict)
+                else None
+            ),
         },
         "agent-heartbeat",
     )

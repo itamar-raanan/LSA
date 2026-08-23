@@ -39,6 +39,7 @@ def active_platform_command_key(
         .where(
             PlatformCommandSigningKey.tenant_id == tenant_id,
             PlatformCommandSigningKey.revoked_at.is_(None),
+            PlatformCommandSigningKey.status == "active",
         )
         .order_by(PlatformCommandSigningKey.key_version.desc())
     )
@@ -69,10 +70,74 @@ def active_platform_command_key(
             settings.settings_encryption_key,
         ),
         fingerprint=hashlib.sha256(public_raw).hexdigest(),
+        status="active",
+        activated_at=func.now(),
     )
     db.add(stored)
     db.flush()
     return stored, True
+
+
+def create_staged_platform_command_key(
+    db: Session, tenant_id: str, active_key: PlatformCommandSigningKey
+) -> PlatformCommandSigningKey:
+    existing = db.scalar(
+        select(PlatformCommandSigningKey).where(
+            PlatformCommandSigningKey.tenant_id == tenant_id,
+            PlatformCommandSigningKey.status == "staged",
+            PlatformCommandSigningKey.revoked_at.is_(None),
+        )
+    )
+    if existing is not None:
+        raise PlatformCommandSigningError("A platform command key rotation is already staged")
+    latest_version = db.scalar(
+        select(func.max(PlatformCommandSigningKey.key_version)).where(
+            PlatformCommandSigningKey.tenant_id == tenant_id
+        )
+    )
+    private_key = Ed25519PrivateKey.generate()
+    public_raw = _public_bytes(private_key.public_key())
+    private_raw = private_key.private_bytes(
+        serialization.Encoding.Raw,
+        serialization.PrivateFormat.Raw,
+        serialization.NoEncryption(),
+    )
+    settings = get_settings()
+    staged = PlatformCommandSigningKey(
+        tenant_id=tenant_id,
+        name="Platform Command Authority",
+        key_version=(latest_version or 0) + 1,
+        public_key=base64.b64encode(public_raw).decode(),
+        private_key_ciphertext=encrypt_secret(
+            base64.b64encode(private_raw).decode(),
+            settings.session_secret,
+            settings.settings_encryption_key,
+        ),
+        fingerprint=hashlib.sha256(public_raw).hexdigest(),
+        status="staged",
+        supersedes_key_id=active_key.id,
+    )
+    db.add(staged)
+    db.flush()
+    return staged
+
+
+def platform_key_rotation_proof(
+    active_key: PlatformCommandSigningKey, staged_key: PlatformCommandSigningKey
+) -> dict[str, Any]:
+    proposal = {
+        "schema_version": "1.0",
+        "kind": "platform-key-rotation",
+        "previous_key_id": active_key.id,
+        "next_key": platform_trust_descriptor(staged_key),
+        "created_at": staged_key.created_at.isoformat(),
+    }
+    return {
+        "phase": "staged",
+        "proposal": proposal,
+        "previous_key_signature": sign_platform_envelope(active_key, proposal),
+        "next_key_signature": sign_platform_envelope(staged_key, proposal),
+    }
 
 
 def platform_trust_descriptor(key: PlatformCommandSigningKey) -> dict[str, Any]:

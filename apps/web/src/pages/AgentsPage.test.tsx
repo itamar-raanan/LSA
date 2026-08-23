@@ -23,7 +23,10 @@ vi.mock('../api/client', () => ({
     controlCatalog: vi.fn().mockResolvedValue([{ control_id: 'CIS-DEBIAN13-1.1.1', title: 'Disable unused filesystem', category: 'filesystem', module: 'cis_debian13' }]),
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
     createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token', token_type: 'one_time', max_uses: null, use_count: 0, platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
-    agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
+    agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) }, key_rotation: null }),
+    stagePlatformCommandKeyRotation: vi.fn().mockResolvedValue({}),
+    activatePlatformCommandKeyRotation: vi.fn().mockResolvedValue({}),
+    abortPlatformCommandKeyRotation: vi.fn().mockResolvedValue(undefined),
     agentPackages: vi.fn().mockResolvedValue([
       { id: 'linux-deb', version: '0.4.1', filename: 'lsa-agent_0.4.1_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) },
       { id: 'linux-rpm', version: '0.4.1', filename: 'lsa-agent-0.4.1-1.noarch.rpm', content_type: 'application/x-rpm', operating_system: 'RHEL / Rocky / AlmaLinux 9+', architecture: 'noarch', package_format: 'rpm', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'b'.repeat(64) },
@@ -152,6 +155,29 @@ describe('Agents', () => {
     })))
     expect(await screen.findByText('lsa_tenant_enroll_test')).toBeInTheDocument()
     expect(screen.getByText(/Store it in your deployment secret manager/)).toBeInTheDocument()
+  })
+
+  it('keeps signing key activation locked until every agent acknowledges it', async () => {
+    vi.mocked(api.agentConnectivity).mockResolvedValueOnce({
+      public_url: 'https://lsa.example.test:8444',
+      platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) },
+      key_rotation: {
+        status: 'staged',
+        current_key: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) },
+        next_key: { key_id: 'platform-key-2', key_version: 2, algorithm: 'Ed25519', public_key: 'bmV4dC1rZXk=', fingerprint: 'a'.repeat(64) },
+        eligible_agents: 3,
+        acknowledged_agents: 2,
+        blocking_agents: 1,
+        staged_at: '2026-08-12T10:00:00Z',
+      },
+    })
+    render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Deployment' }))
+    expect(screen.getByText('Waiting For Agent Acknowledgement')).toBeInTheDocument()
+    expect(screen.getByText(/2 of 3 supported agents acknowledged/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Abort' })).toBeEnabled()
   })
 
   it('reviews policy differences before publishing an immutable version', async () => {

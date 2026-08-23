@@ -129,7 +129,7 @@ Agent sizing is per managed host. The figures below describe available headroom 
 | **CPU** | 1 available vCPU | 2 available vCPU during larger audit profiles |
 | **Memory** | 512 MiB available | 1 GiB available during an audit |
 | **Disk** | 500 MiB free for runtime, virtual environment, controls, state, and initial reports | 1 GiB or more, plus capacity for retained report history |
-| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.5.0 encrypts HTTPS traffic and authenticates platform control responses with a pinned Ed25519 identity, but does not validate the gateway certificate or hostname |
+| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.6.0 encrypts HTTPS traffic and authenticates platform control responses with a pinned Ed25519 identity, but does not validate the gateway certificate or hostname |
 
 The host requires Python 3.11 or newer, `venv` support, systemd, and root privileges so read-only controls can inspect protected system state. Enrollment installs constrained Python dependencies into `/opt/lsa-agent/venv`, so it also requires access to the dependency source or an internal/offline package mirror. No inbound agent port is required.
 
@@ -228,7 +228,7 @@ curl --fail-with-body \
 Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
 
 ```bash
-sudo apt install ./lsa-agent_0.5.0_all.deb
+sudo apt install ./lsa-agent_0.6.0_all.deb
 # Copy the complete enrollment command from the console; it includes the public platform key.
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
@@ -240,6 +240,8 @@ Agent 0.4 verifies a package-generated SHA-256 manifest before each cycle and re
 The generated installation command also provisions a tenant-specific public Ed25519 platform key. Enrollment credentials are written only after the agent verifies a short-lived signed proof bound to its locally generated identity. This makes the application-layer trust bootstrap transparent to the operator without treating the public key as a secret. Remediation and command execution remain disabled.
 
 Agent 0.5 extends the same application-layer trust to every platform control response. Policy, heartbeat, audit-task delivery, empty queues, and completion acknowledgements are signed, agent-bound, short-lived, and sequence protected. The sequence is persisted immediately after verification so a process restart does not reopen a replay window. Agents that advertise signed-control support cannot downgrade themselves to unsigned responses.
+
+Agent 0.6 adds two-phase platform signing-key rotation. The current and replacement keys cross-sign a proposal, every active compatible agent acknowledges the new fingerprint, and activation remains blocked until the complete fleet is ready. Activation revokes enrollment tokens tied to the retired identity; create a new token after rotation.
 
 For automated provisioning, administrators can create one reusable tenant enrollment token from **Agents → Deployment**. The token is shown only once, stored hashed by LSA, assigned to a default group, valid for at most one year, and optionally limited to a maximum number of successful enrollments. Only one reusable token may be active per tenant. Every use updates its counter and last-used timestamp and is recorded with the resulting agent enrollment; administrators can revoke it immediately. One-time tokens remain the recommended option for individual manual installations.
 

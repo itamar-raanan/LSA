@@ -32,6 +32,7 @@ from lsa.models import (
     PolicyMode,
     PlatformCommandSigningKey,
     SigningKey,
+    Tenant,
     User,
     now_utc,
 )
@@ -65,6 +66,7 @@ from lsa.schemas import (
 from lsa.security import hash_ingestion_token
 from lsa.services.platform_command_trust import (
     active_platform_command_key,
+    platform_key_rotation_proof,
     platform_trust_descriptor,
     sign_platform_envelope,
 )
@@ -74,6 +76,7 @@ router = APIRouter(tags=["agents"])
 AGENT_CLOCK_SKEW_SECONDS = 300
 AGENT_TASK_LEASE_SECONDS = 3600
 SIGNED_PLATFORM_CONTROL_CAPABILITY = "signed-platform-control-v1"
+PLATFORM_KEY_ROTATION_CAPABILITY = "platform-key-rotation-v1"
 
 
 @dataclass(frozen=True)
@@ -86,6 +89,11 @@ def _aware(value):
     if value is not None and value.tzinfo is None:
         return value.replace(tzinfo=now_utc().tzinfo)
     return value
+
+
+def _lock_tenant(db: Session, tenant_id: str) -> None:
+    if db.scalar(select(Tenant.id).where(Tenant.id == tenant_id).with_for_update()) is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
 
 
 def _validate_public_key(encoded: str) -> tuple[Ed25519PublicKey, bytes]:
@@ -601,6 +609,7 @@ def bulk_assign_agent_group(
     db: Session = Depends(get_db),
 ):
     require_admin(user)
+    _lock_tenant(db, user.tenant_id)
     _require_group(db, user.tenant_id, request.group_id)
     agents = _selected_agents(db, user.tenant_id, request.agent_ids)
     for agent in agents:
@@ -886,9 +895,16 @@ def enroll_agent(
 ):
     if credentials is None:
         raise HTTPException(status_code=401, detail="Enrollment token required")
+    token_hash = hash_ingestion_token(credentials.credentials)
+    candidate = db.scalar(
+        select(AgentEnrollmentToken).where(AgentEnrollmentToken.token_hash == token_hash)
+    )
+    if candidate is None:
+        raise HTTPException(status_code=401, detail="Invalid, expired, revoked, consumed, or exhausted enrollment token")
+    _lock_tenant(db, candidate.tenant_id)
     enrollment = db.scalar(
         select(AgentEnrollmentToken)
-        .where(AgentEnrollmentToken.token_hash == hash_ingestion_token(credentials.credentials))
+        .where(AgentEnrollmentToken.id == candidate.id)
         .with_for_update()
     )
     token_exhausted = (
@@ -1002,6 +1018,16 @@ def enroll_agent(
         platform_envelope_sequence=1,
         last_seen_at=now_utc(),
     )
+    staged_key = db.scalar(
+        select(PlatformCommandSigningKey).where(
+            PlatformCommandSigningKey.tenant_id == enrollment.tenant_id,
+            PlatformCommandSigningKey.status == "staged",
+            PlatformCommandSigningKey.revoked_at.is_(None),
+        )
+    )
+    if staged_key is not None:
+        agent.pending_platform_command_key_id = staged_key.id
+        agent.pending_platform_command_key_fingerprint = staged_key.fingerprint
     db.add(agent)
     db.flush()
     enrollment_used_at = now_utc()
@@ -1047,6 +1073,11 @@ def enroll_agent(
             "agent_identity_fingerprint": fingerprint,
             "execution_enabled": False,
             "signed_control_required": SIGNED_PLATFORM_CONTROL_CAPABILITY in request.capabilities,
+            "platform_key_rotation": (
+                platform_key_rotation_proof(platform_key, staged_key)
+                if staged_key is not None
+                else None
+            ),
         },
     }
     signature = sign_platform_envelope(platform_key, envelope)
@@ -1099,6 +1130,21 @@ def _signed_control_response(
         raise HTTPException(status_code=409, detail="Agent platform trust is unavailable")
     agent.platform_envelope_sequence += 1
     issued_at = now_utc()
+    rotation: dict[str, object] | None = None
+    if agent.pending_platform_command_key_id is not None:
+        staged_key = db.get(PlatformCommandSigningKey, agent.pending_platform_command_key_id)
+        if (
+            staged_key is not None
+            and staged_key.status == "staged"
+            and staged_key.revoked_at is None
+            and staged_key.fingerprint == agent.pending_platform_command_key_fingerprint
+        ):
+            rotation = platform_key_rotation_proof(platform_key, staged_key)
+    elif platform_key.status == "active" and platform_key.supersedes_key_id is not None:
+        rotation = {
+            "phase": "activated",
+            "next_key": platform_trust_descriptor(platform_key),
+        }
     envelope = {
         "schema_version": "1.0",
         "kind": kind,
@@ -1112,6 +1158,7 @@ def _signed_control_response(
             "agent_id": agent.id,
             "agent_identity_fingerprint": agent.fingerprint,
             "execution_enabled": False,
+            "platform_key_rotation": rotation,
         },
     }
     return PlatformControlResponse(
@@ -1158,6 +1205,14 @@ def agent_heartbeat(
     agent.capabilities_attested_at = now_utc()
     agent.last_seen_at = agent.capabilities_attested_at
     agent.last_policy_version = request.policy_version
+    if request.platform_key_ack_fingerprint is not None:
+        if (
+            agent.pending_platform_command_key_id is None
+            or agent.pending_platform_command_key_fingerprint
+            != request.platform_key_ack_fingerprint
+        ):
+            raise HTTPException(status_code=409, detail="Platform key acknowledgement does not match the staged key")
+        agent.platform_command_key_acknowledged_at = now_utc()
     heartbeat = AgentHeartbeatResponse(
         accepted_at=agent.last_seen_at,
         policy_changed=request.policy_version != policy.policy_version,
