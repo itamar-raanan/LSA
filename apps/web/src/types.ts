@@ -344,6 +344,60 @@ export interface RemediationChangeSet {
   updated_at: string
 }
 
+export type RemediationValidationStatus = 'queued' | 'delivered' | 'ready' | 'blocked' | 'expired' | 'canceled'
+
+export interface RemediationValidationCheck {
+  code: string
+  status: 'passed' | 'blocked'
+  detail: string
+}
+
+export interface RemediationValidationActionResult {
+  plan_id: string
+  action_digest: string
+  status: 'ready' | 'blocked'
+  checks: RemediationValidationCheck[]
+}
+
+export interface RemediationValidationReceipt {
+  schema_version: '1.0'
+  kind: 'remediation-validation-receipt'
+  validation_id: string
+  change_set_id: string
+  contract_digest: string
+  agent_id: string
+  host_id: string
+  status: 'ready' | 'blocked'
+  evaluated_at: string
+  execution_enabled: false
+  changes_applied: false
+  agent_version: string
+  agent_integrity_digest: string
+  action_results: RemediationValidationActionResult[]
+  error: string | null
+}
+
+export interface RemediationValidationJob {
+  id: string
+  change_set_id: string
+  host_id: string
+  agent_id: string
+  status: RemediationValidationStatus
+  contract_digest: string
+  contract: Record<string, unknown> | null
+  requested_by: string
+  requested_by_name: string
+  requested_at: string
+  delivered_at: string | null
+  lease_expires_at: string | null
+  completed_at: string | null
+  receipt: RemediationValidationReceipt | null
+  receipt_signature: string | null
+  error: string | null
+  execution_enabled: false
+  changes_applied: false
+}
+
 export interface DashboardData {
   total_hosts: number
   healthy_hosts: number

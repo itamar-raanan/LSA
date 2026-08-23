@@ -1010,3 +1010,70 @@ class RemediationExecutionContractPreview(BaseModel):
     platform_endorsement_signature: str
     target: dict[str, Any]
     actions: list[dict[str, Any]]
+
+
+class RemediationValidationJobCreate(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=36)
+
+
+class RemediationValidationCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=100)
+    status: Literal["passed", "blocked"]
+    detail: str = Field(min_length=1, max_length=1000)
+
+
+class RemediationValidationActionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: str = Field(min_length=1, max_length=36)
+    action_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    status: Literal["ready", "blocked"]
+    checks: list[RemediationValidationCheck]
+
+
+class RemediationValidationReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    kind: Literal["remediation-validation-receipt"] = "remediation-validation-receipt"
+    validation_id: str = Field(min_length=1, max_length=36)
+    change_set_id: str = Field(min_length=1, max_length=36)
+    contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    agent_id: str = Field(min_length=1, max_length=36)
+    host_id: str = Field(min_length=1, max_length=36)
+    status: Literal["ready", "blocked"]
+    evaluated_at: datetime
+    execution_enabled: Literal[False] = False
+    changes_applied: Literal[False] = False
+    agent_version: str = Field(min_length=1, max_length=40)
+    agent_integrity_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    action_results: list[RemediationValidationActionResult]
+    error: str | None = Field(default=None, max_length=4000)
+
+
+class RemediationValidationReceiptSubmission(BaseModel):
+    receipt: RemediationValidationReceipt
+    signature: str = Field(min_length=1, max_length=256)
+
+
+class RemediationValidationJobResponse(BaseModel):
+    id: str
+    change_set_id: str
+    host_id: str
+    agent_id: str
+    status: Literal["queued", "delivered", "ready", "blocked", "expired", "canceled"]
+    contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    contract: dict[str, Any] | None = None
+    requested_by: str
+    requested_by_name: str
+    requested_at: datetime
+    delivered_at: datetime | None
+    lease_expires_at: datetime | None
+    completed_at: datetime | None
+    receipt: RemediationValidationReceipt | None
+    receipt_signature: str | None
+    error: str | None
+    execution_enabled: Literal[False] = False
+    changes_applied: Literal[False] = False

@@ -17,6 +17,7 @@ from agent.lsa_agent import (
     accept_policy_version,
     http_client,
     platform_url,
+    process_remediation_validation,
     run_scanner,
     signed_control_get,
     signed_headers,
@@ -25,6 +26,9 @@ from agent.lsa_agent import (
 )
 from agent.remediation_contract import (
     RemediationContractError,
+    canonical_validation_receipt,
+    dry_run_remediation_contract,
+    sign_validation_receipt,
     validate_remediation_contract_preview,
 )
 from lsa.services.remediation_catalog import load_remediation_catalog
@@ -39,6 +43,7 @@ def test_agent_attests_governance_planning_without_write_execution():
     assert "signed-platform-control-v1" in AGENT_CAPABILITIES
     assert "platform-key-rotation-v1" in AGENT_CAPABILITIES
     assert "remediation-contract-validation-v1" in AGENT_CAPABILITIES
+    assert "remediation-dry-run-v1" in AGENT_CAPABILITIES
     assert all("execute" not in capability and "write" not in capability for capability in AGENT_CAPABILITIES)
 
 
@@ -225,6 +230,135 @@ def test_agent_rejects_mismatched_pinned_platform_key_material():
     )
     with pytest.raises(RemediationContractError, match="platform endorsement binding"):
         validate_contract_fixture(contract, platform_key, other_raw)
+
+
+def test_agent_dry_run_reports_manual_gate_without_writing(tmp_path):
+    contract, _, _ = remediation_contract_fixture()
+    (tmp_path / "etc/ssh/sshd_config.d").mkdir(parents=True)
+    (tmp_path / "etc/os-release").write_text('ID="debian"\nVERSION_ID="13"\n')
+    before = {
+        path.relative_to(tmp_path): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    }
+    result = dry_run_remediation_contract(
+        contract,
+        root=tmp_path,
+        command_lookup=lambda _: "/usr/bin/reviewed-program",
+    )
+    after = {
+        path.relative_to(tmp_path): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    }
+    assert result["status"] == "blocked"
+    assert result["execution_enabled"] is False
+    assert result["changes_applied"] is False
+    assert any(
+        item["status"] == "blocked" and "Manual confirmation" in item["detail"]
+        for item in result["action_results"][0]["checks"]
+    )
+    assert after == before
+
+
+def test_agent_dry_run_can_mark_fully_satisfied_preflight_ready(tmp_path):
+    contract, _, _ = remediation_contract_fixture()
+    action = contract["actions"][0]["action_snapshot"]
+    action["preconditions"] = [
+        item for item in action["preconditions"] if item["kind"] != "manual_confirmation"
+    ]
+    (tmp_path / "etc/ssh/sshd_config.d").mkdir(parents=True)
+    (tmp_path / "var/lib/dpkg").mkdir(parents=True)
+    (tmp_path / "var/lib/dpkg/status").write_text(
+        "Package: openssh-server\nStatus: install ok installed\n"
+    )
+    (tmp_path / "etc/os-release").write_text('ID="debian"\nVERSION_ID="13"\n')
+    result = dry_run_remediation_contract(
+        contract,
+        root=tmp_path,
+        command_lookup=lambda _: "/usr/bin/reviewed-program",
+    )
+    assert result["status"] == "ready"
+    assert result["action_results"][0]["status"] == "ready"
+    assert all(
+        item["status"] == "passed" for item in result["action_results"][0]["checks"]
+    )
+
+
+def test_agent_validation_receipt_has_an_independent_signature():
+    key = Ed25519PrivateKey.generate()
+    receipt = {
+        "schema_version": "1.0",
+        "kind": "remediation-validation-receipt",
+        "validation_id": "validation-1",
+        "change_set_id": "change-set-1",
+        "contract_digest": "a" * 64,
+        "agent_id": "agent-1",
+        "host_id": "host-1",
+        "status": "blocked",
+        "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "execution_enabled": False,
+        "changes_applied": False,
+        "agent_version": "0.8.0",
+        "agent_integrity_digest": f"sha256:{'b' * 64}",
+        "action_results": [],
+        "error": "Preflight blocked",
+    }
+    signature = sign_validation_receipt(key, receipt)
+    key.public_key().verify(base64.b64decode(signature), canonical_validation_receipt(receipt))
+
+
+def test_agent_processes_and_caches_the_exact_signed_dry_run_receipt(tmp_path, monkeypatch):
+    contract, platform_key, platform_raw = remediation_contract_fixture()
+    platform_key_path = tmp_path / "platform-command-key.pub"
+    platform_key_path.write_text(base64.b64encode(platform_raw).decode() + "\n")
+    config = {
+        "state_dir": str(tmp_path / "state"),
+        "platform_command_key_file": str(platform_key_path),
+    }
+    state = {
+        "agent_id": "agent-1",
+        "host_id": "host-1",
+        "platform_command_key_id": "platform-key-1",
+        "integrity_manifest_sha256": f"sha256:{'c' * 64}",
+    }
+    contract_digest = hashlib.sha256(
+        json.dumps(
+            contract,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    payload = {
+        "validation": {
+            "validation_id": "validation-1",
+            "change_set_id": "change-set-1",
+            "contract_digest": contract_digest,
+            "contract": contract,
+        }
+    }
+    agent_key = Ed25519PrivateKey.generate()
+    submitted = []
+
+    def accept_receipt(_config, _state, _key, _path, body, _kind):
+        submitted.append(body)
+        return {"accepted": True}
+
+    monkeypatch.setattr("agent.lsa_agent.signed_control_post", accept_receipt)
+    first = process_remediation_validation(config, state, agent_key, payload)
+    second = process_remediation_validation(config, state, agent_key, payload)
+    assert first == second
+    assert first["changes_applied"] is False
+    assert submitted[0] == submitted[1]
+    receipt = submitted[0]["receipt"]
+    assert receipt["execution_enabled"] is False
+    assert receipt["changes_applied"] is False
+    agent_key.public_key().verify(
+        base64.b64decode(submitted[0]["signature"]),
+        canonical_validation_receipt(receipt),
+    )
+    assert (tmp_path / "state/state.json").is_file()
 
 
 def test_platform_requires_https_by_default():

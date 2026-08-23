@@ -687,6 +687,37 @@ class RemediationChangeSetTarget(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class RemediationValidationJob(Base):
+    __tablename__ = "remediation_validation_jobs"
+    __table_args__ = (
+        Index(
+            "ix_remediation_validation_jobs_agent_status_requested",
+            "agent_id",
+            "status",
+            "requested_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    change_set_id: Mapped[str] = mapped_column(
+        ForeignKey("remediation_change_sets.id", ondelete="CASCADE"), index=True
+    )
+    host_id: Mapped[str] = mapped_column(ForeignKey("hosts.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("linux_agents.id"), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    contract: Mapped[dict[str, object]] = mapped_column(JSON)
+    contract_digest: Mapped[str] = mapped_column(String(64), index=True)
+    requested_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    receipt: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    receipt_signature: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

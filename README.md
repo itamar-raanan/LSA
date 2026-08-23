@@ -129,7 +129,7 @@ Agent sizing is per managed host. The figures below describe available headroom 
 | **CPU** | 1 available vCPU | 2 available vCPU during larger audit profiles |
 | **Memory** | 512 MiB available | 1 GiB available during an audit |
 | **Disk** | 500 MiB free for runtime, virtual environment, controls, state, and initial reports | 1 GiB or more, plus capacity for retained report history |
-| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.7.0 encrypts HTTPS traffic and authenticates platform control responses with a pinned Ed25519 identity, but does not validate the gateway certificate or hostname |
+| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable DNS and time synchronization; agent 0.8.0 encrypts HTTPS traffic and authenticates platform control responses with a pinned Ed25519 identity, but does not validate the gateway certificate or hostname |
 
 The host requires Python 3.11 or newer, `venv` support, systemd, and root privileges so read-only controls can inspect protected system state. Enrollment installs constrained Python dependencies into `/opt/lsa-agent/venv`, so it also requires access to the dependency source or an internal/offline package mirror. No inbound agent port is required.
 
@@ -143,7 +143,7 @@ For selected high-confidence controls, a plan also snapshots a versioned declara
 
 Approved catalog-backed plans can be prepared as signed change sets from **Security Findings → Change Sets**. The workspace shows current readiness gates, canary targets, maintenance and batch boundaries, immutable SHA-256 payload identity, and the tenant Ed25519 signature. A different administrator must authorize the envelope. This is a governance-only workflow: authorization never creates an agent task, and the current agent cannot execute a change set.
 
-Managed agents advertise `signed-change-set-planning-v1` when they can provide the identity, policy, freshness, and integrity evidence required by this workflow. Agent 0.7.0 additionally advertises `remediation-contract-validation-v1`, which can fail closed on a signed, target-bound, validation-only contract preview. The preview remains management-only and cannot create or deliver an agent task. Neither capability grants or advertises configuration-write support.
+Managed agents advertise `signed-change-set-planning-v1` when they can provide the identity, policy, freshness, and integrity evidence required by this workflow. Agent 0.8.0 additionally advertises `remediation-contract-validation-v1` and `remediation-dry-run-v1`. An administrator can explicitly queue an authorized target for a separate, platform-signed dry-run delivery. The agent validates the complete contract, performs read-only local readiness checks, and returns an independently signed receipt with `changes_applied: false`. This protocol does not create an `AgentTask`, and neither capability grants configuration-write support.
 
 Agents poll the platform rather than accepting inbound connections. Their signed heartbeats drive online, stale, and offline status. Each audit uses the shared scanner to report the same package and service inventory as offline mode. On-demand audits are persisted, allow-listed tasks consumed on the next poll—not remote shell commands.
 
@@ -228,7 +228,7 @@ curl --fail-with-body \
 Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
 
 ```bash
-sudo apt install ./lsa-agent_0.7.0_all.deb
+sudo apt install ./lsa-agent_0.8.0_all.deb
 # Copy the complete enrollment command from the console; it includes the public platform key.
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```

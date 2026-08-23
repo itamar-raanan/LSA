@@ -3,9 +3,10 @@
 ## Scope
 
 This document defines the security boundary for Stage 4 remediation work. Stage 4A
-adds a validation-only protocol contract. It does not deliver remediation to an
-agent, create a remediation task, write a file, reload a service, change a kernel
-setting, or expose a remediation route on the agent gateway.
+added a validation-only protocol contract. Stage 4B can deliver that immutable
+contract only through a separate signed validation route and accept an agent-signed
+read-only preflight receipt. It does not create a remediation task, write a file,
+reload a service, change a kernel setting, or expose a privileged executor.
 
 The protected outcome is narrower than “the platform requested a change.” A future
 executor must prove that one exact, reviewed catalog action was independently
@@ -50,7 +51,7 @@ with a signed receipt.
 | Network attacker modifies or replaces a contract | Verify the authorized change-set signature and its SHA-256 digest. |
 | Attacker substitutes their own change-signing key | Require a purpose-bound endorsement signed by the agent's pinned platform-control key. |
 | Valid contract is sent to another host or tenant | Bind tenant, agent, host, group, policy version, rollout phase, and capability inside the signed change-set payload. |
-| Old contract is replayed | Future delivery requires platform envelope sequence protection plus persistent per-change-set receipt state. Stage 4A has no delivery route. |
+| Old contract is replayed | Delivery uses platform-envelope sequence protection, a persistent validation-job state, a bounded lease, contract expiry, and idempotency only for an identical signed receipt. |
 | Authorized action is replaced after review | Recalculate the immutable action snapshot digest and match its ID, version, control, plan, and host to the signed change set. |
 | Payload smuggles executable content | Reject unknown schema fields and recursively reject shell, script, command, executable, argv, and args keys. |
 | Catalog path escapes reviewed configuration roots | Accept normalized absolute paths only under explicit reviewed prefixes; Stage 4A permits `/etc/` only. |
@@ -74,16 +75,24 @@ with a signed receipt.
   collection.
 - Every included action snapshot must match a signed plan identity and digest.
 - Unknown root fields and executable-content keys are rejected.
-- No agent gateway route serves the contract.
+- Stage 4A previews remain management-only; Stage 4B delivery is restricted to the dedicated signed validation route.
 - No `AgentTask` row is created.
 - The agent advertises `remediation-contract-validation-v1`, which explicitly does
   not authorize writes or execution.
 
-## Prerequisites for Stage 4B
+## Stage 4B invariants
 
-Stage 4B may add a local dry-run evaluator only after all Stage 4A invariants are
-covered by negative tests. It must produce a signed validation receipt, persist no
-host changes, and remain unreachable from the audit task protocol. Actual mutation
-requires a later review covering privilege separation, write-ahead backups,
-idempotency, crash recovery, automatic rollback, stop thresholds, and receipt
-reconciliation.
+- Only an administrator can explicitly queue a validation job for an authorized target.
+- The delivery and receipt routes require signed agent authentication and the exact validation capabilities.
+- The platform envelope binds the contract to one agent and provides expiry and replay protection.
+- The contract digest is recalculated before queueing, delivery, evaluation, and receipt acceptance.
+- Local evaluation reads operating-system, package, program, path, and validation-interface state only.
+- Manual or host-role confirmations remain blocked until an operator resolves them.
+- The receipt uses canonical UTC `Z` timestamps and an independent agent Ed25519 signature.
+- The receipt fixes `execution_enabled` and `changes_applied` to `false`.
+- Cancellation closes queued and delivered validation jobs.
+- `AgentTask.task_type` remains exactly `audit`.
+
+Actual mutation requires a later review covering privilege separation, write-ahead
+backups, idempotency, crash recovery, automatic rollback, stop thresholds, and
+receipt reconciliation.

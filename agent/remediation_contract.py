@@ -5,13 +5,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 
 FORBIDDEN_KEYS = {
@@ -94,6 +96,9 @@ TARGET_KEYS = {
     "rollout_phase",
     "required_capability",
     "capability_attested",
+}
+PACKAGE_RESOURCES = {
+    "openssh_server": {"openssh-server"},
 }
 
 
@@ -466,4 +471,182 @@ def validate_remediation_contract_preview(
         "action_count": len(actions),
         "platform_key_fingerprint": pinned_fingerprint,
         "change_signing_key_fingerprint": signing_descriptor["fingerprint"],
+    }
+
+
+def canonical_validation_receipt(receipt: dict[str, Any]) -> bytes:
+    return _canonical(receipt)
+
+
+def sign_validation_receipt(key: Ed25519PrivateKey, receipt: dict[str, Any]) -> str:
+    return base64.b64encode(key.sign(canonical_validation_receipt(receipt))).decode()
+
+
+def _read_os_release(root: Path) -> tuple[str, str]:
+    values: dict[str, str] = {}
+    path = root / "etc/os-release"
+    try:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" in line:
+                key, value = line.split("=", 1)
+                values[key] = value.strip().strip('"')
+    except OSError:
+        return "unknown", "unknown"
+    release_id = values.get("ID", "unknown").lower()
+    family = {"rhel": "redhat", "ol": "oraclelinux"}.get(release_id, release_id)
+    return family, values.get("VERSION_ID", "unknown")
+
+
+def _installed_packages(root: Path) -> set[str]:
+    packages: set[str] = set()
+    status_path = root / "var/lib/dpkg/status"
+    try:
+        for record in status_path.read_text(encoding="utf-8", errors="replace").split("\n\n"):
+            fields = {
+                key: value.strip()
+                for line in record.splitlines()
+                if ":" in line
+                for key, value in [line.split(":", 1)]
+            }
+            if fields.get("Status") == "install ok installed" and fields.get("Package"):
+                packages.add(fields["Package"])
+    except OSError:
+        pass
+    return packages
+
+
+def _mapped_path(root: Path, path: str) -> Path:
+    return root / path.lstrip("/")
+
+
+def _path_preflight(root: Path, path: str) -> tuple[bool, str]:
+    mapped = _mapped_path(root, path)
+    reviewed_root = (root / "etc").resolve()
+    try:
+        resolved = mapped.resolve(strict=False)
+        resolved.relative_to(reviewed_root)
+    except (OSError, ValueError):
+        return False, f"{path} resolves outside the reviewed /etc boundary"
+    parent = mapped.parent
+    if not parent.exists() or not parent.is_dir():
+        return False, f"Parent directory {parent} is unavailable"
+    if mapped.exists() and not mapped.is_file():
+        return False, f"{path} is not a regular configuration file"
+    return True, f"{path} and its parent remain inside the reviewed /etc boundary"
+
+
+def _append_check(checks: list[dict[str, str]], code: str, passed: bool, detail: str) -> None:
+    checks.append(
+        {
+            "code": code,
+            "status": "passed" if passed else "blocked",
+            "detail": detail,
+        }
+    )
+
+
+def dry_run_remediation_contract(
+    contract: dict[str, Any],
+    *,
+    root: Path = Path("/"),
+    command_lookup: Callable[[str], str | None] = shutil.which,
+) -> dict[str, Any]:
+    """Evaluate local readiness using reads only; never return executable operations."""
+
+    family, version = _read_os_release(root)
+    installed_packages = _installed_packages(root)
+    action_results: list[dict[str, Any]] = []
+    for record in contract["actions"]:
+        snapshot = record["action_snapshot"]
+        checks: list[dict[str, str]] = []
+
+        supported = any(
+            item["family"] == family and version in item["versions"]
+            for item in snapshot["supported_systems"]
+        )
+        _append_check(
+            checks,
+            "supported_system",
+            supported,
+            f"Detected {family} {version}; action support {'matches' if supported else 'does not match'}",
+        )
+        for index, parameter in enumerate(snapshot["parameters"]):
+            default = parameter["default"]
+            parameter_type = parameter["type"]
+            typed = (
+                (parameter_type == "boolean" and type(default) is bool)
+                or (parameter_type == "integer" and type(default) is int)
+                or (parameter_type in {"enum", "string"} and isinstance(default, str))
+            )
+            allowed = not parameter["allowed_values"] or default in parameter["allowed_values"]
+            _append_check(
+                checks,
+                f"parameter_{index}",
+                typed and allowed and (default is not None or not parameter["required"]),
+                f"Parameter {parameter['name']} uses its reviewed typed default",
+            )
+        for index, precondition in enumerate(snapshot["preconditions"]):
+            kind = precondition["kind"]
+            resource = precondition["resource"]
+            if kind == "command_available":
+                passed = command_lookup(resource) is not None
+                detail = f"Required program {resource} {'is' if passed else 'is not'} available"
+            elif kind == "package_present":
+                package_names = PACKAGE_RESOURCES.get(resource, set())
+                passed = bool(package_names & installed_packages)
+                detail = (
+                    f"Required package resource {resource} "
+                    f"{'is' if passed else 'is not'} installed"
+                )
+            elif kind == "manual_confirmation":
+                passed = False
+                detail = f"Manual confirmation is still required: {precondition['description']}"
+            else:
+                passed = False
+                detail = f"Host-role exclusion requires operator confirmation: {resource}"
+            _append_check(checks, f"precondition_{index}", passed, detail)
+        for index, operation in enumerate(snapshot["operations"]):
+            kind = operation["kind"]
+            path = operation["path"]
+            if path is not None:
+                passed, detail = _path_preflight(root, path)
+            elif kind in {"service_reload", "sysctl_reload"}:
+                program = "systemctl" if kind == "service_reload" else "sysctl"
+                passed = command_lookup(program) is not None
+                detail = f"Required reload interface {program} {'is' if passed else 'is not'} available"
+            else:
+                passed = False
+                detail = f"Operation {kind} has no reviewed local resource"
+            _append_check(checks, f"operation_{index}", passed, detail)
+        for index, validation in enumerate(snapshot["validation"]):
+            if validation["kind"] == "effective_setting":
+                program = "sshd" if validation["resource"] == "openssh_server" else validation["resource"]
+                passed = command_lookup(program) is not None
+                detail = f"Validation interface {program} {'is' if passed else 'is not'} available"
+            else:
+                proc_path = _mapped_path(
+                    root,
+                    "/proc/sys/" + validation["key"].replace(".", "/"),
+                )
+                passed = proc_path.is_file()
+                detail = f"Kernel validation path {proc_path} {'is' if passed else 'is not'} readable"
+            _append_check(checks, f"validation_{index}", passed, detail)
+        ready = all(item["status"] == "passed" for item in checks)
+        action_results.append(
+            {
+                "plan_id": record["plan_id"],
+                "action_digest": record["action_digest"],
+                "status": "ready" if ready else "blocked",
+                "checks": checks,
+            }
+        )
+    return {
+        "status": (
+            "ready"
+            if action_results and all(item["status"] == "ready" for item in action_results)
+            else "blocked"
+        ),
+        "action_results": action_results,
+        "execution_enabled": False,
+        "changes_applied": False,
     }

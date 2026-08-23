@@ -24,6 +24,8 @@ The API exposes these management routes:
 - `POST /api/v1/remediation-change-sets`
 - `GET /api/v1/remediation-change-sets/{change_set_id}`
 - `GET /api/v1/remediation-change-sets/{change_set_id}/execution-contract-preview/{agent_id}`
+- `GET /api/v1/remediation-change-sets/{change_set_id}/validation-jobs`
+- `POST /api/v1/remediation-change-sets/{change_set_id}/validation-jobs`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/authorize`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/cancel`
 
@@ -132,3 +134,21 @@ digests, operation vocabulary, reviewed paths, backups, validation, and rollback
 The preview remains management-only, creates no agent task, and carries explicit
 `execution_enabled: false` and `dispatch_enabled: false` locks. See
 [the remediation execution threat model](remediation-execution-threat-model.md).
+
+#### Stage 4B — read-only preflight and signed receipts
+
+An administrator can explicitly queue one authorized target for validation. This
+creates a `RemediationValidationJob`, not an `AgentTask`. The dedicated agent route
+delivers the immutable contract inside the existing short-lived, agent-bound,
+replay-protected platform envelope. The agent repeats every Stage 4A trust check,
+then performs read-only operating-system, package, program, reviewed-path, and
+validation-interface preflight checks. Manual confirmations remain blocked rather
+than being guessed or bypassed.
+
+The agent signs a canonical receipt with its enrolled Ed25519 identity. The receipt
+binds the validation job, change set, contract digest, agent, host, agent version,
+runtime-integrity digest, action results, and evaluation time. Both
+`execution_enabled` and `changes_applied` are fixed to `false`. Receipt submission
+is idempotent only for the identical signed document. Cancellation expires queued
+or delivered validation jobs. No shell content, configuration writes, reloads,
+audit task type changes, or privileged executor exist in this stage.

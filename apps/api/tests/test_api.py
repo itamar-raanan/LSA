@@ -1183,11 +1183,13 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
                 name=host.hostname,
                 public_key=signing_key.public_key,
                 fingerprint=signing_key.fingerprint,
-                agent_version="0.7.0",
+                agent_version="0.8.0",
                 capabilities=[
                     "audit",
                     "signed-change-set-planning-v1",
                     "remediation-contract-validation-v1",
+                    "remediation-dry-run-v1",
+                    "signed-platform-control-v1",
                 ],
                 capabilities_attested_at=now_utc(),
                 last_seen_at=now_utc(),
@@ -1263,11 +1265,13 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
 
     heartbeat_body = json.dumps(
         {
-            "agent_version": "0.7.0",
+            "agent_version": "0.8.0",
             "capabilities": [
                 "audit",
                 "signed-change-set-planning-v1",
                 "remediation-contract-validation-v1",
+                "remediation-dry-run-v1",
+                "signed-platform-control-v1",
             ],
             "policy_version": 1,
         },
@@ -1394,6 +1398,138 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
     Ed25519PublicKey.from_public_bytes(b64decode(platform_key.public_key)).verify(
         b64decode(contract["platform_endorsement_signature"]), endorsement_bytes
     )
+    queued_validation = client.post(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/validation-jobs",
+        headers=reviewer_headers,
+        json={"agent_id": agent_id},
+    )
+    assert queued_validation.status_code == 202, queued_validation.text
+    validation_job = queued_validation.json()
+    assert validation_job["status"] == "queued"
+    assert validation_job["execution_enabled"] is False
+    assert validation_job["changes_applied"] is False
+    assert validation_job["contract"] == contract
+
+    validation_path = "/api/v1/agent/remediation-validations/next"
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    validation_message = (
+        f"GET\n{validation_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}"
+    ).encode()
+    delivered = client.get(
+        validation_path,
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(validation_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert delivered.status_code == 200, delivered.text
+    delivered_payload = delivered.json()["platform_envelope"]["payload"]["validation"]
+    assert delivered_payload["validation_id"] == validation_job["id"]
+    assert delivered_payload["contract_digest"] == validation_job["contract_digest"]
+    assert delivered_payload["contract"] == contract
+
+    receipt = {
+        "schema_version": "1.0",
+        "kind": "remediation-validation-receipt",
+        "validation_id": validation_job["id"],
+        "change_set_id": change_set["id"],
+        "contract_digest": validation_job["contract_digest"],
+        "agent_id": agent_id,
+        "host_id": plan["host_id"],
+        "status": "ready",
+        "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "execution_enabled": False,
+        "changes_applied": False,
+        "agent_version": "0.8.0",
+        "agent_integrity_digest": f"sha256:{'a' * 64}",
+        "action_results": [
+            {
+                "plan_id": item["plan_id"],
+                "action_digest": item["action_digest"],
+                "status": "ready",
+                "checks": [
+                    {
+                        "code": "test_read_only_preflight",
+                        "status": "passed",
+                        "detail": "Read-only preflight completed without applying changes",
+                    }
+                ],
+            }
+            for item in contract["actions"]
+        ],
+        "error": None,
+    }
+    receipt_signature = b64encode(
+        change_agent_private_key.sign(
+            json.dumps(
+                receipt,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        )
+    ).decode()
+    receipt_path = (
+        f"/api/v1/agent/remediation-validations/{validation_job['id']}/receipt"
+    )
+    rejected_body = json.dumps(
+        {"receipt": receipt, "signature": b64encode(b"0" * 64).decode()},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    rejected_message = (
+        f"POST\n{receipt_path}\n{timestamp}\n{hashlib.sha256(rejected_body).hexdigest()}"
+    ).encode()
+    rejected_receipt = client.post(
+        receipt_path,
+        content=rejected_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(rejected_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert rejected_receipt.status_code == 409
+    receipt_body = json.dumps(
+        {"receipt": receipt, "signature": receipt_signature},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    receipt_message = (
+        f"POST\n{receipt_path}\n{timestamp}\n{hashlib.sha256(receipt_body).hexdigest()}"
+    ).encode()
+    accepted_receipt = client.post(
+        receipt_path,
+        content=receipt_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(receipt_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert accepted_receipt.status_code == 200, accepted_receipt.text
+    receipt_payload = accepted_receipt.json()["platform_envelope"]["payload"]
+    assert receipt_payload["accepted"] is True
+    assert receipt_payload["status"] == "ready"
+    stored_validations = client.get(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/validation-jobs",
+        headers=reviewer_headers,
+    )
+    assert stored_validations.status_code == 200
+    assert stored_validations.json()[0]["receipt"] == receipt
+    assert stored_validations.json()[0]["receipt_signature"] == receipt_signature
     with SessionLocal() as db:
         assert db.scalar(select(AgentTask)) is None
         events = db.scalars(select(AuditEvent).where(AuditEvent.target_id == change_set["id"])).all()

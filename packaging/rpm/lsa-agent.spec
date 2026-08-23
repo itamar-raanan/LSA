@@ -52,6 +52,9 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Sun Aug 23 2026 Linux Security Auditor - 0.8.0-1
+- Add read-only remediation preflight and agent-signed validation receipts.
+
 * Sun Aug 23 2026 Linux Security Auditor - 0.7.0-1
 - Add fail-closed validation for signed, non-executable remediation contract previews.
 

@@ -39,6 +39,7 @@ import type {
   RemediationPlanStatus,
   RemediationChangeSet,
   RemediationChangeSetStatus,
+  RemediationValidationJob,
 } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -409,6 +410,15 @@ export const api = {
   },
   cancelRemediationChangeSet(changeSetId: string, reason: string): Promise<RemediationChangeSet> {
     return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) })
+  },
+  remediationValidationJobs(changeSetId: string): Promise<RemediationValidationJob[]> {
+    return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/validation-jobs`)
+  },
+  queueRemediationValidation(changeSetId: string, agentId: string): Promise<RemediationValidationJob> {
+    return request(`/remediation-change-sets/${encodeURIComponent(changeSetId)}/validation-jobs`, {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId }),
+    })
   },
   async uploadBundle(file: File, ingestionToken: string): Promise<Record<string, unknown>> {
     const body = new FormData()
