@@ -19,6 +19,7 @@ from lsa.models import (
     Host,
     LinuxAgent,
     PlatformChangeSigningKey,
+    PlatformCommandSigningKey,
     RemediationChangeSet,
     RemediationChangeSetPlan,
     RemediationChangeSetTarget,
@@ -35,6 +36,7 @@ from lsa.schemas import (
     RemediationChangeSetPlanResponse,
     RemediationChangeSetResponse,
     RemediationChangeSetTargetResponse,
+    RemediationExecutionContractPreview,
 )
 from lsa.services.change_set_signing import (
     active_change_signing_key,
@@ -43,10 +45,12 @@ from lsa.services.change_set_signing import (
     verify_change_set_signature,
 )
 from lsa.services.remediation_catalog import RemediationCatalogError
+from lsa.services.remediation_execution_contract import build_validation_contract
 
 
 router = APIRouter(prefix="/remediation-change-sets", tags=["remediation change sets"])
 ACTIVE_STATUSES = ("pending_authorization", "authorized")
+REMEDIATION_CONTRACT_VALIDATION_CAPABILITY = "remediation-contract-validation-v1"
 DEFAULT_LIMITS = {
     "remediation_four_eyes": True,
     "remediation_required_capability": "signed-change-set-planning-v1",
@@ -757,6 +761,121 @@ def get_change_set(
     db: Session = Depends(get_db),
 ) -> RemediationChangeSetResponse:
     return _serialize(db, _change_set(db, user, change_set_id))
+
+
+@router.get(
+    "/{change_set_id}/execution-contract-preview/{agent_id}",
+    response_model=RemediationExecutionContractPreview,
+)
+def execution_contract_preview(
+    change_set_id: str,
+    agent_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> RemediationExecutionContractPreview:
+    require_admin(user)
+    change_set = _change_set(db, user, change_set_id)
+    if change_set.status != "authorized":
+        raise HTTPException(
+            status_code=409,
+            detail="Only an authorized change set can produce a validation contract",
+        )
+    try:
+        _assert_envelope_integrity(db, change_set)
+    except RemediationCatalogError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if change_set.signature is None or change_set.signing_key_id is None:
+        raise HTTPException(status_code=409, detail="Authorized change-set signature is missing")
+    change_signing_key = db.get(PlatformChangeSigningKey, change_set.signing_key_id)
+    if (
+        change_signing_key is None
+        or change_signing_key.tenant_id != user.tenant_id
+        or change_signing_key.revoked_at is not None
+        or not verify_change_set_signature(
+            change_signing_key.public_key,
+            change_set.payload,
+            change_set.signature,
+        )
+    ):
+        raise HTTPException(status_code=409, detail="Authorized change-set signature does not verify")
+    target_link = db.scalar(
+        select(RemediationChangeSetTarget).where(
+            RemediationChangeSetTarget.change_set_id == change_set.id,
+            RemediationChangeSetTarget.agent_id == agent_id,
+        )
+    )
+    if target_link is None:
+        raise HTTPException(status_code=404, detail="Agent is not a target of this change set")
+    agent = db.get(LinuxAgent, target_link.agent_id)
+    if (
+        agent is None
+        or agent.tenant_id != user.tenant_id
+        or agent.revoked_at is not None
+        or REMEDIATION_CONTRACT_VALIDATION_CAPABILITY not in (agent.capabilities or [])
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Target agent has not attested validation-only remediation contract support",
+        )
+    platform_key = (
+        db.get(PlatformCommandSigningKey, agent.platform_command_key_id)
+        if agent.platform_command_key_id is not None
+        else None
+    )
+    if (
+        platform_key is None
+        or platform_key.tenant_id != user.tenant_id
+        or platform_key.status != "active"
+        or platform_key.revoked_at is not None
+        or platform_key.fingerprint != agent.platform_command_key_fingerprint
+    ):
+        raise HTTPException(status_code=409, detail="Target agent platform trust is unavailable")
+    payload_targets = _envelope_records(change_set, "targets")
+    target = next(
+        (
+            item
+            for item in payload_targets
+            if item.get("agent_id") == agent.id and item.get("host_id") == agent.host_id
+        ),
+        None,
+    )
+    if target is None:
+        raise HTTPException(status_code=409, detail="Signed target binding is unavailable")
+    actions: list[dict[str, object]] = []
+    for link in db.scalars(
+        select(RemediationChangeSetPlan).where(
+            RemediationChangeSetPlan.change_set_id == change_set.id
+        )
+    ).all():
+        plan = db.get(RemediationPlan, link.plan_id)
+        if plan is None or plan.host_id != agent.host_id:
+            continue
+        try:
+            action = _stored_action(plan)
+        except RemediationCatalogError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if action is None:
+            raise HTTPException(status_code=409, detail="Target plan has no reviewed action")
+        actions.append(
+            {
+                "plan_id": plan.id,
+                "host_id": plan.host_id,
+                "control_id": plan.control_id,
+                "action_id": action.action_id,
+                "action_version": action.version,
+                "action_digest": action.digest,
+                "action_snapshot": action.model_dump(mode="json"),
+            }
+        )
+    if not actions:
+        raise HTTPException(status_code=409, detail="Target has no reviewed remediation actions")
+    return build_validation_contract(
+        change_set=change_set,
+        change_signing_key=change_signing_key,
+        platform_command_key=platform_key,
+        target=dict(target),
+        actions=sorted(actions, key=lambda item: str(item["plan_id"])),
+    )
 
 
 @router.post("/{change_set_id}/authorize", response_model=RemediationChangeSetResponse)

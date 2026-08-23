@@ -36,7 +36,7 @@ except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
 
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -44,6 +44,7 @@ AGENT_CAPABILITIES = (
     "runtime-integrity",
     "policy-rollback-protection",
     "signed-change-set-planning-v1",
+    "remediation-contract-validation-v1",
     "signed-platform-control-v1",
     "platform-key-rotation-v1",
 )

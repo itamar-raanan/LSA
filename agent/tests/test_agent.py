@@ -23,6 +23,11 @@ from agent.lsa_agent import (
     verify_control_response,
     verify_platform_envelope,
 )
+from agent.remediation_contract import (
+    RemediationContractError,
+    validate_remediation_contract_preview,
+)
+from lsa.services.remediation_catalog import load_remediation_catalog
 
 
 def test_runtime_version_matches_packaging_release():
@@ -33,7 +38,193 @@ def test_agent_attests_governance_planning_without_write_execution():
     assert "signed-change-set-planning-v1" in AGENT_CAPABILITIES
     assert "signed-platform-control-v1" in AGENT_CAPABILITIES
     assert "platform-key-rotation-v1" in AGENT_CAPABILITIES
+    assert "remediation-contract-validation-v1" in AGENT_CAPABILITIES
     assert all("execute" not in capability and "write" not in capability for capability in AGENT_CAPABILITIES)
+
+
+def remediation_contract_fixture() -> tuple[dict, Ed25519PrivateKey, bytes]:
+    platform_key = Ed25519PrivateKey.generate()
+    platform_raw = platform_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    change_key = Ed25519PrivateKey.generate()
+    change_raw = change_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    change_descriptor = {
+        "key_id": "change-key-1",
+        "algorithm": "Ed25519",
+        "public_key": base64.b64encode(change_raw).decode(),
+        "fingerprint": hashlib.sha256(change_raw).hexdigest(),
+    }
+    action = next(
+        item for item in load_remediation_catalog() if "CIS-DEBIAN13-5.1.21" in item.control_ids
+    ).model_dump(mode="json")
+    target = {
+        "host_id": "host-1",
+        "hostname": "host-1.example.test",
+        "agent_id": "agent-1",
+        "group_id": "group-1",
+        "group_name": "Canary Linux",
+        "policy_id": "policy-1",
+        "policy_name": "Remediation (Approval Required)",
+        "policy_version": 4,
+        "rollout_phase": "canary",
+        "required_capability": "signed-change-set-planning-v1",
+        "capability_attested": True,
+    }
+    plan = {
+        "plan_id": "plan-1",
+        "host_id": "host-1",
+        "report_id": "report-1",
+        "control_id": "CIS-DEBIAN13-5.1.21",
+        "action_id": action["action_id"],
+        "action_version": action["version"],
+        "action_digest": action["digest"],
+    }
+    start = datetime.now(UTC) + timedelta(minutes=10)
+    payload = {
+        "schema_version": "1.0",
+        "change_set_id": "change-set-1",
+        "tenant_id": "tenant-1",
+        "requested_at": datetime.now(UTC).isoformat(),
+        "maintenance_window": {
+            "start": start.isoformat(),
+            "end": (start + timedelta(hours=2)).isoformat(),
+        },
+        "rollout": {"strategy": "canary", "batch_size": 1, "batch_interval_minutes": 15},
+        "safeguards": {
+            "execution_enabled": False,
+            "four_eyes_required": True,
+            "post_change_verification_required": True,
+            "rollback_checkpoint_required": True,
+        },
+        "plans": [plan],
+        "targets": [target],
+    }
+    canonical_payload = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    endorsement = {
+        "schema_version": "1.0",
+        "kind": "change-signing-key-endorsement",
+        "tenant_id": "tenant-1",
+        "purpose": "remediation-validation",
+        "platform_command_key_id": "platform-key-1",
+        "change_signing_key": change_descriptor,
+    }
+    canonical_endorsement = json.dumps(
+        endorsement, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    contract = {
+        "schema_version": "1.0",
+        "contract_type": "remediation-validation",
+        "mode": "validate_only",
+        "execution_enabled": False,
+        "dispatch_enabled": False,
+        "change_set": {
+            "change_set_id": "change-set-1",
+            "tenant_id": "tenant-1",
+            "digest": hashlib.sha256(canonical_payload).hexdigest(),
+            "payload": payload,
+            "signature": base64.b64encode(change_key.sign(canonical_payload)).decode(),
+            "signing_key": change_descriptor,
+        },
+        "platform_endorsement": endorsement,
+        "platform_endorsement_signature": base64.b64encode(
+            platform_key.sign(canonical_endorsement)
+        ).decode(),
+        "target": dict(target),
+        "actions": [
+            {
+                "plan_id": "plan-1",
+                "host_id": "host-1",
+                "control_id": "CIS-DEBIAN13-5.1.21",
+                "action_id": action["action_id"],
+                "action_version": action["version"],
+                "action_digest": action["digest"],
+                "action_snapshot": action,
+            }
+        ],
+    }
+    return contract, platform_key, platform_raw
+
+
+def validate_contract_fixture(contract, platform_key, platform_raw):
+    return validate_remediation_contract_preview(
+        contract,
+        pinned_platform_key=platform_key.public_key(),
+        pinned_platform_raw=platform_raw,
+        expected_platform_key_id="platform-key-1",
+        expected_agent_id="agent-1",
+        expected_host_id="host-1",
+    )
+
+
+def test_agent_validates_contract_without_exposing_an_execution_payload():
+    contract, platform_key, platform_raw = remediation_contract_fixture()
+    result = validate_contract_fixture(contract, platform_key, platform_raw)
+    assert result["validated"] is True
+    assert result["mode"] == "validate_only"
+    assert result["execution_enabled"] is False
+    assert result["dispatch_enabled"] is False
+    assert result["action_count"] == 1
+    assert "actions" not in result
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda value: value.update({"execution_enabled": True}), "safety lock"),
+        (
+            lambda value: value["target"].update({"agent_id": "agent-other"}),
+            "target binding",
+        ),
+        (
+            lambda value: value["actions"][0]["action_snapshot"].update(
+                {"command": "touch /tmp/unsafe"}
+            ),
+            "schema is invalid",
+        ),
+        (
+            lambda value: value["actions"][0].update({"action_digest": "0" * 64}),
+            "does not match",
+        ),
+        (
+            lambda value: value["actions"][0]["action_snapshot"].update({"rollback": []}),
+            "digest is invalid",
+        ),
+    ],
+)
+def test_agent_rejects_mutated_or_executable_contracts(mutation, message):
+    contract, platform_key, platform_raw = remediation_contract_fixture()
+    mutation(contract)
+    with pytest.raises(RemediationContractError, match=message):
+        validate_contract_fixture(contract, platform_key, platform_raw)
+
+
+def test_agent_rejects_unendorsed_change_signing_key():
+    contract, platform_key, platform_raw = remediation_contract_fixture()
+    replacement = Ed25519PrivateKey.generate().public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    contract["platform_endorsement"]["change_signing_key"] = {
+        "key_id": "attacker-key",
+        "algorithm": "Ed25519",
+        "public_key": base64.b64encode(replacement).decode(),
+        "fingerprint": hashlib.sha256(replacement).hexdigest(),
+    }
+    with pytest.raises(RemediationContractError, match="platform endorsement signature"):
+        validate_contract_fixture(contract, platform_key, platform_raw)
+
+
+def test_agent_rejects_mismatched_pinned_platform_key_material():
+    contract, platform_key, _ = remediation_contract_fixture()
+    other_raw = Ed25519PrivateKey.generate().public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    with pytest.raises(RemediationContractError, match="platform endorsement binding"):
+        validate_contract_fixture(contract, platform_key, other_raw)
 
 
 def test_platform_requires_https_by_default():

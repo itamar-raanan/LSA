@@ -997,3 +997,16 @@ class RemediationChangeSetResponse(BaseModel):
     )
     created_at: datetime
     updated_at: datetime
+
+
+class RemediationExecutionContractPreview(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+    contract_type: Literal["remediation-validation"] = "remediation-validation"
+    mode: Literal["validate_only"] = "validate_only"
+    execution_enabled: Literal[False] = False
+    dispatch_enabled: Literal[False] = False
+    change_set: dict[str, Any]
+    platform_endorsement: dict[str, Any]
+    platform_endorsement_signature: str
+    target: dict[str, Any]
+    actions: list[dict[str, Any]]
