@@ -11,14 +11,14 @@ From **Agents** in the console, choose **Install agent** and download the Debian
 For Debian 13 or Ubuntu 24.04+:
 
 ```bash
-sudo apt install ./lsa-agent_0.8.0_all.deb
+sudo apt install ./lsa-agent_0.9.0_all.deb
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
 For RHEL, Rocky Linux, or AlmaLinux 9+:
 
 ```bash
-sudo dnf install ./lsa-agent-0.8.0-1.noarch.rpm
+sudo dnf install ./lsa-agent-0.9.0-1.noarch.rpm
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
@@ -29,8 +29,8 @@ For the universal archive:
 Create a one-time enrollment token for the target group, then run:
 
 ```bash
-tar -xzf lsa-agent-0.8.0-linux-universal.tar.gz
-cd lsa-agent-0.8.0
+tar -xzf lsa-agent-0.9.0-linux-universal.tar.gz
+cd lsa-agent-0.9.0
 sudo ./install.sh --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
@@ -40,9 +40,9 @@ The console-generated command transparently installs the tenant's public Ed25519
 
 The same command accepts either a one-time enrollment token or the tenant's reusable automation token. Reusable tokens are intended for secret-managed provisioning systems: LSA never displays them again, can cap their successful uses, tracks their last use, and allows immediate revocation. They do not bypass platform-key pinning or the audit-only safety lock.
 
-The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.8.0 does not validate the gateway certificate or hostname. Instead, platform identity is authenticated at the application layer. Enrollment, policy, heartbeat, task, remediation-validation, and acknowledgement responses use short-lived Ed25519-signed envelopes bound to the agent identity and a strictly increasing persisted sequence. The agent rejects unsigned, altered, expired, future-dated, misbound, or replayed control responses. Two-phase key rotation accepts a replacement only after both the current and next platform keys sign the same proposal, then acknowledges it before activation. The audit task protocol remains restricted to `audit`. The agent does not use the management console port.
+The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.9.0 does not validate the gateway certificate or hostname. Instead, platform identity is authenticated at the application layer. Enrollment, policy, heartbeat, task, remediation-validation, and acknowledgement responses use short-lived Ed25519-signed envelopes bound to the agent identity and a strictly increasing persisted sequence. The agent rejects unsigned, altered, expired, future-dated, misbound, or replayed control responses. Two-phase key rotation accepts a replacement only after both the current and next platform keys sign the same proposal, then acknowledges it before activation. The audit task protocol remains restricted to `audit`. The agent does not use the management console port.
 
-The agent advertises `signed-change-set-planning-v1` so the management plane can verify that it supplies the identity, freshness, policy, and integrity evidence needed for signed governance planning. Release 0.8.0 also advertises `remediation-contract-validation-v1` and `remediation-dry-run-v1`. When an administrator explicitly queues a target, the agent verifies the pinned platform endorsement, change-set signature, target binding, immutable action digest, maintenance window, reviewed operation vocabulary, backup coverage, and rollback coverage. It then reads operating-system, package, command, path, and validation-interface readiness without creating or modifying files. The resulting receipt is signed with the agent identity and states `execution_enabled: false` and `changes_applied: false`. There is still no configuration-write executor, and task consumption remains restricted to `audit`.
+The agent advertises `signed-change-set-planning-v1` so the management plane can verify that it supplies the identity, freshness, policy, and integrity evidence needed for signed governance planning. Release 0.9.0 also advertises `remediation-contract-validation-v1`, `remediation-dry-run-v1`, and `remediation-recovery-planning-v1`. When an administrator explicitly queues a target, the agent verifies the complete trust contract, reads local readiness, and compiles deterministic checkpoint identities from the reviewed action and rollback operations. It records whether each source is absent or a safely opened regular file, including the original digest, size, ownership, and mode when present. Symbolic links, ambiguous restores, sources over 8 MiB, and multiple actions targeting the same path block the plan. No backup is created, no configuration is modified, and the signed receipt fixes `execution_enabled: false`, `backup_created: false`, and `changes_applied: false`.
 
 The daemon polls every 60 seconds by default while scheduled audits continue to follow the group policy interval and jitter. **Run audit now** queues only the built-in `audit` task. The signed protocol cannot carry a command, script, or remediation payload, and the agent reports completion or a bounded failure message back to the console.
 

@@ -32,6 +32,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 try:
     from .integrity import verify_manifest
+    from .remediation_recovery import compile_recovery_plan
     from .remediation_contract import (
         RemediationContractError,
         dry_run_remediation_contract,
@@ -40,6 +41,7 @@ try:
     )
 except ImportError:  # executed directly by the systemd unit
     from integrity import verify_manifest
+    from remediation_recovery import compile_recovery_plan
     from remediation_contract import (
         RemediationContractError,
         dry_run_remediation_contract,
@@ -48,7 +50,7 @@ except ImportError:  # executed directly by the systemd unit
     )
 
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -58,6 +60,7 @@ AGENT_CAPABILITIES = (
     "signed-change-set-planning-v1",
     "remediation-contract-validation-v1",
     "remediation-dry-run-v1",
+    "remediation-recovery-planning-v1",
     "signed-platform-control-v1",
     "platform-key-rotation-v1",
 )
@@ -680,6 +683,7 @@ def process_remediation_validation(
     else:
         error: str | None = None
         action_results: list[dict[str, Any]] = []
+        recovery_plan: dict[str, Any] | None = None
         status = "blocked"
         try:
             pinned_key, pinned_raw = load_platform_command_key(config)
@@ -694,6 +698,9 @@ def process_remediation_validation(
             dry_run = dry_run_remediation_contract(contract)
             status = str(dry_run["status"])
             action_results = list(dry_run["action_results"])
+            recovery_plan = compile_recovery_plan(contract)
+            if recovery_plan["status"] != "ready":
+                status = "blocked"
         except RemediationContractError as exc:
             error = f"Contract validation failed: {exc}"
         receipt = {
@@ -711,6 +718,7 @@ def process_remediation_validation(
             "agent_version": VERSION,
             "agent_integrity_digest": str(state["integrity_manifest_sha256"]),
             "action_results": action_results,
+            "recovery_plan": recovery_plan,
             "error": error,
         }
         receipt_signature = sign_validation_receipt(key, receipt)

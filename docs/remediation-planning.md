@@ -1,6 +1,6 @@
 # Remediation planning
 
-LSA remediation is being introduced in security-gated stages. The current stage compiles approved, catalog-backed plans into immutable signed change sets with canary and maintenance boundaries. It still gives neither the platform nor the agent any ability to change a host.
+LSA remediation is being introduced in security-gated stages. The current stage compiles approved, catalog-backed plans into immutable signed change sets, delivers read-only preflight contracts, and records signed recovery readiness. It still gives neither the platform nor the agent any ability to change a host.
 
 ## Current workflow
 
@@ -152,3 +152,25 @@ runtime-integrity digest, action results, and evaluation time. Both
 is idempotent only for the identical signed document. Cancellation expires queued
 or delivered validation jobs. No shell content, configuration writes, reloads,
 audit task type changes, or privileged executor exist in this stage.
+
+#### Stage 4C — deterministic recovery planning
+
+Agent 0.9.0 extends the signed preflight receipt with a recovery plan derived from
+the immutable contract. Each backup-required operation is paired with exactly one
+reviewed restore operation and receives a deterministic checkpoint identity. For an
+existing regular file, the agent records its SHA-256 digest, size, ownership, and
+mode; an absent file is recorded explicitly so rollback can require removal of a
+future created file. Rollback order is the exact reverse of checkpoint order.
+
+The recovery planner safely opens regular files without following the final symbolic
+link and rejects symbolic-link parents, non-regular files, sources larger than 8 MiB,
+missing or ambiguous restore coverage, and multiple actions targeting the same path.
+The platform independently reconstructs checkpoint identities and coverage before
+accepting the agent signature. Older 0.8 receipts remain verifiable, while an agent
+advertising `remediation-recovery-planning-v1` must include a valid plan unless the
+contract itself failed validation.
+
+This is still planning only. `backup_created`, `execution_enabled`, and
+`changes_applied` remain `false`; the journal state is fixed to `planned`. There is
+no backup store, mutation primitive, service controller, sysctl writer, subprocess,
+or execution dispatch route.

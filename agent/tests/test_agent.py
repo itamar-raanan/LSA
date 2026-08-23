@@ -31,6 +31,7 @@ from agent.remediation_contract import (
     sign_validation_receipt,
     validate_remediation_contract_preview,
 )
+from agent.remediation_recovery import compile_recovery_plan
 from lsa.services.remediation_catalog import load_remediation_catalog
 
 
@@ -44,6 +45,7 @@ def test_agent_attests_governance_planning_without_write_execution():
     assert "platform-key-rotation-v1" in AGENT_CAPABILITIES
     assert "remediation-contract-validation-v1" in AGENT_CAPABILITIES
     assert "remediation-dry-run-v1" in AGENT_CAPABILITIES
+    assert "remediation-recovery-planning-v1" in AGENT_CAPABILITIES
     assert all("execute" not in capability and "write" not in capability for capability in AGENT_CAPABILITIES)
 
 
@@ -285,6 +287,51 @@ def test_agent_dry_run_can_mark_fully_satisfied_preflight_ready(tmp_path):
     )
 
 
+def test_agent_compiles_read_only_recovery_plan_with_original_file_evidence(tmp_path):
+    contract, _, _ = remediation_contract_fixture()
+    target = tmp_path / "etc/ssh/sshd_config.d/90-lsa-hardening.conf"
+    target.parent.mkdir(parents=True)
+    target.write_text("PermitRootLogin yes\n", encoding="utf-8")
+    target.chmod(0o640)
+    before = target.read_bytes()
+
+    plan = compile_recovery_plan(contract, root=tmp_path)
+
+    assert plan["status"] == "ready"
+    assert plan["execution_enabled"] is False
+    assert plan["changes_applied"] is False
+    assert plan["journal_state"] == "planned"
+    assert len(plan["entries"]) == 1
+    entry = plan["entries"][0]
+    assert entry["source_state"] == "regular_file"
+    assert entry["source_digest"] == f"sha256:{hashlib.sha256(before).hexdigest()}"
+    assert entry["mode"] == "0640"
+    assert entry["backup_created"] is False
+    assert plan["rollback_order"] == [entry["checkpoint_id"]]
+    assert target.read_bytes() == before
+
+
+def test_agent_recovery_plan_blocks_symbolic_links_and_overlapping_actions(tmp_path):
+    contract, _, _ = remediation_contract_fixture()
+    target = tmp_path / "etc/ssh/sshd_config.d/90-lsa-hardening.conf"
+    target.parent.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.write_text("unsafe\n", encoding="utf-8")
+    target.symlink_to(outside)
+
+    symbolic = compile_recovery_plan(contract, root=tmp_path)
+    assert symbolic["status"] == "blocked"
+    assert "symbolic link" in symbolic["entries"][0]["detail"]
+
+    target.unlink()
+    duplicate = dict(contract["actions"][0])
+    duplicate["plan_id"] = "plan-2"
+    contract["actions"].append(duplicate)
+    overlapping = compile_recovery_plan(contract, root=tmp_path)
+    assert overlapping["status"] == "blocked"
+    assert all("multiple actions" in entry["detail"] for entry in overlapping["entries"])
+
+
 def test_agent_validation_receipt_has_an_independent_signature():
     key = Ed25519PrivateKey.generate()
     receipt = {
@@ -299,7 +346,7 @@ def test_agent_validation_receipt_has_an_independent_signature():
         "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "execution_enabled": False,
         "changes_applied": False,
-        "agent_version": "0.8.0",
+        "agent_version": "0.9.0",
         "agent_integrity_digest": f"sha256:{'b' * 64}",
         "action_results": [],
         "error": "Preflight blocked",
@@ -354,6 +401,8 @@ def test_agent_processes_and_caches_the_exact_signed_dry_run_receipt(tmp_path, m
     receipt = submitted[0]["receipt"]
     assert receipt["execution_enabled"] is False
     assert receipt["changes_applied"] is False
+    assert receipt["recovery_plan"]["execution_enabled"] is False
+    assert receipt["recovery_plan"]["backup_before_write"] is True
     agent_key.public_key().verify(
         base64.b64decode(submitted[0]["signature"]),
         canonical_validation_receipt(receipt),

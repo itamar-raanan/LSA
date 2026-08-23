@@ -51,6 +51,8 @@ Stage 4A adds a management-only, target-specific validation preview around an au
 
 Stage 4B adds an explicitly queued, validation-only data-plane path that remains separate from `AgentTask`. The platform sends the frozen contract inside the signed control envelope on TCP 8444. The agent performs local reads only and signs a receipt binding the contract digest, host identity, runtime-integrity digest, and per-action readiness checks. The platform verifies that receipt against the enrolled agent public key and stores it in a dedicated validation-job ledger. Neither side exposes a mutation operation or remediation task type.
 
+Stage 4C adds deterministic recovery planning to that same no-change receipt. The agent maps every backup-required operation to one reviewed restore operation, records original regular-file evidence or explicit absence, and orders rollback in reverse. The API independently reconstructs the expected checkpoint identities and rejects missing, reordered, duplicated, or contract-divergent plans. Recovery state remains `planned`; no backup content, mutation interface, or privileged executor exists.
+
 Capability freshness is tracked separately from general agent activity and advances only when a signed enrollment or heartbeat supplies the capability list. Policy reads and task polling may refresh online status but cannot make an old capability attestation current. Change-set creation locks the selected plan rows through the active-ownership check and insert so concurrent requests cannot place one plan in multiple active envelopes.
 
 ## Container topology

@@ -32,7 +32,9 @@ from lsa.models import (
 )
 from lsa.seed import DEMO_TOKEN, bootstrap
 from lsa.security import hash_ingestion_token, hash_password
+from lsa.schemas import RemediationValidationReceiptSubmission
 from lsa.services.platform_command_trust import active_platform_command_key
+from lsa.services.remediation_receipts import verify_validation_receipt
 from sqlalchemy import select
 from scanner.scripts.build_bundle import build
 
@@ -1095,6 +1097,43 @@ def test_remediation_plan_marks_cataloged_action_unsupported_for_host_os(client)
     assert created.json()["action"] is None
 
 
+def test_legacy_validation_receipt_signature_shape_remains_verifiable():
+    key = Ed25519PrivateKey.generate()
+    public_key = b64encode(
+        key.public_key().public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+    ).decode()
+    receipt = {
+        "schema_version": "1.0",
+        "kind": "remediation-validation-receipt",
+        "validation_id": "validation-legacy",
+        "change_set_id": "change-set-legacy",
+        "contract_digest": "a" * 64,
+        "agent_id": "agent-legacy",
+        "host_id": "host-legacy",
+        "status": "blocked",
+        "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "execution_enabled": False,
+        "changes_applied": False,
+        "agent_version": "0.8.0",
+        "agent_integrity_digest": f"sha256:{'b' * 64}",
+        "action_results": [],
+        "error": "Legacy preflight was blocked",
+    }
+    signature = b64encode(
+        key.sign(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode())
+    ).decode()
+    submission = RemediationValidationReceiptSubmission.model_validate(
+        {"receipt": receipt, "signature": signature}
+    )
+    preserved = submission.receipt.model_dump(mode="json", exclude_unset=True)
+
+    assert "recovery_plan" not in preserved
+    assert verify_validation_receipt(public_key, preserved, signature) is True
+
+
 def test_signed_change_set_requires_readiness_and_four_eyes(client):
     change_agent_private_key = Ed25519PrivateKey.generate()
     change_agent_public_key = change_agent_private_key.public_key().public_bytes(
@@ -1183,12 +1222,13 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
                 name=host.hostname,
                 public_key=signing_key.public_key,
                 fingerprint=signing_key.fingerprint,
-                agent_version="0.8.0",
+                agent_version="0.9.0",
                 capabilities=[
                     "audit",
                     "signed-change-set-planning-v1",
                     "remediation-contract-validation-v1",
                     "remediation-dry-run-v1",
+                    "remediation-recovery-planning-v1",
                     "signed-platform-control-v1",
                 ],
                 capabilities_attested_at=now_utc(),
@@ -1265,12 +1305,13 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
 
     heartbeat_body = json.dumps(
         {
-            "agent_version": "0.8.0",
+            "agent_version": "0.9.0",
             "capabilities": [
                 "audit",
                 "signed-change-set-planning-v1",
                 "remediation-contract-validation-v1",
                 "remediation-dry-run-v1",
+                "remediation-recovery-planning-v1",
                 "signed-platform-control-v1",
             ],
             "policy_version": 1,
@@ -1432,6 +1473,44 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
     assert delivered_payload["contract_digest"] == validation_job["contract_digest"]
     assert delivered_payload["contract"] == contract
 
+    recovery_operation = contract["actions"][0]["action_snapshot"]["operations"][0]
+    recovery_identity = {
+        "action_digest": contract["actions"][0]["action_digest"],
+        "operation_index": 0,
+        "path": recovery_operation["path"],
+        "plan_id": contract["actions"][0]["plan_id"],
+        "rollback_index": 0,
+    }
+    checkpoint_id = hashlib.sha256(
+        json.dumps(recovery_identity, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    recovery_plan = {
+        "schema_version": "1.0",
+        "kind": "remediation-recovery-plan",
+        "status": "ready",
+        "backup_before_write": True,
+        "automatic_rollback_required": True,
+        "stop_on_failure": True,
+        "journal_state": "planned",
+        "entries": [
+            {
+                "checkpoint_id": checkpoint_id,
+                **recovery_identity,
+                "source_state": "absent",
+                "source_digest": None,
+                "size_bytes": None,
+                "mode": None,
+                "uid": None,
+                "gid": None,
+                "status": "ready",
+                "detail": "The reviewed path is absent and can be restored by removal",
+                "backup_created": False,
+            }
+        ],
+        "rollback_order": [checkpoint_id],
+        "execution_enabled": False,
+        "changes_applied": False,
+    }
     receipt = {
         "schema_version": "1.0",
         "kind": "remediation-validation-receipt",
@@ -1444,7 +1523,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
         "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "execution_enabled": False,
         "changes_applied": False,
-        "agent_version": "0.8.0",
+        "agent_version": "0.9.0",
         "agent_integrity_digest": f"sha256:{'a' * 64}",
         "action_results": [
             {
@@ -1461,6 +1540,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
             }
             for item in contract["actions"]
         ],
+        "recovery_plan": recovery_plan,
         "error": None,
     }
     receipt_signature = b64encode(
@@ -1498,6 +1578,41 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
         },
     )
     assert rejected_receipt.status_code == 409
+    tampered_receipt = json.loads(json.dumps(receipt))
+    tampered_receipt["recovery_plan"]["rollback_order"] = []
+    tampered_signature = b64encode(
+        change_agent_private_key.sign(
+            json.dumps(
+                tampered_receipt,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        )
+    ).decode()
+    tampered_body = json.dumps(
+        {"receipt": tampered_receipt, "signature": tampered_signature},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    tampered_message = (
+        f"POST\n{receipt_path}\n{timestamp}\n{hashlib.sha256(tampered_body).hexdigest()}"
+    ).encode()
+    tampered_response = client.post(
+        receipt_path,
+        content=tampered_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(tampered_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert tampered_response.status_code == 409
+    assert tampered_response.json()["detail"] == "Recovery plan binding is invalid"
     receipt_body = json.dumps(
         {"receipt": receipt, "signature": receipt_signature},
         separators=(",", ":"),

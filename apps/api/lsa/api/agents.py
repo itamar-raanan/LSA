@@ -74,7 +74,7 @@ from lsa.services.platform_command_trust import (
     sign_platform_envelope,
 )
 from lsa.services.remediation_execution_contract import validation_contract_digest
-from lsa.services.remediation_receipts import verify_validation_receipt
+from lsa.services.remediation_receipts import validate_recovery_plan, verify_validation_receipt
 
 
 router = APIRouter(tags=["agents"])
@@ -85,6 +85,7 @@ SIGNED_PLATFORM_CONTROL_CAPABILITY = "signed-platform-control-v1"
 PLATFORM_KEY_ROTATION_CAPABILITY = "platform-key-rotation-v1"
 REMEDIATION_CONTRACT_VALIDATION_CAPABILITY = "remediation-contract-validation-v1"
 REMEDIATION_DRY_RUN_CAPABILITY = "remediation-dry-run-v1"
+REMEDIATION_RECOVERY_PLANNING_CAPABILITY = "remediation-recovery-planning-v1"
 
 
 @dataclass(frozen=True)
@@ -1333,7 +1334,9 @@ def submit_remediation_validation_receipt(
     )
     if job is None:
         raise HTTPException(status_code=404, detail="Remediation validation job not found")
-    receipt = request.receipt.model_dump(mode="json")
+    # Preserve the exact signed shape for backward-compatible 0.8 receipts that
+    # predate the optional recovery-plan field.
+    receipt = request.receipt.model_dump(mode="json", exclude_unset=True)
     if job.status in {"ready", "blocked"}:
         if job.receipt != receipt or job.receipt_signature != request.signature:
             raise HTTPException(status_code=409, detail="Validation job already has another receipt")
@@ -1390,11 +1393,24 @@ def submit_remediation_validation_receipt(
         for plan_id, result in received_actions.items()
     ):
         raise HTTPException(status_code=409, detail="Validation receipt action binding is invalid")
+    recovery_plan = receipt.get("recovery_plan")
+    recovery_capable = REMEDIATION_RECOVERY_PLANNING_CAPABILITY in (
+        principal.agent.capabilities or []
+    )
+    if recovery_plan is not None and not validate_recovery_plan(job.contract, recovery_plan):
+        raise HTTPException(status_code=409, detail="Recovery plan binding is invalid")
+    if recovery_capable and recovery_plan is None and not (
+        receipt["status"] == "blocked" and receipt["error"]
+    ):
+        raise HTTPException(status_code=409, detail="Recovery-capable receipt omitted its plan")
+    if recovery_plan is not None and recovery_plan["status"] == "blocked" and receipt["status"] != "blocked":
+        raise HTTPException(status_code=409, detail="Blocked recovery plan requires a blocked receipt")
     if receipt["status"] == "ready":
         if (
             set(received_actions) != set(expected_actions)
             or any(result.status != "ready" for result in received_actions.values())
             or receipt["error"] is not None
+            or (recovery_capable and recovery_plan["status"] != "ready")
         ):
             raise HTTPException(status_code=409, detail="Ready receipt has incomplete action results")
     elif set(received_actions) != set(expected_actions) and not receipt["error"]:
@@ -1416,6 +1432,8 @@ def submit_remediation_validation_receipt(
             details={
                 "change_set_id": job.change_set_id,
                 "contract_digest": job.contract_digest,
+                "recovery_status": recovery_plan["status"] if recovery_plan else "not_reported",
+                "recovery_checkpoints": len(recovery_plan["entries"]) if recovery_plan else 0,
                 "changes_applied": False,
             },
         )

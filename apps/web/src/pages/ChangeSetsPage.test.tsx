@@ -128,6 +128,35 @@ describe('Signed Change Sets', () => {
     expect(screen.getByText('Validation Cannot Change The Host.')).toBeInTheDocument()
   })
 
+  it('summarizes signed recovery readiness without adding another workflow', async () => {
+    remediationChangeSets.mockResolvedValue([authorizedChangeSet])
+    remediationValidationJobs.mockResolvedValue([{
+      id: 'validation-ready', change_set_id: pendingChangeSet.id, host_id: 'host-1', agent_id: 'agent-1', status: 'ready',
+      contract_digest: 'c'.repeat(64), contract: {}, requested_by: 'authorizer-1', requested_by_name: 'Security Administrator', requested_at: '2026-08-11T09:05:00Z',
+      delivered_at: '2026-08-11T09:06:00Z', lease_expires_at: null, completed_at: '2026-08-11T09:07:00Z', receipt_signature: 'signed-receipt', error: null,
+      execution_enabled: false, changes_applied: false,
+      receipt: {
+        schema_version: '1.0', kind: 'remediation-validation-receipt', validation_id: 'validation-ready', change_set_id: pendingChangeSet.id,
+        contract_digest: 'c'.repeat(64), agent_id: 'agent-1', host_id: 'host-1', status: 'ready', evaluated_at: '2026-08-11T09:07:00Z',
+        execution_enabled: false, changes_applied: false, agent_version: '0.9.0', agent_integrity_digest: `sha256:${'a'.repeat(64)}`,
+        action_results: [{ plan_id: 'plan-1', action_digest: 'a'.repeat(64), status: 'ready', checks: [{ code: 'path', status: 'passed', detail: 'Reviewed path is ready' }] }],
+        recovery_plan: {
+          schema_version: '1.0', kind: 'remediation-recovery-plan', status: 'ready', backup_before_write: true, automatic_rollback_required: true,
+          stop_on_failure: true, journal_state: 'planned', rollback_order: ['b'.repeat(64)], execution_enabled: false, changes_applied: false,
+          entries: [{ checkpoint_id: 'b'.repeat(64), plan_id: 'plan-1', action_digest: 'a'.repeat(64), operation_index: 0, rollback_index: 0,
+            path: '/etc/ssh/sshd_config.d/90-lsa-hardening.conf', source_state: 'absent', source_digest: null, size_bytes: null, mode: null,
+            uid: null, gid: null, status: 'ready', detail: 'Absent source can be restored by removal', backup_created: false }],
+        },
+        error: null,
+      },
+    } satisfies RemediationValidationJob])
+
+    render(<MemoryRouter><ChangeSetsPage /></MemoryRouter>)
+
+    expect(await screen.findByText(/1 Recovery Checkpoint Ready/)).toHaveTextContent('1 Of 1 Actions Ready')
+    expect(screen.getByText(/No Changes Applied/)).toBeInTheDocument()
+  })
+
   it('closes preparation without submitting a change set', async () => {
     render(<MemoryRouter><ChangeSetsPage /></MemoryRouter>)
     await screen.findByText('Not Evaluated')

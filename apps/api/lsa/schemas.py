@@ -1033,6 +1033,42 @@ class RemediationValidationActionResult(BaseModel):
     checks: list[RemediationValidationCheck]
 
 
+class RemediationRecoveryEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    checkpoint_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    plan_id: str = Field(min_length=1, max_length=36)
+    action_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_index: int = Field(ge=0)
+    rollback_index: int = Field(ge=-1)
+    path: str = Field(pattern=r"^/etc/.+", max_length=4096)
+    source_state: Literal["regular_file", "absent", "blocked"]
+    source_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    size_bytes: int | None = Field(default=None, ge=0, le=8 * 1024 * 1024)
+    mode: str | None = Field(default=None, pattern=r"^[0-7]{4}$")
+    uid: int | None = Field(default=None, ge=0)
+    gid: int | None = Field(default=None, ge=0)
+    status: Literal["ready", "blocked"]
+    detail: str = Field(min_length=1, max_length=1000)
+    backup_created: Literal[False] = False
+
+
+class RemediationRecoveryPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    kind: Literal["remediation-recovery-plan"] = "remediation-recovery-plan"
+    status: Literal["ready", "blocked"]
+    backup_before_write: Literal[True] = True
+    automatic_rollback_required: Literal[True] = True
+    stop_on_failure: Literal[True] = True
+    journal_state: Literal["planned"] = "planned"
+    entries: list[RemediationRecoveryEntry]
+    rollback_order: list[str]
+    execution_enabled: Literal[False] = False
+    changes_applied: Literal[False] = False
+
+
 class RemediationValidationReceipt(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1050,6 +1086,7 @@ class RemediationValidationReceipt(BaseModel):
     agent_version: str = Field(min_length=1, max_length=40)
     agent_integrity_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     action_results: list[RemediationValidationActionResult]
+    recovery_plan: RemediationRecoveryPlan | None = None
     error: str | None = Field(default=None, max_length=4000)
 
 
