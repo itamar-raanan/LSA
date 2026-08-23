@@ -776,6 +776,9 @@ class AgentHeartbeatRequest(BaseModel):
     agent_version: str = Field(min_length=1, max_length=40)
     capabilities: list[str] = Field(default_factory=list, max_length=32)
     policy_version: int | None = Field(default=None, ge=1)
+    platform_key_ack_fingerprint: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$"
+    )
 
 
 class AgentHeartbeatResponse(BaseModel):
@@ -886,9 +889,20 @@ class AgentPackageResponse(BaseModel):
     sha256: str
 
 
+class PlatformCommandKeyRotationResponse(BaseModel):
+    status: Literal["staged", "ready"]
+    current_key: PlatformCommandTrustResponse
+    next_key: PlatformCommandTrustResponse
+    eligible_agents: int
+    acknowledged_agents: int
+    blocking_agents: int
+    staged_at: datetime
+
+
 class AgentConnectivityResponse(BaseModel):
     public_url: str
     platform_trust: PlatformCommandTrustResponse
+    key_rotation: PlatformCommandKeyRotationResponse | None = None
 
 
 ChangeSetStatusValue = Literal["pending_authorization", "authorized", "canceled"]

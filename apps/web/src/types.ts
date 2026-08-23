@@ -603,4 +603,15 @@ export interface PlatformCommandTrust {
 export interface AgentConnectivity {
   public_url: string
   platform_trust: PlatformCommandTrust
+  key_rotation: PlatformCommandKeyRotation | null
+}
+
+export interface PlatformCommandKeyRotation {
+  status: 'staged' | 'ready'
+  current_key: PlatformCommandTrust
+  next_key: PlatformCommandTrust
+  eligible_agents: number
+  acknowledged_agents: number
+  blocking_agents: number
+  staged_at: string
 }

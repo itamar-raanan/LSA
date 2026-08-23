@@ -11,14 +11,14 @@ From **Agents** in the console, choose **Install agent** and download the Debian
 For Debian 13 or Ubuntu 24.04+:
 
 ```bash
-sudo apt install ./lsa-agent_0.5.0_all.deb
+sudo apt install ./lsa-agent_0.6.0_all.deb
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
 For RHEL, Rocky Linux, or AlmaLinux 9+:
 
 ```bash
-sudo dnf install ./lsa-agent-0.5.0-1.noarch.rpm
+sudo dnf install ./lsa-agent-0.6.0-1.noarch.rpm
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
@@ -29,8 +29,8 @@ For the universal archive:
 Create a one-time enrollment token for the target group, then run:
 
 ```bash
-tar -xzf lsa-agent-0.5.0-linux-universal.tar.gz
-cd lsa-agent-0.5.0
+tar -xzf lsa-agent-0.6.0-linux-universal.tar.gz
+cd lsa-agent-0.6.0
 sudo ./install.sh --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
@@ -40,7 +40,7 @@ The console-generated command transparently installs the tenant's public Ed25519
 
 The same command accepts either a one-time enrollment token or the tenant's reusable automation token. Reusable tokens are intended for secret-managed provisioning systems: LSA never displays them again, can cap their successful uses, tracks their last use, and allows immediate revocation. They do not bypass platform-key pinning or the audit-only safety lock.
 
-The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.5.0 does not validate the gateway certificate or hostname. Instead, platform identity is authenticated at the application layer. Enrollment, policy, heartbeat, next-task, empty-task, and task-completion responses use short-lived Ed25519-signed envelopes bound to the agent identity and a strictly increasing persisted sequence. The agent rejects unsigned, altered, expired, future-dated, misbound, or replayed control responses. The audit-only protocol lock remains mandatory and remediation execution remains unavailable. The agent does not use the management console port.
+The agent uses encrypted HTTPS on the dedicated gateway, TCP 8444 by default, but release 0.6.0 does not validate the gateway certificate or hostname. Instead, platform identity is authenticated at the application layer. Enrollment, policy, heartbeat, next-task, empty-task, and task-completion responses use short-lived Ed25519-signed envelopes bound to the agent identity and a strictly increasing persisted sequence. The agent rejects unsigned, altered, expired, future-dated, misbound, or replayed control responses. Two-phase key rotation accepts a replacement only after both the current and next platform keys sign the same proposal, then acknowledges it before activation. The audit-only protocol lock remains mandatory and remediation execution remains unavailable. The agent does not use the management console port.
 
 The agent advertises `signed-change-set-planning-v1` so the management plane can verify that it supplies the identity, freshness, policy, and integrity evidence needed for signed governance planning. This capability does not enable configuration writes or change-set execution; task consumption remains restricted to `audit`.
 

@@ -363,6 +363,15 @@ class LinuxAgent(Base):
     platform_command_key_fingerprint: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )
+    pending_platform_command_key_id: Mapped[str | None] = mapped_column(
+        ForeignKey("platform_command_signing_keys.id"), nullable=True, index=True
+    )
+    pending_platform_command_key_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    platform_command_key_acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     platform_envelope_sequence: Mapped[int] = mapped_column(default=0)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_policy_version: Mapped[int | None] = mapped_column(nullable=True)
@@ -581,9 +590,12 @@ class PlatformCommandSigningKey(Base):
     public_key: Mapped[str] = mapped_column(String(64))
     private_key_ciphertext: Mapped[str] = mapped_column(Text)
     fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     supersedes_key_id: Mapped[str | None] = mapped_column(
         ForeignKey("platform_command_signing_keys.id"), nullable=True
     )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 

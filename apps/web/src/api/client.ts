@@ -314,6 +314,15 @@ export const api = {
   agentConnectivity(): Promise<AgentConnectivity> {
     return request('/agent-connectivity')
   },
+  stagePlatformCommandKeyRotation(): Promise<NonNullable<AgentConnectivity['key_rotation']>> {
+    return request('/platform-command-key-rotation', { method: 'POST' })
+  },
+  activatePlatformCommandKeyRotation(): Promise<AgentConnectivity> {
+    return request('/platform-command-key-rotation/activate', { method: 'POST' })
+  },
+  abortPlatformCommandKeyRotation(): Promise<void> {
+    return request('/platform-command-key-rotation', { method: 'DELETE' })
+  },
   agentPackages(): Promise<AgentPackage[]> {
     return request('/agent-packages')
   },

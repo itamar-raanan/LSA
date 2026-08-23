@@ -52,6 +52,8 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Wed Aug 12 2026 Linux Security Auditor - 0.6.0-1
+  - Add cross-signed, agent-acknowledged platform command key rotation.
 * Wed Aug 12 2026 Linux Security Auditor - 0.5.0-1
   - Verify signed, agent-bound, replay-protected platform control responses.
 * Tue Aug 11 2026 Linux Security Auditor - 0.4.4-1
