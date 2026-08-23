@@ -28,6 +28,8 @@ The API exposes these management routes:
 - `POST /api/v1/remediation-change-sets/{change_set_id}/validation-jobs`
 - `GET /api/v1/remediation-change-sets/{change_set_id}/checkpoint-jobs`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/checkpoint-jobs`
+- `GET /api/v1/remediation-change-sets/{change_set_id}/recovery-verification-jobs`
+- `POST /api/v1/remediation-change-sets/{change_set_id}/recovery-verification-jobs`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/authorize`
 - `POST /api/v1/remediation-change-sets/{change_set_id}/cancel`
 
@@ -198,3 +200,24 @@ sizes, journal state, and errors. It never includes source content or the encryp
 key. The platform independently verifies exact checkpoint coverage and evidence
 shape. No decrypt-for-restore API, rollback operation, configuration write, service
 reload, sysctl mutation, arbitrary command, or remediation executor exists.
+
+#### Stage 4E — recovery-readiness verification
+
+After a ready checkpoint receipt is accepted, an administrator can explicitly queue
+a separate verification job. The job freezes the checkpoint, validation, change set,
+contract, recovery plan, and accepted journal digest. Delivery remains agent-initiated
+and platform-signed, and only agent 0.11.0 or later can attest the dedicated capability.
+
+The agent requires the exact accepted local journal and root-only encryption key.
+For every regular-file checkpoint it verifies the blob size and SHA-256 digest,
+authenticates the AES-256-GCM tag and bound metadata, decrypts only in memory, and
+compares the original source digest. Absent-source markers must have no blob. The
+agent signs a metadata-only readiness receipt and caches it exactly for safe retries.
+
+The platform verifies the receipt signature, identities, time window, complete
+coverage, checkpoint journal binding, and equality with the accepted encrypted-blob
+evidence. Missing keys, altered journals, corrupt blobs, failed authentication, or
+digest drift block readiness. Checkpoints are retained; there is no automatic or
+remote deletion while recovery evidence may be active. No plaintext leaves the
+agent, and no restore, host mutation, service control, sysctl write, command, or
+execution route exists.

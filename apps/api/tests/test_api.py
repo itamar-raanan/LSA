@@ -1222,7 +1222,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
                 name=host.hostname,
                 public_key=signing_key.public_key,
                 fingerprint=signing_key.fingerprint,
-                agent_version="0.10.0",
+                agent_version="0.11.0",
                 capabilities=[
                     "audit",
                     "signed-change-set-planning-v1",
@@ -1230,6 +1230,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
                     "remediation-dry-run-v1",
                     "remediation-recovery-planning-v1",
                     "remediation-checkpoint-v1",
+                    "remediation-recovery-verification-v1",
                     "signed-platform-control-v1",
                 ],
                 capabilities_attested_at=now_utc(),
@@ -1306,7 +1307,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
 
     heartbeat_body = json.dumps(
         {
-            "agent_version": "0.10.0",
+            "agent_version": "0.11.0",
             "capabilities": [
                 "audit",
                 "signed-change-set-planning-v1",
@@ -1314,6 +1315,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
                 "remediation-dry-run-v1",
                 "remediation-recovery-planning-v1",
                 "remediation-checkpoint-v1",
+                "remediation-recovery-verification-v1",
                 "signed-platform-control-v1",
             ],
             "policy_version": 1,
@@ -1525,7 +1527,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
         "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "execution_enabled": False,
         "changes_applied": False,
-        "agent_version": "0.10.0",
+        "agent_version": "0.11.0",
         "agent_integrity_digest": f"sha256:{'a' * 64}",
         "action_results": [
             {
@@ -1691,7 +1693,7 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
         "storage_scope": "agent_local_encrypted",
         "encryption": "AES-256-GCM",
         "prepared_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "agent_version": "0.10.0",
+        "agent_version": "0.11.0",
         "agent_integrity_digest": f"sha256:{'a' * 64}",
         "checkpoint_results": [
             {
@@ -1795,6 +1797,110 @@ def test_signed_change_set_requires_readiness_and_four_eyes(client):
     assert stored_checkpoints.status_code == 200
     assert stored_checkpoints.json()[0]["status"] == "ready"
     assert stored_checkpoints.json()[0]["receipt"] == checkpoint_receipt
+    queued_verification = client.post(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/recovery-verification-jobs",
+        headers=reviewer_headers,
+        json={"checkpoint_job_id": checkpoint_job["id"]},
+    )
+    assert queued_verification.status_code == 202, queued_verification.text
+    verification_job = queued_verification.json()
+    assert verification_job["status"] == "queued"
+    assert verification_job["checkpoint_journal_digest"] == checkpoint_receipt["journal_digest"]
+    verification_path = "/api/v1/agent/remediation-recovery-verifications/next"
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    verification_message = (
+        f"GET\n{verification_path}\n{timestamp}\n{hashlib.sha256(b'').hexdigest()}"
+    ).encode()
+    verification_delivery = client.get(
+        verification_path,
+        headers={
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(verification_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert verification_delivery.status_code == 200, verification_delivery.text
+    delivered_verification = verification_delivery.json()["platform_envelope"]["payload"][
+        "verification"
+    ]
+    assert delivered_verification["verification_job_id"] == verification_job["id"]
+    assert delivered_verification["checkpoint_journal_digest"] == checkpoint_receipt["journal_digest"]
+    verification_receipt = {
+        "schema_version": "1.0",
+        "kind": "remediation-recovery-verification-receipt",
+        "verification_job_id": verification_job["id"],
+        "checkpoint_job_id": checkpoint_job["id"],
+        "validation_id": validation_job["id"],
+        "change_set_id": change_set["id"],
+        "contract_digest": validation_job["contract_digest"],
+        "checkpoint_journal_digest": checkpoint_receipt["journal_digest"],
+        "agent_id": agent_id,
+        "host_id": plan["host_id"],
+        "status": "ready",
+        "verification_state": "verified",
+        "verified_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "agent_version": "0.11.0",
+        "agent_integrity_digest": f"sha256:{'a' * 64}",
+        "verification_results": [
+            {
+                "checkpoint_id": checkpoint_id,
+                "source_state": "absent",
+                "status": "verified",
+                "encrypted_blob_digest": None,
+                "encrypted_size_bytes": None,
+                "error": None,
+            }
+        ],
+        "error": None,
+        "execution_enabled": False,
+        "changes_applied": False,
+    }
+    verification_signature = b64encode(
+        change_agent_private_key.sign(
+            json.dumps(
+                verification_receipt,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        )
+    ).decode()
+    verification_receipt_path = (
+        f"/api/v1/agent/remediation-recovery-verifications/{verification_job['id']}/receipt"
+    )
+    verification_body = json.dumps(
+        {"receipt": verification_receipt, "signature": verification_signature},
+        separators=(",", ":"),
+    ).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    verification_receipt_message = (
+        f"POST\n{verification_receipt_path}\n{timestamp}\n"
+        f"{hashlib.sha256(verification_body).hexdigest()}"
+    ).encode()
+    accepted_verification = client.post(
+        verification_receipt_path,
+        content=verification_body,
+        headers={
+            "Content-Type": "application/json",
+            "X-LSA-Agent-ID": agent_id,
+            "X-LSA-Agent-Timestamp": timestamp,
+            "X-LSA-Agent-Signature": b64encode(
+                change_agent_private_key.sign(verification_receipt_message)
+            ).decode(),
+            "X-LSA-Platform-Control": "signed-v1",
+        },
+    )
+    assert accepted_verification.status_code == 200, accepted_verification.text
+    stored_verifications = client.get(
+        f"/api/v1/remediation-change-sets/{change_set['id']}/recovery-verification-jobs",
+        headers=reviewer_headers,
+    )
+    assert stored_verifications.status_code == 200
+    assert stored_verifications.json()[0]["status"] == "ready"
+    assert stored_verifications.json()[0]["receipt"] == verification_receipt
     with SessionLocal() as db:
         assert db.scalar(select(AgentTask)) is None
         events = db.scalars(select(AuditEvent).where(AuditEvent.target_id == change_set["id"])).all()

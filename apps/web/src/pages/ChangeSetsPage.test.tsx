@@ -1,19 +1,21 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RemediationChangeSet, RemediationCheckpointJob, RemediationValidationJob } from '../types'
+import type { RemediationChangeSet, RemediationCheckpointJob, RemediationRecoveryVerificationJob, RemediationValidationJob } from '../types'
 import { ChangeSetsPage } from './ChangeSetsPage'
 
-const { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, queueRemediationCheckpoint, queueRemediationValidation, remediationChangeSets, remediationCheckpointJobs, remediationPlans, remediationValidationJobs, session } = vi.hoisted(() => ({
+const { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, queueRemediationCheckpoint, queueRemediationRecoveryVerification, queueRemediationValidation, remediationChangeSets, remediationCheckpointJobs, remediationPlans, remediationRecoveryVerificationJobs, remediationValidationJobs, session } = vi.hoisted(() => ({
   authorizeRemediationChangeSet: vi.fn(),
   cancelRemediationChangeSet: vi.fn(),
   createRemediationChangeSet: vi.fn(),
   remediationChangeSets: vi.fn(),
   remediationCheckpointJobs: vi.fn(),
   remediationPlans: vi.fn(),
+  remediationRecoveryVerificationJobs: vi.fn(),
   remediationValidationJobs: vi.fn(),
   queueRemediationValidation: vi.fn(),
   queueRemediationCheckpoint: vi.fn(),
+  queueRemediationRecoveryVerification: vi.fn(),
   session: { userId: 'authorizer-1', role: 'admin' },
 }))
 
@@ -22,7 +24,7 @@ vi.mock('../auth/useAuth', () => ({
 }))
 
 vi.mock('../api/client', () => ({
-  api: { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, queueRemediationCheckpoint, queueRemediationValidation, remediationChangeSets, remediationCheckpointJobs, remediationPlans, remediationValidationJobs },
+  api: { authorizeRemediationChangeSet, cancelRemediationChangeSet, createRemediationChangeSet, queueRemediationCheckpoint, queueRemediationRecoveryVerification, queueRemediationValidation, remediationChangeSets, remediationCheckpointJobs, remediationPlans, remediationRecoveryVerificationJobs, remediationValidationJobs },
 }))
 
 const pendingChangeSet: RemediationChangeSet = {
@@ -70,9 +72,11 @@ describe('Signed Change Sets', () => {
     remediationChangeSets.mockReset().mockResolvedValue([pendingChangeSet])
     remediationCheckpointJobs.mockReset().mockResolvedValue([])
     remediationPlans.mockReset().mockResolvedValue([])
+    remediationRecoveryVerificationJobs.mockReset().mockResolvedValue([])
     remediationValidationJobs.mockReset().mockResolvedValue([])
     queueRemediationValidation.mockReset()
     queueRemediationCheckpoint.mockReset()
+    queueRemediationRecoveryVerification.mockReset()
     authorizeRemediationChangeSet.mockReset()
     cancelRemediationChangeSet.mockReset()
     createRemediationChangeSet.mockReset()
@@ -129,7 +133,7 @@ describe('Signed Change Sets', () => {
 
     await waitFor(() => expect(queueRemediationValidation).toHaveBeenCalledWith('change-set-12345678', 'agent-1'))
     expect(await screen.findByText('Queued')).toBeInTheDocument()
-    expect(screen.getByText('Checkpointing Cannot Change Host Configuration.')).toBeInTheDocument()
+    expect(screen.getByText('Recovery Verification Cannot Change Host Configuration.')).toBeInTheDocument()
   })
 
   it('summarizes signed recovery readiness without adding another workflow', async () => {
@@ -142,7 +146,7 @@ describe('Signed Change Sets', () => {
       receipt: {
         schema_version: '1.0', kind: 'remediation-validation-receipt', validation_id: 'validation-ready', change_set_id: pendingChangeSet.id,
         contract_digest: 'c'.repeat(64), agent_id: 'agent-1', host_id: 'host-1', status: 'ready', evaluated_at: '2026-08-11T09:07:00Z',
-        execution_enabled: false, changes_applied: false, agent_version: '0.10.0', agent_integrity_digest: `sha256:${'a'.repeat(64)}`,
+        execution_enabled: false, changes_applied: false, agent_version: '0.11.0', agent_integrity_digest: `sha256:${'a'.repeat(64)}`,
         action_results: [{ plan_id: 'plan-1', action_digest: 'a'.repeat(64), status: 'ready', checks: [{ code: 'path', status: 'passed', detail: 'Reviewed path is ready' }] }],
         recovery_plan: {
           schema_version: '1.0', kind: 'remediation-recovery-plan', status: 'ready', backup_before_write: true, automatic_rollback_required: true,
@@ -171,6 +175,46 @@ describe('Signed Change Sets', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Prepare Encrypted Checkpoint' }))
     await waitFor(() => expect(queueRemediationCheckpoint).toHaveBeenCalledWith('change-set-12345678', 'validation-ready'))
     expect(await screen.findByText('Encrypted Checkpoint Is Being Prepared')).toBeInTheDocument()
+  })
+
+  it('offers one recovery verification action after an encrypted checkpoint is ready', async () => {
+    remediationChangeSets.mockResolvedValue([authorizedChangeSet])
+    const readyValidation = {
+      id: 'validation-ready', change_set_id: pendingChangeSet.id, host_id: 'host-1', agent_id: 'agent-1', status: 'ready',
+      contract_digest: 'c'.repeat(64), contract: {}, requested_by: 'authorizer-1', requested_by_name: 'Security Administrator', requested_at: '2026-08-11T09:05:00Z',
+      delivered_at: '2026-08-11T09:06:00Z', lease_expires_at: null, completed_at: '2026-08-11T09:07:00Z', receipt_signature: 'signed-receipt', error: null,
+      execution_enabled: false, changes_applied: false,
+      receipt: { schema_version: '1.0', kind: 'remediation-validation-receipt', validation_id: 'validation-ready', change_set_id: pendingChangeSet.id,
+        contract_digest: 'c'.repeat(64), agent_id: 'agent-1', host_id: 'host-1', status: 'ready', evaluated_at: '2026-08-11T09:07:00Z',
+        execution_enabled: false, changes_applied: false, agent_version: '0.11.0', agent_integrity_digest: `sha256:${'a'.repeat(64)}`, action_results: [], recovery_plan: null, error: null },
+    } satisfies RemediationValidationJob
+    const readyCheckpoint: RemediationCheckpointJob = {
+      id: 'checkpoint-ready', change_set_id: pendingChangeSet.id, validation_job_id: readyValidation.id, host_id: 'host-1', agent_id: 'agent-1', status: 'ready',
+      contract_digest: 'c'.repeat(64), requested_by: 'authorizer-1', requested_by_name: 'Security Administrator', requested_at: '2026-08-11T09:08:00Z',
+      delivered_at: '2026-08-11T09:09:00Z', lease_expires_at: null, completed_at: '2026-08-11T09:10:00Z', receipt_signature: 'checkpoint-signature', error: null, execution_enabled: false, changes_applied: false,
+      receipt: { schema_version: '1.0', kind: 'remediation-checkpoint-receipt', checkpoint_job_id: 'checkpoint-ready', validation_id: readyValidation.id,
+        change_set_id: pendingChangeSet.id, contract_digest: 'c'.repeat(64), agent_id: 'agent-1', host_id: 'host-1', status: 'ready', journal_state: 'checkpointed', journal_digest: 'd'.repeat(64),
+        storage_scope: 'agent_local_encrypted', encryption: 'AES-256-GCM', prepared_at: '2026-08-11T09:10:00Z', agent_version: '0.11.0', agent_integrity_digest: `sha256:${'a'.repeat(64)}`,
+        checkpoint_results: [{ checkpoint_id: 'b'.repeat(64), source_state: 'absent', status: 'ready', backup_created: false, encrypted_blob_digest: null, encrypted_size_bytes: null, error: null }],
+        error: null, execution_enabled: false, changes_applied: false },
+    }
+    const queuedVerification: RemediationRecoveryVerificationJob = {
+      id: 'verification-1', change_set_id: pendingChangeSet.id, checkpoint_job_id: readyCheckpoint.id, validation_job_id: readyValidation.id, host_id: 'host-1', agent_id: 'agent-1', status: 'queued',
+      contract_digest: 'c'.repeat(64), checkpoint_journal_digest: 'd'.repeat(64), requested_by: 'authorizer-1', requested_by_name: 'Security Administrator', requested_at: '2026-08-11T09:11:00Z',
+      delivered_at: null, lease_expires_at: null, completed_at: null, receipt: null, receipt_signature: null, error: null, execution_enabled: false, changes_applied: false,
+    }
+    remediationValidationJobs.mockResolvedValue([readyValidation])
+    remediationCheckpointJobs.mockResolvedValue([readyCheckpoint])
+    queueRemediationRecoveryVerification.mockImplementation(async () => {
+      remediationRecoveryVerificationJobs.mockResolvedValue([queuedVerification])
+      return queuedVerification
+    })
+
+    render(<MemoryRouter><ChangeSetsPage /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: 'Verify Recovery Readiness' }))
+
+    await waitFor(() => expect(queueRemediationRecoveryVerification).toHaveBeenCalledWith('change-set-12345678', 'checkpoint-ready'))
+    expect(await screen.findByText('Recovery Readiness Is Being Verified')).toBeInTheDocument()
   })
 
   it('closes preparation without submitting a change set', async () => {

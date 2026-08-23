@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -306,7 +307,7 @@ def _require_private_directory(path: Path, description: str) -> None:
         raise RuntimeError(f"{description} is not owned by the agent or is not root-only")
 
 
-def _read_private_file(path: Path, description: str) -> bytes:
+def _read_private_file(path: Path, description: str, *, max_bytes: int | None = None) -> bytes:
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags)
     try:
@@ -317,6 +318,8 @@ def _read_private_file(path: Path, description: str) -> bytes:
             or stat.S_IMODE(metadata.st_mode) & 0o077
         ):
             raise RuntimeError(f"{description} is not owned by the agent or is not root-only")
+        if max_bytes is not None and metadata.st_size > max_bytes:
+            raise RuntimeError(f"{description} exceeds its safety limit")
         return b"".join(iter(lambda: os.read(descriptor, 64 * 1024), b""))
     finally:
         os.close(descriptor)
@@ -324,10 +327,20 @@ def _read_private_file(path: Path, description: str) -> bytes:
 
 def _checkpoint_key(path: Path) -> bytes:
     try:
-        key = _read_private_file(path, "checkpoint encryption key")
+        key = _read_private_file(path, "checkpoint encryption key", max_bytes=32)
     except FileNotFoundError:
         key = AESGCM.generate_key(bit_length=256)
         _atomic_bytes(path, key)
+    if len(key) != 32:
+        raise RuntimeError("checkpoint encryption key is invalid or not root-only")
+    return key
+
+
+def _existing_checkpoint_key(path: Path) -> bytes:
+    try:
+        key = _read_private_file(path, "checkpoint encryption key", max_bytes=32)
+    except FileNotFoundError as exc:
+        raise RuntimeError("checkpoint encryption key is missing") from exc
     if len(key) != 32:
         raise RuntimeError("checkpoint encryption key is invalid or not root-only")
     return key
@@ -407,7 +420,7 @@ def create_encrypted_checkpoints(
     recovery_plan_digest = hashlib.sha256(_canonical(recovery_plan)).hexdigest()
     if journal_path.exists():
         journal = json.loads(
-            _read_private_file(journal_path, "checkpoint journal").decode("utf-8")
+            _read_private_file(journal_path, "checkpoint journal", max_bytes=2 * 1024 * 1024).decode("utf-8")
         )
         if (
             journal.get("checkpoint_job_id") != checkpoint_job_id
@@ -510,3 +523,132 @@ def create_encrypted_checkpoints(
             )
     _atomic_json(journal_path, journal)
     return journal
+
+
+def verify_encrypted_checkpoints(
+    *,
+    checkpoint_job_id: str,
+    validation_id: str,
+    contract_digest: str,
+    recovery_plan: dict[str, Any],
+    expected_journal_digest: str,
+    state_dir: Path,
+) -> dict[str, Any]:
+    """Authenticate and decrypt local checkpoints without restoring their contents."""
+
+    if not SAFE_JOB_ID.fullmatch(checkpoint_job_id) or not SAFE_JOB_ID.fullmatch(validation_id):
+        raise RuntimeError("checkpoint job identity is invalid")
+    checkpoint_root = state_dir / "remediation-checkpoints"
+    _require_private_directory(checkpoint_root, "checkpoint storage root")
+    job_dir = checkpoint_root / checkpoint_job_id
+    _require_private_directory(job_dir, "checkpoint job directory")
+    journal = json.loads(
+        _read_private_file(
+            job_dir / "journal.json", "checkpoint journal", max_bytes=2 * 1024 * 1024
+        ).decode("utf-8")
+    )
+    recovery_plan_digest = hashlib.sha256(_canonical(recovery_plan)).hexdigest()
+    local_journal_digest = hashlib.sha256(_canonical(journal)).hexdigest()
+    if (
+        journal.get("checkpoint_job_id") != checkpoint_job_id
+        or journal.get("validation_id") != validation_id
+        or journal.get("contract_digest") != contract_digest
+        or journal.get("recovery_plan_digest") != recovery_plan_digest
+        or journal.get("recovery_plan") != recovery_plan
+        or journal.get("state") != "checkpointed"
+        or local_journal_digest != expected_journal_digest
+    ):
+        raise RuntimeError("local checkpoint journal does not match the accepted receipt")
+    journal_results = journal.get("checkpoint_results")
+    if not isinstance(journal_results, list):
+        raise RuntimeError("local checkpoint journal coverage is invalid")
+    by_id = {
+        item.get("checkpoint_id"): item for item in journal_results if isinstance(item, dict)
+    }
+    entries = recovery_plan.get("entries")
+    if (
+        not isinstance(entries, list)
+        or len(by_id) != len(journal_results)
+        or set(by_id) != {entry.get("checkpoint_id") for entry in entries}
+    ):
+        raise RuntimeError("local checkpoint journal coverage is invalid")
+    cipher = AESGCM(_existing_checkpoint_key(state_dir / "remediation-checkpoints.key"))
+    results: list[dict[str, Any]] = []
+    for entry in entries:
+        checkpoint_id = entry["checkpoint_id"]
+        source_state = entry["source_state"]
+        stored = by_id[checkpoint_id]
+        result = {
+            "checkpoint_id": checkpoint_id,
+            "source_state": source_state,
+            "status": "verified",
+            "encrypted_blob_digest": None,
+            "encrypted_size_bytes": None,
+            "error": None,
+        }
+        try:
+            if stored.get("status") != "ready":
+                raise RuntimeError("checkpoint journal entry is not ready")
+            blob_path = job_dir / f"{checkpoint_id}.bin"
+            if source_state == "regular_file":
+                blob = _read_private_file(
+                    blob_path,
+                    "encrypted checkpoint blob",
+                    max_bytes=MAX_CHECKPOINT_SOURCE_BYTES + 128,
+                )
+                if (
+                    len(blob) < len(CHECKPOINT_BLOB_MAGIC) + 12 + 16
+                    or len(blob) > MAX_CHECKPOINT_SOURCE_BYTES + 128
+                    or not blob.startswith(CHECKPOINT_BLOB_MAGIC)
+                    or stored.get("backup_created") is not True
+                    or stored.get("encrypted_size_bytes") != len(blob)
+                    or stored.get("encrypted_blob_digest")
+                    != f"sha256:{hashlib.sha256(blob).hexdigest()}"
+                ):
+                    raise RuntimeError("encrypted checkpoint blob evidence is invalid")
+                aad_document = {
+                    "checkpoint_job_id": checkpoint_job_id,
+                    "contract_digest": contract_digest,
+                    "checkpoint_id": checkpoint_id,
+                    "path": entry["path"],
+                    "source_digest": entry["source_digest"],
+                }
+                plaintext = cipher.decrypt(
+                    blob[len(CHECKPOINT_BLOB_MAGIC) : len(CHECKPOINT_BLOB_MAGIC) + 12],
+                    blob[len(CHECKPOINT_BLOB_MAGIC) + 12 :],
+                    _canonical(aad_document),
+                )
+                if f"sha256:{hashlib.sha256(plaintext).hexdigest()}" != entry["source_digest"]:
+                    raise RuntimeError("decrypted checkpoint content digest is invalid")
+                del plaintext
+                result["encrypted_blob_digest"] = stored["encrypted_blob_digest"]
+                result["encrypted_size_bytes"] = stored["encrypted_size_bytes"]
+            elif source_state == "absent":
+                try:
+                    blob_path.lstat()
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise RuntimeError("absent-source checkpoint unexpectedly has a blob")
+                if (
+                    stored.get("backup_created") is not False
+                    or stored.get("encrypted_blob_digest") is not None
+                    or stored.get("encrypted_size_bytes") is not None
+                ):
+                    raise RuntimeError("absent-source checkpoint evidence is invalid")
+            else:
+                raise RuntimeError("checkpoint source state is invalid")
+        except (InvalidTag, KeyError, OSError, RuntimeError, ValueError) as exc:
+            result["status"] = "blocked"
+            result["encrypted_blob_digest"] = None
+            result["encrypted_size_bytes"] = None
+            result["error"] = str(exc)[:1000] or "encrypted checkpoint authentication failed"
+        results.append(result)
+    blocked = [item for item in results if item["status"] == "blocked"]
+    return {
+        "state": "blocked" if blocked else "verified",
+        "verification_results": results,
+        "error": blocked[0]["error"] if blocked else None,
+        "execution_enabled": False,
+        "changes_applied": False,
+    }

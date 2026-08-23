@@ -485,6 +485,60 @@ export interface RemediationCheckpointJob {
   changes_applied: false
 }
 
+export interface RemediationRecoveryVerificationResult {
+  checkpoint_id: string
+  source_state: 'regular_file' | 'absent'
+  status: 'verified' | 'blocked'
+  encrypted_blob_digest: string | null
+  encrypted_size_bytes: number | null
+  error: string | null
+}
+
+export interface RemediationRecoveryVerificationReceipt {
+  schema_version: '1.0'
+  kind: 'remediation-recovery-verification-receipt'
+  verification_job_id: string
+  checkpoint_job_id: string
+  validation_id: string
+  change_set_id: string
+  contract_digest: string
+  checkpoint_journal_digest: string
+  agent_id: string
+  host_id: string
+  status: 'ready' | 'blocked'
+  verification_state: 'verified' | 'blocked'
+  verified_at: string
+  agent_version: string
+  agent_integrity_digest: string
+  verification_results: RemediationRecoveryVerificationResult[]
+  error: string | null
+  execution_enabled: false
+  changes_applied: false
+}
+
+export interface RemediationRecoveryVerificationJob {
+  id: string
+  change_set_id: string
+  checkpoint_job_id: string
+  validation_job_id: string
+  host_id: string
+  agent_id: string
+  status: 'queued' | 'delivered' | 'ready' | 'blocked' | 'expired' | 'canceled'
+  contract_digest: string
+  checkpoint_journal_digest: string
+  requested_by: string
+  requested_by_name: string
+  requested_at: string
+  delivered_at: string | null
+  lease_expires_at: string | null
+  completed_at: string | null
+  receipt: RemediationRecoveryVerificationReceipt | null
+  receipt_signature: string | null
+  error: string | null
+  execution_enabled: false
+  changes_applied: false
+}
+
 export interface DashboardData {
   total_hosts: number
   healthy_hosts: number

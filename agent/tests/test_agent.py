@@ -17,6 +17,7 @@ from agent.lsa_agent import (
     accept_policy_version,
     http_client,
     platform_url,
+    process_recovery_verification,
     process_remediation_checkpoint,
     process_remediation_validation,
     run_scanner,
@@ -32,7 +33,11 @@ from agent.remediation_contract import (
     sign_validation_receipt,
     validate_remediation_contract_preview,
 )
-from agent.remediation_recovery import compile_recovery_plan, create_encrypted_checkpoints
+from agent.remediation_recovery import (
+    compile_recovery_plan,
+    create_encrypted_checkpoints,
+    verify_encrypted_checkpoints,
+)
 from lsa.services.remediation_catalog import load_remediation_catalog
 
 
@@ -48,6 +53,7 @@ def test_agent_attests_governance_planning_without_write_execution():
     assert "remediation-dry-run-v1" in AGENT_CAPABILITIES
     assert "remediation-recovery-planning-v1" in AGENT_CAPABILITIES
     assert "remediation-checkpoint-v1" in AGENT_CAPABILITIES
+    assert "remediation-recovery-verification-v1" in AGENT_CAPABILITIES
     assert all("execute" not in capability and "write" not in capability for capability in AGENT_CAPABILITIES)
 
 
@@ -439,6 +445,57 @@ def test_agent_checkpoint_blocks_when_an_absent_source_appears_after_preflight(t
     assert target.read_text(encoding="utf-8") == "PermitRootLogin yes\n"
 
 
+def test_agent_reverifies_encrypted_checkpoints_and_detects_tampering(tmp_path):
+    contract, _, _ = remediation_contract_fixture()
+    root = tmp_path / "root"
+    state_dir = tmp_path / "state"
+    target = root / "etc/ssh/sshd_config.d/90-lsa-hardening.conf"
+    target.parent.mkdir(parents=True)
+    target.write_text("PermitRootLogin yes\n", encoding="utf-8")
+    plan = compile_recovery_plan(contract, root=root)
+    journal = create_encrypted_checkpoints(
+        checkpoint_job_id="checkpoint-job-verify",
+        validation_id="validation-verify",
+        contract_digest="f" * 64,
+        recovery_plan=plan,
+        state_dir=state_dir,
+        root=root,
+    )
+    journal_digest = hashlib.sha256(
+        json.dumps(journal, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+
+    verified = verify_encrypted_checkpoints(
+        checkpoint_job_id="checkpoint-job-verify",
+        validation_id="validation-verify",
+        contract_digest="f" * 64,
+        recovery_plan=plan,
+        expected_journal_digest=journal_digest,
+        state_dir=state_dir,
+    )
+    assert verified["state"] == "verified"
+    assert verified["verification_results"][0]["status"] == "verified"
+    assert verified["execution_enabled"] is False
+    assert target.read_text(encoding="utf-8") == "PermitRootLogin yes\n"
+
+    blob = next((state_dir / "remediation-checkpoints/checkpoint-job-verify").glob("*.bin"))
+    corrupted = bytearray(blob.read_bytes())
+    corrupted[-1] ^= 1
+    blob.write_bytes(corrupted)
+    blob.chmod(0o600)
+    blocked = verify_encrypted_checkpoints(
+        checkpoint_job_id="checkpoint-job-verify",
+        validation_id="validation-verify",
+        contract_digest="f" * 64,
+        recovery_plan=plan,
+        expected_journal_digest=journal_digest,
+        state_dir=state_dir,
+    )
+    assert blocked["state"] == "blocked"
+    assert blocked["verification_results"][0]["status"] == "blocked"
+    assert target.read_text(encoding="utf-8") == "PermitRootLogin yes\n"
+
+
 def test_agent_validation_receipt_has_an_independent_signature():
     key = Ed25519PrivateKey.generate()
     receipt = {
@@ -572,6 +629,79 @@ def test_agent_processes_and_retries_the_exact_encrypted_checkpoint_receipt(
     receipt = submitted[0]["receipt"]
     assert receipt["journal_state"] == "checkpointed"
     assert receipt["checkpoint_results"][0]["backup_created"] is True
+    agent_key.public_key().verify(
+        base64.b64decode(submitted[0]["signature"]),
+        canonical_validation_receipt(receipt),
+    )
+
+
+def test_agent_processes_and_caches_signed_recovery_verification(tmp_path, monkeypatch):
+    contract, _, platform_raw = remediation_contract_fixture()
+    root = tmp_path / "root"
+    state_dir = tmp_path / "state"
+    target = root / "etc/ssh/sshd_config.d/90-lsa-hardening.conf"
+    target.parent.mkdir(parents=True)
+    target.write_text("PermitRootLogin yes\n", encoding="utf-8")
+    recovery_plan = compile_recovery_plan(contract, root=root)
+    contract_digest = hashlib.sha256(
+        json.dumps(contract, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    journal = create_encrypted_checkpoints(
+        checkpoint_job_id="checkpoint-job-verify",
+        validation_id="validation-verify",
+        contract_digest=contract_digest,
+        recovery_plan=recovery_plan,
+        state_dir=state_dir,
+        root=root,
+    )
+    journal_digest = hashlib.sha256(
+        json.dumps(journal, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    platform_key_path = tmp_path / "platform-command-key.pub"
+    platform_key_path.write_text(base64.b64encode(platform_raw).decode() + "\n")
+    config = {
+        "state_dir": str(state_dir),
+        "platform_command_key_file": str(platform_key_path),
+    }
+    state = {
+        "agent_id": "agent-1",
+        "host_id": "host-1",
+        "platform_command_key_id": "platform-key-1",
+        "integrity_manifest_sha256": f"sha256:{'c' * 64}",
+    }
+    payload = {
+        "verification": {
+            "verification_job_id": "verification-job-1",
+            "checkpoint_job_id": "checkpoint-job-verify",
+            "validation_id": "validation-verify",
+            "change_set_id": "change-set-1",
+            "contract_digest": contract_digest,
+            "contract": contract,
+            "recovery_plan": recovery_plan,
+            "checkpoint_journal_digest": journal_digest,
+        }
+    }
+    agent_key = Ed25519PrivateKey.generate()
+    submitted = []
+
+    def accept_receipt(_config, _state, _key, _path, body, _kind):
+        submitted.append(body)
+        return {"accepted": True}
+
+    monkeypatch.setattr("agent.lsa_agent.signed_control_post", accept_receipt)
+    first = process_recovery_verification(config, state, agent_key, payload)
+    second = process_recovery_verification(config, state, agent_key, payload)
+
+    assert first == second == {
+        "verification_job_id": "verification-job-1",
+        "status": "ready",
+        "changes_applied": False,
+    }
+    assert submitted[0] == submitted[1]
+    receipt = submitted[0]["receipt"]
+    assert receipt["verification_state"] == "verified"
+    assert receipt["verification_results"][0]["status"] == "verified"
+    assert receipt["changes_applied"] is False
     agent_key.public_key().verify(
         base64.b64decode(submitted[0]["signature"]),
         canonical_validation_receipt(receipt),

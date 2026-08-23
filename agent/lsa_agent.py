@@ -36,6 +36,7 @@ try:
         compile_recovery_plan,
         create_encrypted_checkpoints,
         validate_recovery_plan_binding,
+        verify_encrypted_checkpoints,
     )
     from .remediation_contract import (
         RemediationContractError,
@@ -49,6 +50,7 @@ except ImportError:  # executed directly by the systemd unit
         compile_recovery_plan,
         create_encrypted_checkpoints,
         validate_recovery_plan_binding,
+        verify_encrypted_checkpoints,
     )
     from remediation_contract import (
         RemediationContractError,
@@ -58,7 +60,7 @@ except ImportError:  # executed directly by the systemd unit
     )
 
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -70,6 +72,7 @@ AGENT_CAPABILITIES = (
     "remediation-dry-run-v1",
     "remediation-recovery-planning-v1",
     "remediation-checkpoint-v1",
+    "remediation-recovery-verification-v1",
     "signed-platform-control-v1",
     "platform-key-rotation-v1",
 )
@@ -826,7 +829,15 @@ def process_remediation_checkpoint(
                 state_dir=Path(config.get("state_dir", DEFAULT_STATE_DIR)),
                 root=Path(config.get("inspection_root", "/")),
             )
-        except (RemediationContractError, OSError, RuntimeError, ValueError) as exc:
+        except (
+            AttributeError,
+            KeyError,
+            RemediationContractError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as exc:
             journal = {
                 "state": "blocked",
                 "checkpoint_results": [
@@ -904,6 +915,157 @@ def process_remediation_checkpoint(
     }
 
 
+def process_recovery_verification(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    key: Ed25519PrivateKey,
+    payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    verification = payload.get("verification")
+    if verification is None:
+        return None
+    expected_keys = {
+        "verification_job_id",
+        "checkpoint_job_id",
+        "validation_id",
+        "change_set_id",
+        "contract_digest",
+        "contract",
+        "recovery_plan",
+        "checkpoint_journal_digest",
+    }
+    if not isinstance(verification, dict) or set(verification) != expected_keys:
+        raise RuntimeError("platform returned an invalid recovery verification wrapper")
+    identities = {
+        name: verification[name]
+        for name in (
+            "verification_job_id",
+            "checkpoint_job_id",
+            "validation_id",
+            "change_set_id",
+            "contract_digest",
+            "checkpoint_journal_digest",
+        )
+    }
+    if not all(isinstance(value, str) and value for value in identities.values()):
+        raise RuntimeError("recovery verification identity is invalid")
+    contract = verification["contract"]
+    recovery_plan = verification["recovery_plan"]
+    if not isinstance(contract, dict) or not isinstance(recovery_plan, dict):
+        raise RuntimeError("recovery verification contract is invalid")
+    calculated_digest = hashlib.sha256(
+        json.dumps(contract, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    if calculated_digest != identities["contract_digest"]:
+        raise RuntimeError("recovery verification contract digest is invalid")
+    cached_receipts = state.setdefault("recovery_verification_receipts", {})
+    cached = (
+        cached_receipts.get(identities["verification_job_id"])
+        if isinstance(cached_receipts, dict)
+        else None
+    )
+    if (
+        isinstance(cached, dict)
+        and cached.get("contract_digest") == identities["contract_digest"]
+        and cached.get("checkpoint_journal_digest")
+        == identities["checkpoint_journal_digest"]
+        and isinstance(cached.get("receipt"), dict)
+        and isinstance(cached.get("signature"), str)
+    ):
+        receipt = cached["receipt"]
+        signature = cached["signature"]
+    else:
+        try:
+            pinned_key, pinned_raw = load_platform_command_key(config)
+            validate_remediation_contract_preview(
+                contract,
+                pinned_platform_key=pinned_key,
+                pinned_platform_raw=pinned_raw,
+                expected_platform_key_id=str(state["platform_command_key_id"]),
+                expected_agent_id=str(state["agent_id"]),
+                expected_host_id=str(state["host_id"]),
+            )
+            validate_recovery_plan_binding(contract, recovery_plan)
+            verification_result = verify_encrypted_checkpoints(
+                checkpoint_job_id=identities["checkpoint_job_id"],
+                validation_id=identities["validation_id"],
+                contract_digest=identities["contract_digest"],
+                recovery_plan=recovery_plan,
+                expected_journal_digest=identities["checkpoint_journal_digest"],
+                state_dir=Path(config.get("state_dir", DEFAULT_STATE_DIR)),
+            )
+        except (
+            AttributeError,
+            KeyError,
+            RemediationContractError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            verification_result = {
+                "state": "blocked",
+                "verification_results": [
+                    {
+                        "checkpoint_id": entry["checkpoint_id"],
+                        "source_state": entry["source_state"],
+                        "status": "blocked",
+                        "encrypted_blob_digest": None,
+                        "encrypted_size_bytes": None,
+                        "error": str(exc)[:1000],
+                    }
+                    for entry in recovery_plan.get("entries", [])
+                    if isinstance(entry, dict)
+                ],
+                "error": str(exc)[:1000],
+            }
+        status = "ready" if verification_result["state"] == "verified" else "blocked"
+        receipt = {
+            "schema_version": "1.0",
+            "kind": "remediation-recovery-verification-receipt",
+            **identities,
+            "agent_id": str(state["agent_id"]),
+            "host_id": str(state["host_id"]),
+            "status": status,
+            "verification_state": verification_result["state"],
+            "verified_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "agent_version": VERSION,
+            "agent_integrity_digest": str(state["integrity_manifest_sha256"]),
+            "verification_results": verification_result["verification_results"],
+            "error": verification_result.get("error"),
+            "execution_enabled": False,
+            "changes_applied": False,
+        }
+        signature = sign_validation_receipt(key, receipt)
+        if not isinstance(cached_receipts, dict):
+            cached_receipts = {}
+            state["recovery_verification_receipts"] = cached_receipts
+        cached_receipts[identities["verification_job_id"]] = {
+            "contract_digest": identities["contract_digest"],
+            "checkpoint_journal_digest": identities["checkpoint_journal_digest"],
+            "receipt": receipt,
+            "signature": signature,
+        }
+        while len(cached_receipts) > 50:
+            cached_receipts.pop(next(iter(cached_receipts)))
+        atomic_json(state_paths(config)[0], state)
+    acknowledgement = signed_control_post(
+        config,
+        state,
+        key,
+        f"/api/v1/agent/remediation-recovery-verifications/{identities['verification_job_id']}/receipt",
+        {"receipt": receipt, "signature": signature},
+        "remediation-recovery-verification-receipt",
+    )
+    if acknowledgement.get("accepted") is not True:
+        raise RuntimeError("platform did not accept the recovery verification receipt")
+    return {
+        "verification_job_id": identities["verification_job_id"],
+        "status": receipt["status"],
+        "changes_applied": False,
+    }
+
+
 def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[str, Any]:
     if os.geteuid() != 0 and not config.get("allow_unprivileged_development", False):
         raise RuntimeError("LSA agent must run as root to read protected audit evidence")
@@ -976,6 +1138,27 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
             file=sys.stderr,
             flush=True,
         )
+    verification_result: dict[str, Any] | None = None
+    try:
+        verification_payload = signed_control_get(
+            config,
+            state,
+            key,
+            "/api/v1/agent/remediation-recovery-verifications/next",
+            "remediation-recovery-verification",
+        )
+        verification_result = process_recovery_verification(
+            config,
+            state,
+            key,
+            verification_payload,
+        )
+    except (httpx.HTTPError, RuntimeError) as exc:
+        print(
+            f"LSA agent recovery verification cycle failed without applying changes: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
     task_payload = signed_control_get(
         config, state, key, "/api/v1/agent/tasks/next", "agent-task"
     )
@@ -1013,6 +1196,7 @@ def agent_cycle(config: dict[str, Any], *, always_scan: bool = False) -> dict[st
         "heartbeat": heartbeat,
         "validation": validation_result,
         "checkpoint": checkpoint_result,
+        "recovery_verification": verification_result,
         "task": task,
         "scanned": should_scan,
     }
