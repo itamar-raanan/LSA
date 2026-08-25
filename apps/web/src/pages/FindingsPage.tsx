@@ -1,12 +1,13 @@
-import { ArrowRight, FolderOpen, ShieldWarning } from '@phosphor-icons/react'
+import { FolderOpen, ShieldWarning } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { FindingDetailPanel } from '../components/FindingDetailPanel'
 import { PageHeader } from '../components/PageHeader'
 import { type SecurityColumn, SecurityTable } from '../components/security/SecurityTable'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { ErrorState, LoadingState } from '../components/StatePanel'
+import { TabLink, TabList } from '../components/ui/Tabs'
 import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
 import { withInvestigationReturn } from '../lib/investigationContext'
@@ -132,7 +133,6 @@ function FindingsQueuePage() {
     { id: 'lifecycle', header: 'Lifecycle', priority: 'detail', sortValue: (finding) => finding.lifecycle, exportValue: (finding) => finding.lifecycle, cell: (finding) => <span className={`status-pill ${finding.lifecycle === 'new' ? 'status-pill-warning' : 'status-pill-stale'}`}>{finding.lifecycle}</span> },
     { id: 'observed', header: 'Observed State', priority: 'detail', sortValue: (finding) => finding.actual ?? '', exportValue: (finding) => finding.actual, cell: (finding) => <span className="finding-observed-state">{finding.actual || 'No Concrete Value Reported'}</span> },
     { id: 'impact', header: 'Change Impact', priority: 'detail', sortValue: (finding) => Number(finding.reboot_required) * 2 + Number(finding.service_restart), exportValue: (finding) => finding.reboot_required ? 'Reboot required' : finding.service_restart ? 'Service restart' : 'No restart reported', cell: (finding) => <span className="table-primary">{finding.reboot_required ? 'Reboot Required' : finding.service_restart ? 'Service Restart' : 'No Restart'}<small>{finding.remediation_commands.length} Apply Steps</small></span> },
-    { id: 'action', header: '', priority: 'detail', hideable: false, cell: (finding) => <button className="button-secondary min-h-8 whitespace-nowrap px-3" onClick={() => openFinding(finding)}>Investigate <ArrowRight size={14} /></button> },
   ]
 
   function selectCategory(nextCategory: string) {
@@ -144,11 +144,11 @@ function FindingsQueuePage() {
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Risk Queue" title="Security Findings" detail="Select a control category, prioritize its unresolved findings, and open an operator-ready remediation guide without losing your place in the queue." />
-    <nav className="findings-view-tabs" aria-label="Security Finding Workspaces">
-      <Link className="findings-view-tab findings-view-tab-active" to="/findings" aria-current="page">Findings Queue</Link>
-      <Link className="findings-view-tab" to="/findings?view=remediation">Remediation Review</Link>
-      <Link className="findings-view-tab" to="/findings?view=change-sets">Change Sets</Link>
-    </nav>
+    <TabList label="Security Finding Workspaces">
+      <TabLink to="/findings" active>Findings Queue</TabLink>
+      <TabLink to="/findings?view=remediation">Remediation Review</TabLink>
+      <TabLink to="/findings?view=change-sets">Change Sets</TabLink>
+    </TabList>
     {facets.loading && !facets.data ? <LoadingState variant="table" /> : facets.error || error ? <ErrorState message={facets.error ?? error ?? 'Unable To Load Findings'} retry={() => { void facets.reload(); void reload() }} /> : <section className="panel overflow-hidden" aria-label="Findings workspace">
       <div className="findings-summary-strip">
         <div><span className="detail-label">Open Findings</span><strong>{facets.data?.total ?? 0}</strong></div>

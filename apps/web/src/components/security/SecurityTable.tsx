@@ -167,15 +167,16 @@ export function SecurityTable<T extends { id: string }>({
       <div className="flex flex-wrap items-center justify-end gap-2">
         {selectionSummary && selectable && selectedRowIds && selectedRowIds.size > 0 && <div className="security-table-selection" role="status"><strong>{selectedRowIds.size}</strong> Selected<button type="button" onClick={() => onSelectionChange?.(new Set())}>Clear</button>{bulkActions}</div>}
         {toolbarActions}
-        <span className="hidden items-center gap-1.5 text-[10px] text-slate-500 sm:flex"><FunnelSimple size={13} />{totalRows} Records</span>
+        <span className="security-table-count">{totalRows} Records</span>
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild><Button size="sm"><SlidersHorizontal size={14} />Columns<CaretDown size={12} /></Button></DropdownMenu.Trigger>
+          <DropdownMenu.Trigger asChild><Button size="sm"><SlidersHorizontal size={14} />Options<CaretDown size={12} /></Button></DropdownMenu.Trigger>
           <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content">
             <DropdownMenu.Label className="soc-menu-label">Visible Columns</DropdownMenu.Label>
             {columns.filter((column) => column.hideable !== false).map((column) => <DropdownMenu.CheckboxItem key={column.id} checked={!hidden.has(column.id)} onCheckedChange={() => setHidden((current) => { const next = new Set(current); if (next.has(column.id)) next.delete(column.id); else next.add(column.id); return next })} className="soc-menu-item"><span className="soc-menu-check">{!hidden.has(column.id) ? '✓' : ''}</span>{column.header}</DropdownMenu.CheckboxItem>)}
+            <DropdownMenu.Separator className="soc-menu-separator" />
+            <DropdownMenu.Item className="soc-menu-item" onSelect={exportCsv}><span className="soc-menu-check"><DownloadSimple size={13} /></span>{serverPagination ? 'Export Current Page' : 'Export All Rows'}</DropdownMenu.Item>
           </DropdownMenu.Content></DropdownMenu.Portal>
         </DropdownMenu.Root>
-        <Button size="sm" onClick={exportCsv}><DownloadSimple size={14} />{serverPagination ? 'Export Page' : 'Export'}</Button>
       </div>
     </div>
     <div className="security-table-scroll"><table className="security-table" aria-label={ariaLabel}>

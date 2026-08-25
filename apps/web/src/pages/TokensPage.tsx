@@ -5,6 +5,7 @@ import { CreateTokenPanel } from '../components/CreateTokenPanel'
 import { PageHeader } from '../components/PageHeader'
 import { type SecurityColumn, SecurityTable } from '../components/security/SecurityTable'
 import { StatusBadge } from '../components/security/StatusBadge'
+import { Button } from '../components/ui/Button'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useAuth } from '../auth/useAuth'
 import { useApi } from '../hooks/useApi'
@@ -53,7 +54,7 @@ export function TokensPage({ embedded = false, autoCreate = false }: { embedded?
   const activeCount = tokens.filter((token) => tokenState(token) === 'active').length
   const usedCount = tokens.filter((token) => token.last_used_at).length
   const hostnames = new Map((data?.hosts ?? []).map((host) => [host.id, host.hostname]))
-  const createAction = <button className="button-primary" onClick={() => setCreating(true)}><Plus size={16} /> Issue Token</button>
+  const createAction = <Button variant="primary" onClick={() => setCreating(true)}><Plus size={16} /> Issue Token</Button>
   const columns: SecurityColumn<IngestionToken>[] = [
     { id: 'credential', header: 'Credential', priority: 'primary', hideable: false, sortValue: (token) => token.name, exportValue: (token) => token.name, cell: (token) => <span className="table-primary">{token.name}<small>{token.token_prefix}… · Created {formatDate(token.created_at)}</small></span> },
     { id: 'scope', header: 'Scope', priority: 'secondary', sortValue: (token) => token.host_id ? hostnames.get(token.host_id) ?? '' : 'All Tenant Hosts', exportValue: (token) => token.host_id ? hostnames.get(token.host_id) ?? 'Unknown Host' : 'All Tenant Hosts', cell: (token) => <span className="table-primary">{token.host_id ? hostnames.get(token.host_id) ?? 'Unknown Host' : 'All Tenant Hosts'}<small>{token.host_id ? 'Host-Scoped' : 'Tenant-Wide'}</small></span> },
