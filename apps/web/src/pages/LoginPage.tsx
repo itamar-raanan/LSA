@@ -71,15 +71,15 @@ export function LoginPage() {
 
       <section className="flex items-center justify-center px-5 py-12 sm:px-10">
         <div className="login-form-shell w-full max-w-[470px]">
-          <div className="mb-12 lg:hidden"><BrandMark /></div>
+          <div className="mb-12 lg:hidden"><BrandMark tone="light" /></div>
           <div className="mb-8 grid size-11 place-items-center rounded-md border border-stone-300 bg-[#f8f5ee] text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,.8)]"><ShieldCheck size={21} /></div>
           <h2 className="text-3xl font-medium tracking-[-0.045em]">Access the console</h2>
           <p className="mt-2 text-sm leading-6 text-stone-600">Use your organization account to review the Linux estate.</p>
-          {sessionNotice && <p className="mt-6 rounded-xl border border-amber-900/40 bg-amber-950/10 px-4 py-3 text-xs leading-5 text-amber-200">{sessionNotice}</p>}
+          {sessionNotice && <p className="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">{sessionNotice}</p>}
           {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="mt-8 space-y-2">
             {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Building2 size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
           </div>}
-          {providers.some((provider) => provider.provider_type === 'radius') && <div className="mt-7 flex gap-4 border-b border-stone-800 pb-3 text-[10px] capitalize tracking-wider text-stone-600">
+          {providers.some((provider) => provider.provider_type === 'radius') && <div className="mt-7 flex gap-4 border-b border-stone-200 pb-3 text-[10px] capitalize tracking-wider text-stone-600">
             <button className={method === 'local' ? 'text-amber-700' : ''} onClick={() => setMethod('local')}>Local</button>
             <button className={method === 'radius' ? 'text-amber-700' : ''} onClick={() => setMethod('radius')}>RADIUS</button>
           </div>}
@@ -92,7 +92,7 @@ export function LoginPage() {
               <span>Password</span>
               <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
             </label>
-            {error && <p className="rounded-xl border border-rose-900/50 bg-rose-950/20 px-3 py-2 text-xs leading-5 text-rose-300">{error}</p>}
+            {error && <p className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-800">{error}</p>}
             <button className="button-primary w-full justify-between" disabled={submitting}>
               <span>{submitting ? 'Authenticating' : 'Continue'}</span><ArrowRight size={17} />
             </button>

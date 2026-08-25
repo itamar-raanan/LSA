@@ -526,17 +526,6 @@ input[type="checkbox"] { accent-color: #a86b1f; }
 .security-table-count { display: none; color: #81786c; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (min-width: 640px) { .security-table-count { display: inline-flex; } }
 
-/* Normalize legacy light-surface utility colors without changing the dark navigation shell. */
-.page-reveal .text-stone-50, .page-reveal .text-stone-100, .page-reveal .text-stone-200,
-.ui-dialog-content .text-stone-50, .ui-dialog-content .text-stone-100, .ui-dialog-content .text-stone-200,
-.host-quick-view .text-stone-50, .host-quick-view .text-stone-100, .host-quick-view .text-stone-200 { color: #37322d; }
-.page-reveal .text-stone-300, .ui-dialog-content .text-stone-300, .host-quick-view .text-stone-300 { color: #5f584f; }
-.page-reveal .text-rose-300, .page-reveal .text-rose-400, .ui-dialog-content .text-rose-300, .host-quick-view .text-rose-300, .host-quick-view .text-rose-400 { color: #9d3f43; }
-.page-reveal .text-amber-200, .page-reveal .text-amber-300, .ui-dialog-content .text-amber-200, .ui-dialog-content .text-amber-300 { color: #806222; }
-.page-reveal .border-stone-800, .ui-dialog-content .border-stone-800, .host-quick-view .border-stone-800 { border-color: #ddd6ca; }
-.page-reveal .divide-stone-800 > :not(:last-child), .ui-dialog-content .divide-stone-800 > :not(:last-child) { border-color: #ddd6ca; }
-.page-reveal .bg-stone-800, .host-quick-view .bg-stone-800 { background-color: #ddd6ca; }
-
 .settings-disclosure { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
 .settings-disclosure > summary { display: flex; min-height: 68px; cursor: pointer; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; color: #4f4941; list-style: none; }
 .settings-disclosure > summary::-webkit-details-marker { display: none; }
@@ -574,18 +563,10 @@ input[type="checkbox"] { accent-color: #a86b1f; }
 
 .login-aside { background: radial-gradient(circle at 22% 75%, rgba(190,137,57,.13), transparent 28rem), #292923; }
 .login-form-shell h2 { color: #292621; }
-.login-form-shell .text-stone-100 { color: #292621; }
-.login-form-shell .text-stone-500 { color: #786f64; }
 .route-loading span { background: #b8792b; }
 
 .host-quick-view { font-family: var(--font-main); }
 .host-quick-view .section-label, .host-quick-view .detail-label { color: #756d62; font-family: var(--font-main); font-weight: 600; letter-spacing: .07em; }
-.host-quick-view .text-stone-100, .host-quick-view .text-stone-200 { color: #332f2a; }
-.host-quick-view .text-stone-300, .host-quick-view .text-stone-400 { color: #5f584f; }
-.host-quick-view .text-stone-500, .host-quick-view .text-stone-600 { color: #786f64; }
-.host-quick-view .border-stone-800 { border-color: #d8d0c4; }
-.host-quick-view .bg-stone-800 { background: #d8d0c4; }
-.host-quick-view .text-sky-500 { color: #9a611d; }
 .host-quick-view .font-mono { font-family: var(--font-main); font-variant-numeric: tabular-nums; letter-spacing: 0; }
 .policy-safety-note { border-color: #d7d0c4; color: #625c53; background: #f5f1e9; }
 .policy-safety-note svg { color: #6e766c; }
