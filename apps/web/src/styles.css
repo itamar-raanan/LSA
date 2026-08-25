@@ -729,6 +729,8 @@ img, video, canvas, svg { max-width: 100%; }
 .ui-tab:active { transform: translateY(1px); }
 .ui-tab-active { color: #70440f; }
 .ui-tab-active::after { content: ""; position: absolute; inset: auto 10px -1px; height: 2px; background: #a86b1f; }
+.tab-count { display: inline-grid; min-width: 20px; height: 20px; place-items: center; border: 1px solid #d8d1c5; border-radius: 5px; padding: 0 5px; color: #756d62; background: #f3efe7; font-size: 9px; font-variant-numeric: tabular-nums; }
+.ui-tab-active .tab-count { border-color: #d5b784; color: #70440f; background: #f6ead5; }
 .finding-detail-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 
 .remediation-safety-banner { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; border: 1px solid #bcc9be; border-radius: 7px; padding: 13px 15px; color: #557361; background: #edf2ee; }

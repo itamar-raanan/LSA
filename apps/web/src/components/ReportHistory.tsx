@@ -46,7 +46,7 @@ export function ReportHistory({ hostId }: { hostId: string }) {
 
   if (loading) return <div className="skeleton h-52 rounded-[22px]" />
   if (error) return <ErrorState message={error} retry={reload} />
-  if (!data?.length) return null
+  if (!data?.length) return <section className="panel p-8 text-center"><FileTextEmptyState /></section>
 
   return (
     <section className="panel mt-4 overflow-hidden">
@@ -73,6 +73,10 @@ export function ReportHistory({ hostId }: { hostId: string }) {
       )}
     </section>
   )
+}
+
+function FileTextEmptyState() {
+  return <div className="mx-auto max-w-md"><p className="text-sm font-semibold text-stone-800">No Accepted Evidence</p><p className="mt-2 text-xs leading-5 text-stone-600">The first authenticated agent or offline report will establish this host's immutable evidence history.</p></div>
 }
 
 function formatBytes(value: number | null): string {
