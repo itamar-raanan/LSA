@@ -89,7 +89,7 @@ export function UsersSettingsPage() {
   }
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Identity governance" title="Users, roles & permissions" detail="Pre-provision users or allow just-in-time creation after successful organization authentication." action={users?.length ? <button className="button-primary" onClick={() => setAdding(true)} disabled={!providers?.length}><Plus size={16} /> Add user</button> : undefined} />
+    <PageHeader eyebrow="Identity governance" title="Users, roles & permissions" detail="Pre-provision users or allow just-in-time creation after successful organization authentication." action={users?.length ? <Button variant="primary" onClick={() => setAdding(true)} disabled={!providers?.length}><Plus size={16} /> Add user</Button> : undefined} />
     {adding && <section className="panel mb-6 overflow-hidden">
       <div className="flex items-start justify-between gap-4 border-b border-stone-800 px-6 py-5"><div><p className="section-label">External identity</p><h2 className="mt-2 text-base font-semibold text-stone-100">Pre-provision user</h2><p className="mt-2 text-xs leading-5 text-stone-600">LSA stores the identity link and role; authentication remains with your selected provider.</p></div><button className="icon-button" aria-label="Close add user form" onClick={() => setAdding(false)}><X size={16} /></button></div>
       <form className="grid gap-4 px-6 py-6 md:grid-cols-2" onSubmit={(event) => void createUser(event)}>
@@ -98,7 +98,7 @@ export function UsersSettingsPage() {
         <label className="form-field">Display name<input name="display_name" required autoComplete="name" placeholder="Itamar Raanan" /></label>
         <label className="form-field">Email address<input name="email" type="email" required autoComplete="email" placeholder="itamar@example.com" /></label>
         <label className="form-field">LSA role<select className="select-input min-h-11 w-full" name="role" defaultValue="auditor"><option value="admin">Administrator</option><option value="analyst">Analyst</option><option value="auditor">Auditor</option></select></label>
-        <div className="flex items-end justify-end gap-3"><button className="button-secondary" type="button" onClick={() => setAdding(false)}>Cancel</button><button className="button-primary" disabled={saving || !providerId}>{saving ? 'Adding…' : 'Add user'}</button></div>
+        <div className="flex items-end justify-end gap-3"><Button type="button" onClick={() => setAdding(false)}>Cancel</Button><Button variant="primary" disabled={saving || !providerId}>{saving ? 'Adding…' : 'Add User'}</Button></div>
         {formError && <p className="text-xs text-rose-400 md:col-span-2">{formError}</p>}
       </form>
     </section>}
@@ -107,11 +107,11 @@ export function UsersSettingsPage() {
       <SecurityTable rows={users} columns={columns} query={tableState.query} onQueryChange={tableState.setQuery} sort={tableState.sort} onSortChange={tableState.setSort} page={tableState.page} onPageChange={tableState.setPage} searchText={(managed) => `${managed.name} ${managed.email} ${managed.provider_name ?? ''} ${managed.auth_source} ${managed.role} ${managed.is_active ? 'active' : 'disabled'}`} rowLabel={(managed) => managed.name} searchPlaceholder="Search User, Provider, Role, Or Status" filename="lsa-users.csv" ariaLabel="Users" embedded />
       <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><UsersThree size={17} className="mt-0.5 shrink-0" />Disabling a user immediately revokes every active browser session. User identities remain linked to their provider subject.</div>
     </section>}
-    <section className="mt-8 overflow-hidden rounded-[22px] border border-stone-800 bg-[#f7f3eb]">
-      <div className="border-b border-stone-800 px-6 py-5"><p className="section-label">Enforced permission model</p><p className="mt-2 text-xs leading-5 text-stone-600">Administrative APIs enforce these role boundaries independently of the console.</p></div>
-      <div className="overflow-x-auto"><table className="data-table min-w-[680px]"><thead><tr><th>Capability</th><th>Administrator</th><th>Analyst</th><th>Auditor</th></tr></thead><tbody>{permissions.map((permission) => <tr key={permission.capability}><td>{permission.capability}</td>{(['admin', 'analyst', 'auditor'] as const).map((role) => <td key={role}>{permission[role] ? <Check size={16} className="text-[#4f6f5c]" aria-label="Allowed" /> : <Minus size={16} className="text-stone-700" aria-label="Not allowed" />}</td>)}</tr>)}</tbody></table></div>
-      <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />Role mapping originates in OIDC groups or the configured RADIUS reply attribute and can be corrected here.</div>
-    </section>
+    <details className="settings-disclosure mt-6">
+      <summary><span><strong>Enforced permission model</strong><small>Compare the capabilities enforced for Administrators, Analysts, and Auditors.</small></span></summary>
+      <div className="overflow-x-auto border-t border-stone-200"><table className="data-table min-w-[680px]"><thead><tr><th>Capability</th><th>Administrator</th><th>Analyst</th><th>Auditor</th></tr></thead><tbody>{permissions.map((permission) => <tr key={permission.capability}><td>{permission.capability}</td>{(['admin', 'analyst', 'auditor'] as const).map((role) => <td key={role}>{permission[role] ? <Check size={16} className="text-[#4f6f5c]" aria-label="Allowed" /> : <Minus size={16} className="text-stone-700" aria-label="Not allowed" />}</td>)}</tr>)}</tbody></table></div>
+      <div className="flex items-start gap-3 border-t border-stone-200 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />Role mapping originates in OIDC groups or the configured RADIUS reply attribute and can be corrected here.</div>
+    </details>
     <Dialog
       open={pendingChange !== null}
       onOpenChange={(open) => { if (!open && !updating) setPendingChange(null) }}

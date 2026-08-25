@@ -3,13 +3,13 @@ import {
   Layers3, LockKeyhole, ShieldCheck, ShieldX, TriangleAlert,
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { PageHeader } from '../components/PageHeader'
 import { ErrorState, LoadingState } from '../components/StatePanel'
 import { Button } from '../components/ui/Button'
 import { Dialog } from '../components/ui/Dialog'
+import { TabLink, TabList } from '../components/ui/Tabs'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime } from '../lib/dateTime'
 import type { RemediationChangeSet, RemediationCheckpointJob, RemediationPlan, RemediationRecoveryVerificationJob, RemediationValidationJob } from '../types'
@@ -205,7 +205,7 @@ export function ChangeSetsPage() {
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Change Governance" title="Signed Change Sets" detail="Compile approved plans into immutable canary envelopes, verify every readiness gate, and require independent authorization before signing." action={user?.role === 'admin' ? <Button variant="primary" onClick={() => { setMutationError(''); setCreating(true) }}>Prepare Change Set</Button> : undefined} />
-    <nav className="findings-view-tabs" aria-label="Security Finding Workspaces"><Link className="findings-view-tab" to="/findings">Findings Queue</Link><Link className="findings-view-tab" to="/findings?view=remediation">Remediation Review</Link><Link className="findings-view-tab findings-view-tab-active" to="/findings?view=change-sets" aria-current="page">Change Sets</Link></nav>
+    <TabList label="Security Finding Workspaces"><TabLink to="/findings">Findings Queue</TabLink><TabLink to="/findings?view=remediation">Remediation Review</TabLink><TabLink to="/findings?view=change-sets" active>Change Sets</TabLink></TabList>
     <div className="remediation-safety-banner"><KeyRound size={18} /><div><strong>Signing Does Not Enable Execution</strong><p>Change sets remain governed artifacts. Read-only preflight uses a separate signed validation route and cannot create an audit task or modify host configuration.</p></div></div>
     {workspace.loading && !workspace.data ? <LoadingState variant="table" /> : workspace.error ? <ErrorState message={workspace.error} retry={() => void workspace.reload()} /> : <section className="panel change-set-workspace" aria-label="Signed Change Set Workspace">
       <div className="change-set-queue"><header><div><h2>Authorization Queue</h2><p>{changeSets.length} Retained Envelope{changeSets.length === 1 ? '' : 's'}</p></div><Fingerprint size={18} /></header><ul>{changeSets.map(changeSet => <li key={changeSet.id}><button className={selected?.id === changeSet.id ? 'change-set-row change-set-row-active' : 'change-set-row'} onClick={() => setSelectedId(changeSet.id)}><ChangeSetStatus changeSet={changeSet} /><strong>{changeSet.plans.length} Change{changeSet.plans.length === 1 ? '' : 's'} · {changeSet.targets.length} Target{changeSet.targets.length === 1 ? '' : 's'}</strong><small>{formatDateTime(changeSet.maintenance_window_start)} · {changeSet.id.slice(0, 8)}</small></button></li>)}{!changeSets.length && <li className="change-set-empty"><LockKeyhole size={24} /><h2>No Change Sets Yet</h2><p>Approve a catalog-backed remediation plan, then prepare its canary and maintenance boundaries here.</p></li>}</ul></div>

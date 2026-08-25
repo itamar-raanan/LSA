@@ -6,6 +6,7 @@ import { CreateSigningKeyPanel } from '../components/CreateSigningKeyPanel'
 import { PageHeader } from '../components/PageHeader'
 import { type SecurityColumn, SecurityTable } from '../components/security/SecurityTable'
 import { StatusBadge } from '../components/security/StatusBadge'
+import { Button } from '../components/ui/Button'
 import { EmptyState, ErrorState, LoadingState } from '../components/StatePanel'
 import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
@@ -53,7 +54,7 @@ export function SigningKeysPage({ embedded = false }: { embedded?: boolean } = {
   const activeCount = keys.filter((item) => keyState(item) === 'active').length
   const scopedCount = keys.filter((item) => item.host_id).length
   const hostnames = new Map((data?.hosts ?? []).map((host) => [host.id, host.hostname]))
-  const createAction = <button className="button-primary" onClick={() => setCreating(true)}><Plus size={16} /> Register Key</button>
+  const createAction = <Button variant="primary" onClick={() => setCreating(true)}><Plus size={16} /> Register Key</Button>
   const columns: SecurityColumn<SigningKey>[] = [
     { id: 'key', header: 'Signing Key', priority: 'primary', hideable: false, sortValue: (item) => item.name, exportValue: (item) => item.name, cell: (item) => <span className="table-primary">{item.name}<small>ID {item.id} · Created {formatDate(item.created_at)}</small></span> },
     { id: 'scope', header: 'Scope', priority: 'secondary', sortValue: (item) => item.host_id ? hostnames.get(item.host_id) ?? '' : 'All Tenant Hosts', exportValue: (item) => item.host_id ? hostnames.get(item.host_id) ?? 'Unknown Host' : 'All Tenant Hosts', cell: (item) => <span className="table-primary">{item.host_id ? hostnames.get(item.host_id) ?? 'Unknown Host' : 'All Tenant Hosts'}<small>{item.host_id ? 'Host-Scoped' : 'Tenant-Wide'}</small></span> },

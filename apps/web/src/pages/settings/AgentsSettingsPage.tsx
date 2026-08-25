@@ -20,6 +20,7 @@ import { type SecurityColumn, SecurityTable } from '../../components/security/Se
 import { ErrorState, LoadingState } from '../../components/StatePanel'
 import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
+import { TabButton, TabList } from '../../components/ui/Tabs'
 import { useApi } from '../../hooks/useApi'
 import { formatDateTime } from '../../lib/dateTime'
 import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, LinuxAgent, PlatformCommandTrust, PolicyMode } from '../../types'
@@ -391,11 +392,11 @@ export function AgentsSettingsPage() {
                 {selectedGroup && <div><strong className="block font-mono text-lg font-medium text-stone-200">v{selectedGroup.policy_version}</strong><span className="text-[10px] text-stone-600">policy version</span></div>}
               </div>
             </div>
-            <nav className="mt-6 flex gap-6" aria-label="Group workspace tabs">
-              <button className={`workspace-tab ${activeTab === 'hosts' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('hosts')}><DesktopTower size={15} /> Hosts</button>
-              {selectedGroup && <button className={`workspace-tab ${activeTab === 'policy' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('policy')}><SlidersHorizontal size={15} /> Policy</button>}
-              <button className={`workspace-tab ${activeTab === 'deployment' ? 'workspace-tab-active' : ''}`} onClick={() => setActiveTab('deployment')}><DownloadSimple size={15} /> Deployment</button>
-            </nav>
+            <TabList label="Group Workspace" className="mb-0 mt-6">
+              <TabButton active={activeTab === 'hosts'} onClick={() => setActiveTab('hosts')}><DesktopTower size={15} /> Hosts</TabButton>
+              {selectedGroup && <TabButton active={activeTab === 'policy'} onClick={() => setActiveTab('policy')}><SlidersHorizontal size={15} /> Policy</TabButton>}
+              <TabButton active={activeTab === 'deployment'} onClick={() => setActiveTab('deployment')}><DownloadSimple size={15} /> Deployment</TabButton>
+            </TabList>
           </header>
 
           {activeTab === 'hosts' && <div>
@@ -571,7 +572,7 @@ export function AgentsSettingsPage() {
 
                 <div className="flex flex-col items-start justify-between gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7">
                   <span className="flex items-center gap-2 text-xs text-stone-600"><CheckCircle size={16} /> {hasPolicyChanges ? `${policyChangeCount} Pending ${policyChangeCount === 1 ? 'Change' : 'Changes'}` : 'No Unpublished Changes'}</span>
-                  <button className="button-primary" disabled={saving || assignedPolicy.assigned_groups > 1 || !hasPolicyChanges} onClick={() => setPolicyStage('review')}>Review Changes</button>
+                  <Button variant="primary" disabled={saving || assignedPolicy.assigned_groups > 1 || !hasPolicyChanges} onClick={() => setPolicyStage('review')}>Review Changes</Button>
                 </div>
               </div> : <div>
                 <div className="border-b border-stone-800 px-5 py-5 sm:px-7">

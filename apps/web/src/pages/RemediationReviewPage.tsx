@@ -11,6 +11,7 @@ import { SeverityBadge } from '../components/SeverityBadge'
 import { ErrorState, LoadingState } from '../components/StatePanel'
 import { Button } from '../components/ui/Button'
 import { Dialog } from '../components/ui/Dialog'
+import { TabLink, TabList } from '../components/ui/Tabs'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime } from '../lib/dateTime'
 import type { RemediationActionOperation, RemediationPlan, RemediationPlanStatus } from '../types'
@@ -233,11 +234,11 @@ export function RemediationReviewPage() {
 
   return <div className="page-reveal">
     <PageHeader eyebrow="Change Governance" title="Remediation Review" detail="Review current finding evidence, record accountable decisions, and preserve a complete change history without granting the console permission to modify a host." />
-    <nav className="findings-view-tabs" aria-label="Security Finding Workspaces">
-      <Link className="findings-view-tab" to="/findings">Findings Queue</Link>
-      <Link className="findings-view-tab findings-view-tab-active" to="/findings?view=remediation" aria-current="page">Remediation Review</Link>
-      <Link className="findings-view-tab" to="/findings?view=change-sets">Change Sets</Link>
-    </nav>
+    <TabList label="Security Finding Workspaces">
+      <TabLink to="/findings">Findings Queue</TabLink>
+      <TabLink to="/findings?view=remediation" active>Remediation Review</TabLink>
+      <TabLink to="/findings?view=change-sets">Change Sets</TabLink>
+    </TabList>
     <div className="remediation-safety-banner"><ShieldCheck size={18} /><div><strong>Review And Approval Are Non-Executable</strong><p>Plans contain evidence snapshots and human decisions only. The agent remains audit-only and no action on this page changes host configuration.</p></div></div>
     {plans.loading && !plans.data ? <LoadingState variant="table" /> : plans.error ? <ErrorState message={plans.error} retry={() => void plans.reload()} /> : <section className="panel remediation-review-desk" aria-label="Remediation Review Desk">
       <aside className="remediation-status-rail">

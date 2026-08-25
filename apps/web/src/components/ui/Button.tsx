@@ -12,11 +12,13 @@ const buttonVariants = cva(
         secondary: 'soc-button-secondary',
         ghost: 'soc-button-ghost',
         danger: 'soc-button-danger',
+        success: 'soc-button-success',
       },
       size: {
         sm: 'h-8 px-3 text-[11px]',
         md: 'h-9 px-3.5 text-xs',
         lg: 'h-10 px-4 text-xs',
+        iconSm: 'size-8 p-0',
         icon: 'size-9 p-0',
       },
     },
