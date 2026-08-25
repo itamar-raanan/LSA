@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Boxes, CornerDownLeft, FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { BookOpen, Boxes, CornerDownLeft, FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -26,6 +26,7 @@ const commands: CommandResult[] = [
   { id: 'remediation', label: 'Remediation Review', detail: 'Review requested changes and approval history', path: '/findings?view=remediation', icon: ShieldCheck, keywords: 'remediation changes approvals review', group: 'Navigate' },
   { id: 'change-sets', label: 'Signed Change Sets', detail: 'Review readiness gates, canaries, and independent authorization', path: '/findings?view=change-sets', icon: ShieldCheck, keywords: 'remediation signed change sets canary authorization', group: 'Navigate' },
   { id: 'evidence', label: 'Evidence Intake', detail: 'Upload an offline evidence bundle', path: '/evidence', icon: FileUp, keywords: 'offline upload report evidence intake', group: 'Navigate' },
+  { id: 'how-to', label: 'How To Use LSA', detail: 'Learn collection, investigation, and evidence workflows', path: '/how-to', icon: BookOpen, keywords: 'help guide getting started analyst secops agent offline ansible', group: 'Navigate' },
   { id: 'credentials', label: 'Administration · Credentials & Trust', detail: 'Manage ingestion tokens and signing keys', path: '/settings/credentials', icon: ShieldCheck, keywords: 'administration tokens signing keys credentials trust', group: 'Navigate', adminOnly: true },
   { id: 'certificates', label: 'Administration · TLS Certificates', detail: 'Review the console HTTPS identity', path: '/settings/certificates', icon: ShieldCheck, keywords: 'administration tls https certificate', group: 'Navigate', adminOnly: true },
   { id: 'administration', label: 'Administration', detail: 'Identity, trust, users, and access', path: '/settings', icon: Settings, keywords: 'settings admin users tokens', group: 'Navigate', adminOnly: true },
