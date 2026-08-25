@@ -64,11 +64,12 @@ export function HowToPage() {
             <div><dt>LSA Connection</dt><dd>Optional during collection</dd></div>
           </dl>
           <ol className="how-to-steps">
-            <li><span>1</span><p>{isAdmin ? 'Enroll the host and securely store its host-scoped ingestion token.' : 'Ask an administrator to enroll the host and issue a host-scoped ingestion token.'}</p></li>
-            <li><span>2</span><p>Copy the scanner inventory, set the host ID and deployment profile, then run the read-only playbook.</p></li>
-            <li><span>3</span><p>Upload the signed ZIP bundle through Evidence Intake, or use automatic upload-and-keep delivery.</p></li>
+            <li><span>1</span><p>Open Evidence Intake and download the offline scanner ZIP. It includes the scanner, inventory template, runner, checksums, and complete README.</p></li>
+            <li><span>2</span><p>{isAdmin ? 'Enroll the host, store its host-scoped ingestion token, and register the scanner public signing key.' : 'Ask an administrator to enroll the host, issue its token, and register the scanner public signing key.'}</p></li>
+            <li><span>3</span><p>Edit `inventory.ini`, then run `run-offline.sh` from the extracted package on the Ansible controller.</p></li>
+            <li><span>4</span><p>Import the unchanged `lsa-report-*.zip` through Evidence Intake with the host-scoped token.</p></li>
           </ol>
-          <Link to="/evidence" className="button-secondary">Open Evidence Intake <ArrowRight size={14} /></Link>
+          <Link to="/evidence" className="button-secondary">Download Scanner And Start <ArrowRight size={14} /></Link>
         </article>
 
         <article>

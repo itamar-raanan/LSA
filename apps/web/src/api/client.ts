@@ -26,6 +26,7 @@ import type {
   PolicyMode,
   AgentConnectivity,
   AgentPackage,
+  OfflineScannerPackage,
   AgentPolicyVersion,
   AgentTask,
   ApplicationVulnerability,
@@ -340,6 +341,22 @@ export const api = {
     }
     const disposition = response.headers.get('Content-Disposition') ?? ''
     const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `lsa-agent-${packageId}.tar.gz`
+    return { blob: await response.blob(), filename }
+  },
+  offlineScannerPackage(): Promise<OfflineScannerPackage> {
+    return request('/offline-scanner-package')
+  },
+  async downloadOfflineScannerPackage(): Promise<{ blob: Blob; filename: string }> {
+    const token = localStorage.getItem('lsa_session')
+    const response = await fetch(`${API_URL}/offline-scanner-package/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ detail: 'Offline scanner download failed' }))
+      throw new ApiError(payload.detail ?? 'Offline scanner download failed', response.status)
+    }
+    const disposition = response.headers.get('Content-Disposition') ?? ''
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? 'lsa-offline-scanner.zip'
     return { blob: await response.blob(), filename }
   },
   controlCatalog(): Promise<ControlCatalogItem[]> {

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-const surfaces = ['login', 'overview', 'assets', 'host-card', 'host-detail', 'agents', 'agents-policy', 'administration'] as const
+const surfaces = ['login', 'overview', 'assets', 'host-card', 'host-detail', 'agents', 'agents-policy', 'evidence', 'administration'] as const
 
 for (const surface of surfaces) {
   test(`${surface} visual baseline`, async ({ page }) => {

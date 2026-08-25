@@ -787,6 +787,14 @@ export interface AgentPackage {
   sha256: string
 }
 
+export interface OfflineScannerPackage {
+  version: string
+  filename: string
+  size_bytes: number
+  sha256: string
+  audit_only: true
+}
+
 export interface PlatformCommandTrust {
   key_id: string
   key_version: number

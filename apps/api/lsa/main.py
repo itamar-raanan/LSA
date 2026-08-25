@@ -15,6 +15,7 @@ from lsa.api import (
     change_sets,
     fleet,
     ingest,
+    offline_scanner,
     remediation_actions,
     remediations,
     settings as settings_api,
@@ -61,6 +62,7 @@ app.include_router(admin.router, prefix="/api/v1")
 app.include_router(agents.router, prefix="/api/v1")
 app.include_router(agent_packages.router, prefix="/api/v1")
 app.include_router(ingest.router, prefix="/api/v1")
+app.include_router(offline_scanner.router, prefix="/api/v1")
 app.include_router(artifacts.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
 app.include_router(vulnerabilities.router, prefix="/api/v1")
