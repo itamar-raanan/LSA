@@ -1,7 +1,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   Boxes, ChevronLeft, ChevronRight, FileBarChart,
-  Gauge, LogOut, Menu, MonitorCog, Search, Server, Settings, ShieldAlert,
+  Gauge, LogOut, Menu, MonitorCog, Search, Server, Settings, ShieldAlert, BookOpen,
 } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -25,6 +25,7 @@ const navigation: NavigationGroup[] = [
     { to: '/evidence', label: 'Evidence Intake', icon: FileBarChart },
   ] },
   { label: 'System', items: [
+    { to: '/how-to', label: 'How To', icon: BookOpen },
     { to: '/settings', label: 'Administration', icon: Settings, adminOnly: true },
   ] },
 ]
