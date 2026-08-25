@@ -70,15 +70,15 @@ export function TokensPage({ embedded = false, autoCreate = false }: { embedded?
       {loading ? <LoadingState variant="table" /> : error ? <ErrorState message={error} retry={reload} /> : (
         <>
           <section className="credential-summary sm:grid-cols-[1.2fr_1fr_1fr]">
-            <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Credential posture</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Secrets are displayed once and stored as one-way hashes.</p></div>
-            <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-100">{activeCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Active tokens</p></div>
-            <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-100">{usedCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Used credentials</p></div>
+            <div className="border-b border-stone-200 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Credential posture</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Secrets are displayed once and stored as one-way hashes.</p></div>
+            <div className="border-b border-stone-200 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-800">{activeCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Active tokens</p></div>
+            <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-800">{usedCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Used credentials</p></div>
           </section>
-          {actionError && <p className="mb-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{actionError}</p>}
+          {actionError && <p className="mb-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-700">{actionError}</p>}
           {!tokens.length ? <EmptyState title="No Scanner Credentials" detail="Issue a host-scoped token before configuring the first scanner controller." action={createAction} /> : (
             <section className="panel overflow-hidden">
               <SecurityTable rows={tokens} columns={columns} query={tableState.query} onQueryChange={tableState.setQuery} sort={tableState.sort} onSortChange={tableState.setSort} page={tableState.page} onPageChange={tableState.setPage} searchText={(token) => `${token.name} ${token.token_prefix} ${token.host_id ? hostnames.get(token.host_id) ?? '' : 'all tenant hosts'} ${tokenState(token)}`} rowLabel={(token) => token.name} searchPlaceholder="Search Credential, Scope, Or Status" filename="lsa-ingestion-tokens.csv" ariaLabel="Ingestion Tokens" embedded />
-              <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />Revocation takes effect immediately. Existing reports and host history remain unchanged.</div>
+              <div className="flex items-start gap-3 border-t border-stone-200 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />Revocation takes effect immediately. Existing reports and host history remain unchanged.</div>
             </section>
           )}
         </>

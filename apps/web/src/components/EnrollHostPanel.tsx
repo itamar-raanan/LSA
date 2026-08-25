@@ -56,7 +56,7 @@ export function EnrollHostPanel({ close, created }: { close: () => void; created
               <label className="form-field"><span>Environment</span><input value={form.environment} onChange={(event) => update('environment', event.target.value)} placeholder="production" /></label>
               <label className="form-field"><span>Owner</span><input value={form.owner} onChange={(event) => update('owner', event.target.value)} placeholder="platform" /></label>
             </div>
-            {error && <p className="mt-5 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{error}</p>}
+            {error && <p className="mt-5 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-700">{error}</p>}
             <div className="mt-7 flex justify-end gap-3"><Button type="button" onClick={close}>Cancel</Button><Button variant="primary" disabled={submitting}>{submitting ? 'Creating identity' : 'Create host and token'}</Button></div>
           </form>
         ) : (
@@ -73,5 +73,5 @@ export function EnrollHostPanel({ close, created }: { close: () => void; created
 }
 
 function CredentialRow({ label, value, copied, copy }: { label: string; value: string; copied: string; copy: (label: string, value: string) => Promise<void> }) {
-  return <div className="mt-5"><p className="detail-label">{label}</p><div className="mt-2 flex items-center gap-3 rounded-xl border border-stone-800 bg-[#eee8dd] px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-stone-300">{value}</code><Button variant="ghost" size="icon" className="shrink-0" aria-label={`Copy ${label}`} onClick={() => void copy(label, value)}>{copied === label ? <Check size={16} /> : <Copy size={16} />}</Button></div></div>
+  return <div className="mt-5"><p className="detail-label">{label}</p><div className="mt-2 flex items-center gap-3 rounded-xl border border-stone-200 bg-[#eee8dd] px-4 py-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-stone-700">{value}</code><Button variant="ghost" size="icon" className="shrink-0" aria-label={`Copy ${label}`} onClick={() => void copy(label, value)}>{copied === label ? <Check size={16} /> : <Copy size={16} />}</Button></div></div>
 }

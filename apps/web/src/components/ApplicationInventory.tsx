@@ -37,14 +37,14 @@ export function ApplicationInventory({ hostId }: { hostId: string }) {
         {([['all', `All ${packageCount + serviceCount}`], ['package', `Packages ${packageCount}`], ['service', `Services ${serviceCount}`]] as const).map(([value, label]) => <button key={value} className={kind === value ? 'filter-chip filter-chip-active' : 'filter-chip'} aria-pressed={kind === value} onClick={() => { setKind(value); setVisibleCount(100) }}>{label}</button>)}
       </div>
     </div>
-    <div className="border-t border-stone-800 px-6 py-4 md:px-8">
+    <div className="border-t border-stone-200 px-6 py-4 md:px-8">
       <label className="relative block max-w-md"><span className="sr-only">Search application inventory</span><MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-600" size={16} /><input className="search-input" placeholder="Search name, version, publisher, or description" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100) }} /></label>
     </div>
-    {inventoryState.loading ? <div className="skeleton m-6 h-40 rounded-2xl" /> : inventoryState.error ? <div className="p-6 text-sm text-rose-300">{inventoryState.error}</div> : !inventoryState.data?.length ? <div className="border-t border-stone-800 p-10 text-center text-sm text-stone-500">No application inventory has been reported yet.</div> : !applications.length ? <div className="border-t border-stone-800 p-10 text-center text-sm text-stone-500">No inventory items match this filter.</div> : <div className="max-h-[34rem] overflow-auto border-t border-stone-800">
+    {inventoryState.loading ? <div className="skeleton m-6 h-40 rounded-2xl" /> : inventoryState.error ? <div className="p-6 text-sm text-rose-700">{inventoryState.error}</div> : !inventoryState.data?.length ? <div className="border-t border-stone-200 p-10 text-center text-sm text-stone-500">No application inventory has been reported yet.</div> : !applications.length ? <div className="border-t border-stone-200 p-10 text-center text-sm text-stone-500">No inventory items match this filter.</div> : <div className="max-h-[34rem] overflow-auto border-t border-stone-200">
       <table className="data-table min-w-[760px]">
         <thead><tr><th>Application</th><th>Type</th><th>Version</th><th>State</th><th>Source</th><th>Last observed</th></tr></thead>
         <tbody>{visibleApplications.map((item) => <tr key={item.id}>
-          <td><span className="flex items-center gap-2 font-medium text-stone-200">{item.kind === 'package' ? <Package size={15} className="text-[#4f6f5c]" /> : <Gear size={15} className="text-[#4f6f5c]" />}{item.name}</span>{item.description && <span className="table-subtitle max-w-md truncate">{item.description}</span>}</td>
+          <td><span className="flex items-center gap-2 font-medium text-stone-800">{item.kind === 'package' ? <Package size={15} className="text-[#4f6f5c]" /> : <Gear size={15} className="text-[#4f6f5c]" />}{item.name}</span>{item.description && <span className="table-subtitle max-w-md truncate">{item.description}</span>}</td>
           <td className="capitalize">{item.kind}</td>
           <td className="font-mono text-xs">{item.version ?? '—'}{item.architecture && <span className="table-subtitle">{item.architecture}</span>}</td>
           <td><span className={item.running ? 'text-[#4f6f5c]' : 'text-stone-400'}>{state(item)}</span>{item.kind === 'service' && <span className="table-subtitle">{item.enabled ? 'enabled at boot' : 'not enabled at boot'}</span>}</td>
@@ -52,7 +52,7 @@ export function ApplicationInventory({ hostId }: { hostId: string }) {
           <td className="font-mono text-xs text-stone-500">{formatDate(item.last_seen_at)}</td>
         </tr>)}</tbody>
       </table>
-      {visibleApplications.length < applications.length && <div className="flex items-center justify-between border-t border-stone-800 px-6 py-4"><p className="font-mono text-[10px] text-stone-600">Showing {visibleApplications.length} of {applications.length}</p><button className="button-secondary min-h-9 px-3" onClick={() => setVisibleCount((value) => value + 100)}>Show 100 more</button></div>}
+      {visibleApplications.length < applications.length && <div className="flex items-center justify-between border-t border-stone-200 px-6 py-4"><p className="font-mono text-[10px] text-stone-600">Showing {visibleApplications.length} of {applications.length}</p><button className="button-secondary min-h-9 px-3" onClick={() => setVisibleCount((value) => value + 100)}>Show 100 more</button></div>}
     </div>}
   </section>
 }

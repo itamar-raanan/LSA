@@ -41,19 +41,19 @@ export function HostDetailPage() {
               ['Owner', host.tags.owner ?? 'Unassigned'],
               ['Application', host.tags.application ?? 'Unassigned'],
               ['Criticality', host.tags.criticality ?? 'Unassigned'],
-            ].map(([label, value]) => <div key={label}><dt className="text-[10px] capitalize tracking-wider text-stone-600">{label}</dt><dd className="mt-2 text-sm capitalize text-stone-300">{value}</dd></div>)}
+            ].map(([label, value]) => <div key={label}><dt className="text-[10px] capitalize tracking-wider text-stone-600">{label}</dt><dd className="mt-2 text-sm capitalize text-stone-700">{value}</dd></div>)}
           </dl>
         </div>
         <div className="panel p-6 md:p-8">
           <p className="section-label">Current posture</p>
           <div className="mt-8 grid grid-cols-2 gap-7">
-            <div><span className="font-mono text-4xl tracking-[-0.08em] text-stone-50">{host.security_score?.toFixed(1) ?? '—'}</span><p className="mt-2 text-xs text-stone-600">Security score</p></div>
-            <div><span className="font-mono text-4xl tracking-[-0.08em] text-stone-50">{host.compliance_score?.toFixed(1) ?? '—'}</span><p className="mt-2 text-xs text-stone-600">Compliance</p></div>
+            <div><span className="font-mono text-4xl tracking-[-0.08em] text-stone-900">{host.security_score?.toFixed(1) ?? '—'}</span><p className="mt-2 text-xs text-stone-600">Security score</p></div>
+            <div><span className="font-mono text-4xl tracking-[-0.08em] text-stone-900">{host.compliance_score?.toFixed(1) ?? '—'}</span><p className="mt-2 text-xs text-stone-600">Compliance</p></div>
           </div>
-          <div className="mt-8 space-y-3 border-t border-stone-800 pt-6">
-            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 text-stone-500"><ShieldCheck size={16} /> Critical findings</span><span className="font-mono text-rose-400">{host.finding_counts.critical}</span></div>
-            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 text-stone-500"><Network size={16} /> High findings</span><span className="font-mono text-orange-300">{host.finding_counts.high}</span></div>
-            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 text-stone-500"><HardDrive size={16} /> Last report</span><span className="font-mono text-stone-300">{formatDate(host.last_scan_at, 'Never')}</span></div>
+          <div className="mt-8 space-y-3 border-t border-stone-200 pt-6">
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 text-stone-500"><ShieldCheck size={16} /> Critical findings</span><span className="font-mono text-rose-700">{host.finding_counts.critical}</span></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 text-stone-500"><Network size={16} /> High findings</span><span className="font-mono text-orange-700">{host.finding_counts.high}</span></div>
+            <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 text-stone-500"><HardDrive size={16} /> Last report</span><span className="font-mono text-stone-700">{formatDate(host.last_scan_at, 'Never')}</span></div>
           </div>
         </div>
       </section>
@@ -65,15 +65,15 @@ export function HostDetailPage() {
       <ReportHistory hostId={host.id} />
       <section className="panel mt-4 overflow-hidden">
         <div className="px-6 py-5 md:px-8"><p className="section-label">Open findings</p></div>
-        {findingState.loading ? <div className="skeleton m-6 h-40 rounded-2xl" /> : findingState.error ? <div className="p-6 text-sm text-rose-300">{findingState.error}</div> : !findingState.data?.length ? <div className="border-t border-stone-800 p-10 text-center text-sm text-stone-500">No open findings in the latest report.</div> : (
-          <div className="divide-y divide-stone-800 border-t border-stone-800">{findingState.data.map((finding) => (
+        {findingState.loading ? <div className="skeleton m-6 h-40 rounded-2xl" /> : findingState.error ? <div className="p-6 text-sm text-rose-700">{findingState.error}</div> : !findingState.data?.length ? <div className="border-t border-stone-200 p-10 text-center text-sm text-stone-500">No open findings in the latest report.</div> : (
+          <div className="divide-y divide-stone-200 border-t border-stone-200">{findingState.data.map((finding) => (
             <article key={finding.id}>
               <button className="grid w-full gap-5 px-6 py-5 text-left md:grid-cols-[auto_1fr_auto] md:px-8" onClick={() => setExpandedFinding(expandedFinding === finding.id ? null : finding.id)} aria-expanded={expandedFinding === finding.id}>
                 <SeverityBadge severity={finding.severity} />
-                <div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-stone-200">{finding.title}</p><span className="font-mono text-[9px] text-stone-600">{finding.control_id}</span></div><p className="mt-2 text-xs leading-5 text-stone-500">{finding.remediation_summary ?? 'Open the guide to compare the current and required states.'}</p></div>
+                <div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-stone-800">{finding.title}</p><span className="font-mono text-[9px] text-stone-600">{finding.control_id}</span></div><p className="mt-2 text-xs leading-5 text-stone-500">{finding.remediation_summary ?? 'Open the guide to compare the current and required states.'}</p></div>
                 <CaretDown size={16} className={`mt-1 text-stone-600 transition-transform ${expandedFinding === finding.id ? 'rotate-180' : ''}`} />
               </button>
-              {expandedFinding === finding.id && <div className="border-t border-stone-800 bg-[#f7f3eb] px-5 py-6 md:px-8"><RemediationGuide finding={finding} /></div>}
+              {expandedFinding === finding.id && <div className="border-t border-stone-200 bg-[#f7f3eb] px-5 py-6 md:px-8"><RemediationGuide finding={finding} /></div>}
             </article>
           ))}</div>
         )}

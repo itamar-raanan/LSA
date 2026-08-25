@@ -70,15 +70,15 @@ export function SigningKeysPage({ embedded = false }: { embedded?: boolean } = {
       {loading ? <LoadingState variant="table" /> : error ? <ErrorState message={error} retry={reload} /> : (
         <>
           <section className="credential-summary sm:grid-cols-[1.2fr_1fr_1fr]">
-            <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Evidence trust</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Ed25519 signatures bind each report manifest to a registered controller key.</p></div>
-            <div className="border-b border-stone-800 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-100">{activeCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Active keys</p></div>
-            <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-100">{scopedCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Host-scoped keys</p></div>
+            <div className="border-b border-stone-200 px-6 py-5 sm:border-b-0 sm:border-r"><p className="section-label">Evidence trust</p><p className="mt-3 max-w-sm text-sm leading-6 text-stone-400">Ed25519 signatures bind each report manifest to a registered controller key.</p></div>
+            <div className="border-b border-stone-200 px-6 py-5 sm:border-b-0 sm:border-r"><p className="font-mono text-2xl text-stone-800">{activeCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Active keys</p></div>
+            <div className="px-6 py-5"><p className="font-mono text-2xl text-stone-800">{scopedCount}</p><p className="mt-2 text-[10px] capitalize tracking-wider text-stone-600">Host-scoped keys</p></div>
           </section>
-          {actionError && <p className="mb-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{actionError}</p>}
+          {actionError && <p className="mb-4 rounded-xl border border-rose-900/50 bg-rose-950/20 px-4 py-3 text-xs text-rose-700">{actionError}</p>}
           {!keys.length ? <EmptyState title="No Trusted Signing Keys" detail="Generate a key on the scanner controller, then register its public half to verify future report bundles." action={createAction} /> : (
             <section className="panel overflow-hidden">
               <SecurityTable rows={keys} columns={columns} query={tableState.query} onQueryChange={tableState.setQuery} sort={tableState.sort} onSortChange={tableState.setSort} page={tableState.page} onPageChange={tableState.setPage} searchText={(item) => `${item.name} ${item.id} ${item.fingerprint} ${item.host_id ? hostnames.get(item.host_id) ?? '' : 'all tenant hosts'} ${keyState(item)}`} rowLabel={(item) => item.name} searchPlaceholder="Search Key, Scope, Fingerprint, Or Status" filename="lsa-signing-keys.csv" ariaLabel="Signing Keys" embedded />
-              <div className="flex items-start gap-3 border-t border-stone-800 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />The platform verifies the exact manifest bytes before accepting signed evidence. Revocation blocks new submissions without invalidating historical provenance.</div>
+              <div className="flex items-start gap-3 border-t border-stone-200 bg-[#f7f3eb] px-6 py-4 text-xs leading-5 text-stone-600"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#4f6f5c]" />The platform verifies the exact manifest bytes before accepting signed evidence. Revocation blocks new submissions without invalidating historical provenance.</div>
             </section>
           )}
         </>

@@ -95,7 +95,7 @@ function AgentTable({ agents, groups, packageVersion, submit, selected, setSelec
     title={`Revoke ${revoking?.hostname ?? 'agent'}?`}
     description="The agent identity will be rejected immediately. Existing reports remain available, but this installation cannot reconnect or submit new evidence."
   >
-    <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-300">Re-enrolling this host later creates a new agent identity and requires a new one-time enrollment token.</div>
+    <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-700">Re-enrolling this host later creates a new agent identity and requires a new one-time enrollment token.</div>
     <div className="mt-6 flex justify-end gap-3"><Button onClick={() => setRevoking(null)}>Cancel</Button><Button variant="danger" disabled={!revoking} onClick={() => { if (revoking) void submit(() => api.revokeAgent(revoking.id)).finally(() => setRevoking(null)) }}>Revoke agent</Button></div>
   </Dialog>
   </>
@@ -113,13 +113,13 @@ function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, s
   saving: boolean
 }) {
   const activeAgents = agents.filter(agent => !agent.revoked_at)
-  return <aside className="min-w-0 overflow-hidden border-b border-stone-800 bg-[#f7f3eb] lg:min-h-[690px] lg:border-b-0 lg:border-r" aria-label="Agent groups">
-    <div className="flex items-center justify-between border-b border-stone-800 px-4 py-4">
+  return <aside className="min-w-0 overflow-hidden border-b border-stone-200 bg-[#f7f3eb] lg:min-h-[690px] lg:border-b-0 lg:border-r" aria-label="Agent groups">
+    <div className="flex items-center justify-between border-b border-stone-200 px-4 py-4">
       <div><p className="section-label">Fleet scope</p><p className="mt-1 text-xs text-stone-500">{groups.length} groups</p></div>
       <button className="icon-button" onClick={() => setShowCreate(!showCreate)} aria-label="Create group"><Plus size={15} /></button>
     </div>
 
-    {showCreate && <form className="grid min-w-0 gap-3 border-b border-stone-800 bg-[#f7f3eb] p-4" onSubmit={createGroup}>
+    {showCreate && <form className="grid min-w-0 gap-3 border-b border-stone-200 bg-[#f7f3eb] p-4" onSubmit={createGroup}>
       <label className="form-field">Group name<input name="name" required placeholder="Database servers" /></label>
       <label className="form-field">Description<input name="description" placeholder="Production database fleet" /></label>
       <label className="form-field">Initial policy<select name="policy_id" className="select-input w-full" required>{policies.map(policy => <option key={policy.id} value={policy.id}>{policy.name}</option>)}</select></label>
@@ -362,7 +362,7 @@ export function AgentsSettingsPage() {
       detail="Monitor agent connectivity, review accepted report freshness, and manage group-specific policy and deployment."
       action={<button className="button-primary" onClick={() => { setActiveTab('deployment'); setToken(''); setEnrollmentTrust(null); setEnrollmentType('one_time') }}><Key size={16} /> Deploy agent</button>}
     />
-    {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-300">{formError}</div>}
+    {formError && <div className="mb-5 rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs text-rose-700">{formError}</div>}
     {showDownloads && <AgentDownloadPanel packages={data.packages} platformUrl={data.connectivity.public_url} platformTrust={enrollmentTrust ?? data.connectivity.platform_trust} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
 
     <section className="panel overflow-hidden">
@@ -380,16 +380,16 @@ export function AgentsSettingsPage() {
         />
 
         <div className="min-w-0">
-          <header className="border-b border-stone-800 px-5 pt-5 sm:px-7 sm:pt-6">
+          <header className="border-b border-stone-200 px-5 pt-5 sm:px-7 sm:pt-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-stone-500">{selectedGroup ? <FolderSimple size={16} /> : <UsersThree size={16} />}<span className="section-label">{selectedGroup ? 'Agent group' : 'Fleet inventory'}</span></div>
-                <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-stone-100">{selectedGroup?.name ?? 'All Agents'}</h2>
+                <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-stone-800">{selectedGroup?.name ?? 'All Agents'}</h2>
                 <p className="mt-1 text-xs leading-5 text-stone-500">{selectedGroup?.description || (selectedGroup ? `${selectedGroup.policy_name} is applied to this group.` : 'Every agent across all policy groups.')}</p>
               </div>
-              <div className="flex items-center gap-6 border-l border-stone-800 pl-5">
-                <div><strong className="block font-mono text-lg font-medium text-stone-200">{activeCount}</strong><span className="text-[10px] text-stone-600">active hosts</span></div>
-                {selectedGroup && <div><strong className="block font-mono text-lg font-medium text-stone-200">v{selectedGroup.policy_version}</strong><span className="text-[10px] text-stone-600">policy version</span></div>}
+              <div className="flex items-center gap-6 border-l border-stone-200 pl-5">
+                <div><strong className="block font-mono text-lg font-medium text-stone-800">{activeCount}</strong><span className="text-[10px] text-stone-600">active hosts</span></div>
+                {selectedGroup && <div><strong className="block font-mono text-lg font-medium text-stone-800">v{selectedGroup.policy_version}</strong><span className="text-[10px] text-stone-600">policy version</span></div>}
               </div>
             </div>
             <TabList label="Group Workspace" className="mb-0 mt-6">
@@ -410,32 +410,32 @@ export function AgentsSettingsPage() {
           </div>}
 
           {activeTab === 'deployment' && <div>
-            <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
+            <div className="border-b border-stone-200 px-5 py-5 sm:px-7">
               <p className="section-label">Agent deployment</p>
-              <h3 className="mt-2 text-base font-semibold text-stone-100">Enroll Linux hosts</h3>
+              <h3 className="mt-2 text-base font-semibold text-stone-800">Enroll Linux hosts</h3>
               <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-500">Use a short-lived token for one host or a controlled reusable tenant token for automated fleet enrollment. Every host enters the selected group and verifies the pinned platform identity.</p>
             </div>
             <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,.8fr)]">
-              <section className="min-w-0 border-b border-stone-800 px-5 py-6 sm:px-7 lg:border-b-0 lg:border-r">
+              <section className="min-w-0 border-b border-stone-200 px-5 py-6 sm:px-7 lg:border-b-0 lg:border-r">
                 <div className="flex items-start justify-between gap-4">
-                  <div><p className="section-label">Connection destination</p><p className="mt-3 text-sm font-medium text-stone-200">Dedicated agent gateway</p><code className="mt-2 block break-all text-[11px] text-stone-500">{data.connectivity.public_url}</code></div>
+                  <div><p className="section-label">Connection destination</p><p className="mt-3 text-sm font-medium text-stone-800">Dedicated agent gateway</p><code className="mt-2 block break-all text-[11px] text-stone-500">{data.connectivity.public_url}</code></div>
                   <span className="status-pill status-pill-online">Identity Pinned</span>
                 </div>
-                <div className="mt-6 grid gap-4 border-t border-stone-800 pt-5 sm:grid-cols-2">
-                  <div><span className="detail-label">Current release</span><strong className="mt-2 block text-sm font-semibold text-stone-200">{data.packages[0]?.version ?? 'Unavailable'}</strong><span className="table-subtitle">{data.packages.length} package formats</span></div>
-                  <div><span className="detail-label">Operating mode</span><strong className="mt-2 block text-sm font-semibold text-stone-200">Audit only</strong><span className="table-subtitle">Host configuration is not changed</span></div>
+                <div className="mt-6 grid gap-4 border-t border-stone-200 pt-5 sm:grid-cols-2">
+                  <div><span className="detail-label">Current release</span><strong className="mt-2 block text-sm font-semibold text-stone-800">{data.packages[0]?.version ?? 'Unavailable'}</strong><span className="table-subtitle">{data.packages.length} package formats</span></div>
+                  <div><span className="detail-label">Operating mode</span><strong className="mt-2 block text-sm font-semibold text-stone-800">Audit only</strong><span className="table-subtitle">Host configuration is not changed</span></div>
                 </div>
-                <div className="mt-4 border-t border-stone-800 pt-4"><span className="detail-label">Platform identity fingerprint</span><code className="mt-2 block break-all text-[10px] text-stone-500">SHA256:{data.connectivity.platform_trust.fingerprint}</code></div>
-                <div className="mt-5 border-t border-stone-800 pt-5">
+                <div className="mt-4 border-t border-stone-200 pt-4"><span className="detail-label">Platform identity fingerprint</span><code className="mt-2 block break-all text-[10px] text-stone-500">SHA256:{data.connectivity.platform_trust.fingerprint}</code></div>
+                <div className="mt-5 border-t border-stone-200 pt-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <span className="detail-label">Signing Key Rotation</span>
                       {data.connectivity.key_rotation ? <>
-                        <strong className="mt-2 block text-sm font-semibold text-stone-200">{data.connectivity.key_rotation.status === 'ready' ? 'Ready To Activate' : 'Waiting For Agent Acknowledgement'}</strong>
+                        <strong className="mt-2 block text-sm font-semibold text-stone-800">{data.connectivity.key_rotation.status === 'ready' ? 'Ready To Activate' : 'Waiting For Agent Acknowledgement'}</strong>
                         <p className="mt-1 text-xs leading-5 text-stone-500">{data.connectivity.key_rotation.acknowledged_agents} of {data.connectivity.key_rotation.eligible_agents} supported agents acknowledged version {data.connectivity.key_rotation.next_key.key_version}. {data.connectivity.key_rotation.blocking_agents > 0 ? `${data.connectivity.key_rotation.blocking_agents} agent(s) still block activation.` : 'Every managed agent can verify the new identity.'}</p>
                         <code className="mt-3 block break-all text-[10px] text-stone-500">Next SHA256:{data.connectivity.key_rotation.next_key.fingerprint}</code>
                       </> : <>
-                        <strong className="mt-2 block text-sm font-semibold text-stone-200">Version {data.connectivity.platform_trust.key_version} Active</strong>
+                        <strong className="mt-2 block text-sm font-semibold text-stone-800">Version {data.connectivity.platform_trust.key_version} Active</strong>
                         <p className="mt-1 text-xs leading-5 text-stone-500">Stage a replacement without interrupting agents. Activation remains locked until every active agent acknowledges it.</p>
                       </>}
                     </div>
@@ -452,7 +452,7 @@ export function AgentsSettingsPage() {
                 <p className="section-label">Enrollment credential</p>
                 {token ? <div className="mt-4">
                   <p className="text-xs leading-5 text-stone-500">Copy this token now; it will not be shown again. {createdTokenType === 'one_time' ? 'It becomes invalid after one successful enrollment.' : `It can enroll multiple hosts until expiry${createdTokenMaxUses ? ` or ${createdTokenMaxUses} successful uses` : ''}. Store it in your deployment secret manager.`}</p>
-                  <code className="mt-4 block min-w-0 overflow-x-auto rounded-lg border border-stone-800 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code>
+                  <code className="mt-4 block min-w-0 overflow-x-auto rounded-lg border border-stone-200 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code>
                   <div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy token</Button><Button variant="primary" onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> Continue to installation</Button></div>
                 </div> : <form className="mt-4 grid gap-4" onSubmit={createEnrollment}>
                   {activeReusableToken && <div className="rounded-xl border border-[#b8c5ba] bg-[#edf1eb] p-4 text-xs leading-5 text-stone-600"><div className="flex min-w-0 items-start justify-between gap-4"><div className="min-w-0"><strong className="block truncate font-medium text-stone-800">{activeReusableToken.name}</strong><span className="mt-1 block">Reusable tenant token · {activeReusableToken.group_name}</span><span className="mt-1 block">{activeReusableToken.use_count}{activeReusableToken.max_uses === null ? ' uses' : ` of ${activeReusableToken.max_uses} uses`} · Expires {formatDateTime(activeReusableToken.expires_at)}</span></div><Button type="button" disabled={saving} onClick={() => void submit(() => api.revokeAgentEnrollmentToken(activeReusableToken.id))}><Prohibit size={14} /> Revoke</Button></div></div>}
@@ -468,7 +468,7 @@ export function AgentsSettingsPage() {
           </div>}
 
           {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] min-w-0 md:grid-cols-[210px_minmax(0,1fr)]">
-            <nav className="min-w-0 overflow-hidden border-b border-stone-800 bg-[#f7f3eb] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
+            <nav className="min-w-0 overflow-hidden border-b border-stone-200 bg-[#f7f3eb] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
               <button className={`policy-category-item ${selectedCategory === 'overview' && policyStage === 'configure' ? 'policy-category-item-active' : ''}`} onClick={() => { setSelectedCategory('overview'); setPolicyStage('configure') }}><SlidersHorizontal size={15} /><span>Overview</span></button>
               <div className="px-3 pb-2 pt-5"><span className="section-label">Control categories</span></div>
               <div className="flex gap-1 overflow-x-auto md:block md:space-y-1">{categories.map(([category, controls]) => <button key={category} className={`policy-category-item min-w-44 md:min-w-0 ${selectedCategory === category && policyStage === 'configure' ? 'policy-category-item-active' : ''}`} onClick={() => { setSelectedCategory(category); setPolicyStage('configure') }}><span className="min-w-0 flex-1 truncate text-left capitalize">{category.replaceAll('_', ' ')}</span><span className="font-mono text-[9px] text-stone-600">{controls.length}</span></button>)}</div>
@@ -480,16 +480,16 @@ export function AgentsSettingsPage() {
                   <ShieldCheck size={17} className="mt-0.5 shrink-0" />
                   <span><strong>Audit-Only Safety Lock Is Active.</strong> Publishing changes what the agent audits, but this release still cannot modify host configuration.</span>
                 </div>
-                <div className="border-b border-stone-800 px-5 py-6 sm:px-7">
+                <div className="border-b border-stone-200 px-5 py-6 sm:px-7">
                   <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                     <div>
                       <p className="section-label">Review Policy Changes</p>
-                      <h3 className="mt-2 text-xl font-semibold text-stone-100">Confirm Version {assignedPolicy.version + 1}</h3>
+                      <h3 className="mt-2 text-xl font-semibold text-stone-800">Confirm Version {assignedPolicy.version + 1}</h3>
                       <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-500">Review the differences below before publishing an immutable policy version for {selectedGroup.name}.</p>
                     </div>
                     <span className="settings-state">{policyChangeCount} {policyChangeCount === 1 ? 'Change' : 'Changes'}</span>
                   </div>
-                  <ol className="mt-6 grid max-w-2xl grid-cols-3 border-y border-stone-800 py-3 text-[11px]">
+                  <ol className="mt-6 grid max-w-2xl grid-cols-3 border-y border-stone-200 py-3 text-[11px]">
                     <li className="text-stone-500"><span className="mr-2 font-mono">01</span>Configure</li>
                     <li className="font-semibold text-[#80551f]"><span className="mr-2 font-mono">02</span>Review</li>
                     <li className="text-stone-500"><span className="mr-2 font-mono">03</span>Publish</li>
@@ -497,27 +497,27 @@ export function AgentsSettingsPage() {
                 </div>
 
                 <div className="px-5 py-6 sm:px-7">
-                  <div className="grid gap-px overflow-hidden rounded-xl border border-stone-800 bg-stone-800 sm:grid-cols-2">
-                    <div className="bg-[#fbfaf7] p-4"><span className="detail-label">Policy</span><strong className="mt-2 block text-sm text-stone-200">{assignedPolicy.name}</strong><span className="table-subtitle">Version {assignedPolicy.version} → {assignedPolicy.version + 1}</span></div>
-                    <div className="bg-[#fbfaf7] p-4"><span className="detail-label">Assigned Group</span><strong className="mt-2 block text-sm text-stone-200">{selectedGroup.name}</strong><span className="table-subtitle">{selectedGroup.agent_count} Enrolled Hosts</span></div>
+                  <div className="grid gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 sm:grid-cols-2">
+                    <div className="bg-[#fbfaf7] p-4"><span className="detail-label">Policy</span><strong className="mt-2 block text-sm text-stone-800">{assignedPolicy.name}</strong><span className="table-subtitle">Version {assignedPolicy.version} → {assignedPolicy.version + 1}</span></div>
+                    <div className="bg-[#fbfaf7] p-4"><span className="detail-label">Assigned Group</span><strong className="mt-2 block text-sm text-stone-800">{selectedGroup.name}</strong><span className="table-subtitle">{selectedGroup.agent_count} Enrolled Hosts</span></div>
                   </div>
 
-                  <div className="mt-6 border-y border-stone-800">
-                    {policyChanges.defaultMode && <div className="grid gap-2 border-b border-stone-800 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Default Mode</span><span className="text-xs text-stone-300"><s className="mr-3 text-stone-500">{assignedPolicy.default_mode}</s><strong>{draftDefaultMode}</strong></span></div>}
-                    {policyChanges.schedule && <div className="grid gap-2 border-b border-stone-800 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Audit Schedule</span><span className="text-xs text-stone-300"><s className="mr-3 text-stone-500">{Number(assignedPolicy.settings.schedule_minutes ?? 60)} Minutes</s><strong>{draftSchedule} Minutes</strong></span></div>}
-                    {policyChanges.description && <div className="grid gap-2 border-b border-stone-800 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Description</span><div className="text-xs leading-5 text-stone-300"><p className="text-stone-500">{assignedPolicy.description || 'No Description'}</p><p className="mt-1 font-medium">{draftDescription || 'No Description'}</p></div></div>}
+                  <div className="mt-6 border-y border-stone-200">
+                    {policyChanges.defaultMode && <div className="grid gap-2 border-b border-stone-200 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Default Mode</span><span className="text-xs text-stone-700"><s className="mr-3 text-stone-500">{assignedPolicy.default_mode}</s><strong>{draftDefaultMode}</strong></span></div>}
+                    {policyChanges.schedule && <div className="grid gap-2 border-b border-stone-200 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Audit Schedule</span><span className="text-xs text-stone-700"><s className="mr-3 text-stone-500">{Number(assignedPolicy.settings.schedule_minutes ?? 60)} Minutes</s><strong>{draftSchedule} Minutes</strong></span></div>}
+                    {policyChanges.description && <div className="grid gap-2 border-b border-stone-200 py-4 sm:grid-cols-[180px_minmax(0,1fr)]"><span className="detail-label">Description</span><div className="text-xs leading-5 text-stone-700"><p className="text-stone-500">{assignedPolicy.description || 'No Description'}</p><p className="mt-1 font-medium">{draftDescription || 'No Description'}</p></div></div>}
                     {policyChanges.controls.length > 0 && <div className="py-4">
                       <div className="mb-3 flex items-center justify-between gap-3"><span className="detail-label">Control Overrides</span><span className="font-mono text-[10px] text-stone-500">{policyChanges.controls.length} Changed</span></div>
-                      <div className="divide-y divide-stone-800">{policyChanges.controls.map(change => <div key={change.controlId} className="grid gap-2 py-3 sm:grid-cols-[180px_minmax(0,1fr)_160px] sm:items-center">
+                      <div className="divide-y divide-stone-200">{policyChanges.controls.map(change => <div key={change.controlId} className="grid gap-2 py-3 sm:grid-cols-[180px_minmax(0,1fr)_160px] sm:items-center">
                         <code className="text-[10px] text-stone-500">{change.controlId}</code>
-                        <span className="text-xs text-stone-300">{change.title}</span>
-                        <span className="text-[11px] text-stone-500"><s>{change.from}</s><strong className="ml-2 text-stone-300">{change.to}</strong></span>
+                        <span className="text-xs text-stone-700">{change.title}</span>
+                        <span className="text-[11px] text-stone-500"><s>{change.from}</s><strong className="ml-2 text-stone-700">{change.to}</strong></span>
                       </div>)}</div>
                     </div>}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3 border-t border-stone-800 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                <div className="flex flex-col gap-3 border-t border-stone-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
                   <Button disabled={saving} onClick={() => setPolicyStage('configure')}>Back To Configuration</Button>
                   <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center"><span className="flex items-center gap-2 text-xs text-stone-600"><CheckCircle size={16} /> Version {assignedPolicy.version + 1} Cannot Be Edited After Publication</span><Button variant="primary" disabled={saving || !hasPolicyChanges} onClick={publishPolicy}>{saving ? 'Publishing…' : `Publish Version ${assignedPolicy.version + 1}`}</Button></div>
                 </div>
@@ -526,25 +526,25 @@ export function AgentsSettingsPage() {
                   <ShieldCheck size={17} className="mt-0.5 shrink-0" />
                   <span><strong>Audit-Only Safety Lock Is Active.</strong> Remediation modes can be staged here, but this agent release cannot change host configuration.</span>
                 </div>
-                <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
+                <div className="border-b border-stone-200 px-5 py-5 sm:px-7">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div><p className="section-label">Effective policy</p><h3 className="mt-2 text-base font-semibold text-stone-100">{assignedPolicy.name}</h3><p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">{assignedPolicy.description || 'No policy description.'}</p></div>
+                    <div><p className="section-label">Effective policy</p><h3 className="mt-2 text-base font-semibold text-stone-800">{assignedPolicy.name}</h3><p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">{assignedPolicy.description || 'No policy description.'}</p></div>
                     <span className="settings-state">Version {assignedPolicy.version} · {Object.keys(controlModes).length} Overrides</span>
                   </div>
                 </div>
 
                 {assignedPolicy.assigned_groups > 1 && <div className="flex flex-col gap-4 border-b border-amber-900/30 bg-amber-950/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-                  <div><p className="text-xs font-medium text-amber-200">Shared by {assignedPolicy.assigned_groups} groups</p><p className="mt-1 text-[11px] leading-5 text-stone-500">Create a group-owned copy before changing controls, so other groups keep their current policy.</p></div>
+                  <div><p className="text-xs font-medium text-amber-800">Shared by {assignedPolicy.assigned_groups} groups</p><p className="mt-1 text-[11px] leading-5 text-stone-500">Create a group-owned copy before changing controls, so other groups keep their current policy.</p></div>
                   <button className="button-secondary shrink-0" disabled={saving} onClick={clonePolicyForGroup}><Copy size={14} /> Make group-specific copy</button>
                 </div>}
 
-                <div className="grid min-w-0 gap-5 border-b border-stone-800 px-5 py-6 sm:px-7 2xl:grid-cols-[minmax(0,1fr)_260px]">
+                <div className="grid min-w-0 gap-5 border-b border-stone-200 px-5 py-6 sm:px-7 2xl:grid-cols-[minmax(0,1fr)_260px]">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="form-field">Default mode<select className="select-input w-full" value={draftDefaultMode} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftDefaultMode(event.target.value as PolicyMode)}>{modes.map(mode => <option key={mode}>{mode}</option>)}</select></label>
                     <label className="form-field">Schedule minutes<input type="number" min="5" max="10080" value={draftSchedule} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftSchedule(Number(event.target.value))} /></label>
                     <label className="form-field sm:col-span-2">Description<input value={draftDescription} disabled={assignedPolicy.assigned_groups > 1} onChange={event => setDraftDescription(event.target.value)} /></label>
                   </div>
-                  <div className="min-w-0 border-t border-stone-800 pt-5 2xl:border-l 2xl:border-t-0 2xl:pl-5 2xl:pt-0">
+                  <div className="min-w-0 border-t border-stone-200 pt-5 2xl:border-l 2xl:border-t-0 2xl:pl-5 2xl:pt-0">
                     <p className="section-label">Apply another policy</p>
                     <form key={assignedPolicy.id} className="mt-3 grid gap-3" onSubmit={applyExistingPolicy}>
                       <select name="policy_id" className="select-input w-full" defaultValue={assignedPolicy.id}>{data.policies.map(policy => <option key={policy.id} value={policy.id}>{policy.name} · v{policy.version}</option>)}</select>
@@ -554,7 +554,7 @@ export function AgentsSettingsPage() {
                   </div>
                 </div>
 
-                {showPolicy && <form className="grid gap-4 border-b border-stone-800 bg-[#f7f3eb] px-5 py-5 sm:grid-cols-2 sm:px-7" onSubmit={createGroupPolicy}>
+                {showPolicy && <form className="grid gap-4 border-b border-stone-200 bg-[#f7f3eb] px-5 py-5 sm:grid-cols-2 sm:px-7" onSubmit={createGroupPolicy}>
                   <label className="form-field sm:col-span-2">Policy name<input name="name" required placeholder={`${selectedGroup.name} policy`} /></label>
                   <label className="form-field sm:col-span-2">Description<input name="description" placeholder="Policy owned by this group" /></label>
                   <label className="form-field">Default mode<select name="default_mode" className="select-input w-full" defaultValue="audit">{modes.map(mode => <option key={mode}>{mode}</option>)}</select></label>
@@ -562,10 +562,10 @@ export function AgentsSettingsPage() {
                   <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="button-secondary" onClick={() => setShowPolicy(false)}>Cancel</button><button className="button-primary" disabled={saving}>Create and apply</button></div>
                 </form>}
 
-                <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
+                <div className="border-b border-stone-200 px-5 py-5 sm:px-7">
                   <div className="flex items-end justify-between gap-4"><div><p className="section-label">Version history</p><p className="mt-2 text-xs text-stone-500">Every publication is immutable. Restoring publishes a new version from the selected snapshot.</p></div><span className="font-mono text-[10px] text-stone-600">{policyVersions.length} versions</span></div>
-                  {historyError ? <p className="mt-4 text-xs text-rose-300">{historyError}</p> : <div className="mt-4 divide-y divide-stone-800 border-y border-stone-800">{policyVersions.map(version => <div key={version.version} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
-                    <div className="min-w-0 flex-1"><strong className="text-xs text-stone-300">Version {version.version}{version.version === assignedPolicy.version ? ' · current' : ''}</strong><span className="table-subtitle">{version.default_mode} default · {Object.keys(version.control_modes).length} overrides · {version.created_by_name ?? 'system'} · {formatDateTime(version.created_at)}</span></div>
+                  {historyError ? <p className="mt-4 text-xs text-rose-700">{historyError}</p> : <div className="mt-4 divide-y divide-stone-200 border-y border-stone-200">{policyVersions.map(version => <div key={version.version} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
+                    <div className="min-w-0 flex-1"><strong className="text-xs text-stone-700">Version {version.version}{version.version === assignedPolicy.version ? ' · current' : ''}</strong><span className="table-subtitle">{version.default_mode} default · {Object.keys(version.control_modes).length} overrides · {version.created_by_name ?? 'system'} · {formatDateTime(version.created_at)}</span></div>
                     {version.version !== assignedPolicy.version && <button className="button-secondary min-h-9 shrink-0" disabled={saving || assignedPolicy.assigned_groups > 1} onClick={() => void submit(() => api.restoreAgentPolicy(assignedPolicy.id, version.version))}>Restore as v{assignedPolicy.version + 1}</button>}
                   </div>)}</div>}
                 </div>
@@ -575,13 +575,13 @@ export function AgentsSettingsPage() {
                   <Button variant="primary" disabled={saving || assignedPolicy.assigned_groups > 1 || !hasPolicyChanges} onClick={() => setPolicyStage('review')}>Review Changes</Button>
                 </div>
               </div> : <div>
-                <div className="border-b border-stone-800 px-5 py-5 sm:px-7">
+                <div className="border-b border-stone-200 px-5 py-5 sm:px-7">
                   <p className="section-label">Policy category</p>
-                  <div className="mt-2 flex items-end justify-between gap-4"><div><h3 className="text-base font-semibold capitalize text-stone-100">{selectedCategory.replaceAll('_', ' ')}</h3><p className="mt-1 text-xs text-stone-500">Override individual controls for {selectedGroup.name}, or inherit the policy default.</p></div><span className="font-mono text-[10px] text-stone-600">{categoryControls.length} controls</span></div>
+                  <div className="mt-2 flex items-end justify-between gap-4"><div><h3 className="text-base font-semibold capitalize text-stone-800">{selectedCategory.replaceAll('_', ' ')}</h3><p className="mt-1 text-xs text-stone-500">Override individual controls for {selectedGroup.name}, or inherit the policy default.</p></div><span className="font-mono text-[10px] text-stone-600">{categoryControls.length} controls</span></div>
                 </div>
-                <div>{categoryControls.map(control => <div key={control.control_id} className="grid min-w-0 gap-3 border-b border-stone-800/70 px-5 py-4 sm:px-7 2xl:grid-cols-[155px_minmax(0,1fr)_170px] 2xl:items-center">
+                <div>{categoryControls.map(control => <div key={control.control_id} className="grid min-w-0 gap-3 border-b border-stone-200/70 px-5 py-4 sm:px-7 2xl:grid-cols-[155px_minmax(0,1fr)_170px] 2xl:items-center">
                   <code className="text-[10px] text-stone-500">{control.control_id}</code>
-                  <span className="text-xs text-stone-300">{control.title}<small className="table-subtitle">{control.module}</small></span>
+                  <span className="text-xs text-stone-700">{control.title}<small className="table-subtitle">{control.module}</small></span>
                   <select
                     aria-label={`Mode for ${control.control_id}`}
                     className="select-input w-full"
@@ -598,7 +598,7 @@ export function AgentsSettingsPage() {
                     }}
                   ><option value="">Inherit {draftDefaultMode}</option>{modes.map(mode => <option key={mode}>{mode}</option>)}</select>
                 </div>)}</div>
-                <div className="sticky bottom-0 flex flex-col items-start justify-between gap-4 border-t border-stone-800 bg-[#f7f3eb]/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:px-7">
+                <div className="sticky bottom-0 flex flex-col items-start justify-between gap-4 border-t border-stone-200 bg-[#f7f3eb]/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:px-7">
                   <span className="text-xs text-stone-600">{hasPolicyChanges ? `${policyChangeCount} Pending ${policyChangeCount === 1 ? 'Change' : 'Changes'}` : 'No Unpublished Changes'}</span>
                   <button className="button-primary" disabled={saving || assignedPolicy.assigned_groups > 1 || !hasPolicyChanges} onClick={() => setPolicyStage('review')}>Review Changes</button>
                 </div>
@@ -625,7 +625,7 @@ export function AgentsSettingsPage() {
       title={`Revoke ${selectedAgents.size} selected agents?`}
       description="Every selected agent identity will be rejected immediately. Existing host records and reports remain available, but these installations cannot reconnect or submit new evidence."
     >
-      <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-300">Restoring connectivity requires reinstalling or re-enrolling every affected host with a new one-time token.</div>
+      <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-700">Restoring connectivity requires reinstalling or re-enrolling every affected host with a new one-time token.</div>
       <div className="mt-6 flex justify-end gap-3"><Button onClick={() => setConfirmBulkRevoke(false)} disabled={saving}>Cancel</Button><Button variant="danger" disabled={saving || selectedAgents.size === 0} onClick={() => void submit(() => api.bulkRevokeAgents([...selectedAgents])).then(() => { setSelectedAgents(new Set()); setConfirmBulkRevoke(false) })}>{saving ? 'Revoking agents' : 'Revoke agents'}</Button></div>
     </Dialog>
   </div>
