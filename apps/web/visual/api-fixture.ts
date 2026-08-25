@@ -25,6 +25,7 @@ const fixture = {
   dashboard: async () => ({ total_hosts: 18, healthy_hosts: 11, at_risk_hosts: 7, critical_hosts: 2, stale_hosts: 1, overall_security_score: 78.4, compliance_score: 84.7, finding_counts: { critical: 3, high: 12, medium: 28, low: 41, info: 9 }, os_distribution: { Debian: 12, Ubuntu: 6 }, highest_risk_hosts: [host2, host] }),
   hostPage: async (options: Record<string, unknown> = {}) => ({ rows: [host2, host], total: 2, page: Number(options.page ?? 0), pageSize: Number(options.pageSize ?? 10) }),
   hostFacets: async () => ({ total: 18, critical: 2, healthy: 11, stale: 1 }), host: async () => host,
+  findings: async () => [finding], hostVulnerabilities: async () => [], applications: async () => [], reports: async () => [],
   findingPage: async () => ({ rows: [finding, { ...finding, id: 'finding-2', host_id: host2.id, hostname: host2.hostname, control_id: 'CIS-DEBIAN13-1.5.1', title: 'Restrict Core Dumps', severity: 'high', lifecycle: 'persistent' }], total: 2, page: 0, pageSize: 10 }),
   applicationEstatePage: async () => ({ rows: [], total: 0, page: 0, pageSize: 10 }),
   agents: async () => agents, agentGroups: async () => groups, agentPolicies: async () => policies,

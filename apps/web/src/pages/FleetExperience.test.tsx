@@ -134,7 +134,8 @@ describe('Fleet console experience', () => {
   })
 
   it('shows searchable package and service inventory on the host record', async () => {
-    render(<MemoryRouter initialEntries={['/hosts/host-1']}><Routes><Route path="/hosts/:hostId" element={<HostDetailPage />} /></Routes></MemoryRouter>)
+    render(<MemoryRouter initialEntries={['/hosts/host-1?tab=applications']}><Routes><Route path="/hosts/:hostId" element={<HostDetailPage />} /></Routes></MemoryRouter>)
+    expect(await screen.findByRole('button', { name: /Applications 2/ })).toHaveAttribute('aria-current', 'page')
     expect(await screen.findByText('openssl')).toBeInTheDocument()
     expect(screen.getByText('ssh.service')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Packages 1' })).toBeInTheDocument()
@@ -146,5 +147,16 @@ describe('Fleet console experience', () => {
   it('returns from a host record to the exact findings queue', async () => {
     render(<MemoryRouter initialEntries={['/hosts/host-1?return_to=%2Ffindings%3Fcategory%3Dssh%26severity%3Dcritical%26page%3D2']}><Routes><Route path="/hosts/:hostId" element={<HostDetailPage />} /></Routes></MemoryRouter>)
     expect(await screen.findByRole('link', { name: 'Return To Security Findings' })).toHaveAttribute('href', '/findings?category=ssh&severity=critical&page=2')
+  })
+
+  it('organizes host investigation data into addressable workspaces', async () => {
+    render(<MemoryRouter initialEntries={['/hosts/host-1']}><Routes><Route path="/hosts/:hostId" element={<HostDetailPage />} /></Routes></MemoryRouter>)
+
+    expect(await screen.findByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('openssl')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Findings 1/ }))
+    expect(await screen.findByText('Disable root login')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Evidence' }))
+    expect(await screen.findByText('No Accepted Evidence')).toBeInTheDocument()
   })
 })

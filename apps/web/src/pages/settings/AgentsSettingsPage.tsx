@@ -1,149 +1,30 @@
 import {
   CheckCircle,
   Copy,
-  DesktopTower,
   DownloadSimple,
-  FolderSimple,
   Key,
   Play,
-  Plus,
   Prohibit,
   ShieldCheck,
   SlidersHorizontal,
-  UsersThree,
 } from '@phosphor-icons/react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import { AgentDownloadPanel } from '../../components/AgentDownloadPanel'
+import { AgentFleetTable } from '../../components/agents/AgentFleetTable'
+import { AgentGroupRail } from '../../components/agents/AgentGroupRail'
+import { AgentWorkspaceHeader, type AgentWorkspaceTab } from '../../components/agents/AgentWorkspaceHeader'
+import { agentStatus, type AgentStatus } from '../../components/agents/agentStatus'
 import { PageHeader } from '../../components/PageHeader'
-import { type SecurityColumn, SecurityTable } from '../../components/security/SecurityTable'
 import { ErrorState, LoadingState } from '../../components/StatePanel'
 import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
-import { TabButton, TabList } from '../../components/ui/Tabs'
 import { useApi } from '../../hooks/useApi'
 import { formatDateTime } from '../../lib/dateTime'
-import type { AgentGroup, AgentPolicy, AgentPolicyVersion, ControlCatalogItem, LinuxAgent, PlatformCommandTrust, PolicyMode } from '../../types'
+import type { AgentPolicyVersion, ControlCatalogItem, PlatformCommandTrust, PolicyMode } from '../../types'
 
 const modes: PolicyMode[] = ['audit', 'manual', 'remediate', 'disabled']
-type WorkspaceTab = 'hosts' | 'policy' | 'deployment'
 type PolicyStage = 'configure' | 'review'
-type AgentStatus = 'online' | 'stale' | 'offline' | 'never' | 'revoked'
-type ReportStatus = 'fresh' | 'stale' | 'never'
-
-function agentStatus(agent: LinuxAgent): AgentStatus {
-  if (agent.revoked_at) return 'revoked'
-  if (!agent.last_seen_at) return 'never'
-  const age = Date.now() - new Date(agent.last_seen_at).getTime()
-  if (age <= 5 * 60_000) return 'online'
-  if (age <= 24 * 60 * 60_000) return 'stale'
-  return 'offline'
-}
-
-function reportStatus(agent: LinuxAgent): ReportStatus {
-  if (!agent.last_scan_at) return 'never'
-  return Date.now() - new Date(agent.last_scan_at).getTime() <= 24 * 60 * 60_000 ? 'fresh' : 'stale'
-}
-
-function AgentTable({ agents, groups, packageVersion, submit, selected, setSelected, search, setSearch, statusFilter, setStatusFilter }: {
-  agents: LinuxAgent[]
-  groups: AgentGroup[]
-  packageVersion?: string
-  submit: (action: () => Promise<unknown>) => Promise<void>
-  selected: Set<string>
-  setSelected: (selected: Set<string>) => void
-  search: string
-  setSearch: (search: string) => void
-  statusFilter: 'all' | AgentStatus
-  setStatusFilter: (status: 'all' | AgentStatus) => void
-}) {
-  const [revoking, setRevoking] = useState<LinuxAgent | null>(null)
-  const columns: SecurityColumn<LinuxAgent>[] = [
-    { id: 'host', header: 'Host', priority: 'primary', hideable: false, sortValue: (agent) => agent.hostname, exportValue: (agent) => agent.hostname, cell: (agent) => <span className="table-primary">{agent.hostname}<small>Agent {agent.agent_version} · {packageVersion && agent.agent_version !== packageVersion ? `Upgrade ${packageVersion} Available` : agent.capabilities.join(', ') || 'No Capabilities'}</small></span> },
-    { id: 'connection', header: 'Connection', priority: 'secondary', sortValue: (agent) => agentStatus(agent), exportValue: (agent) => agentStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${agentStatus(agent)}`}>{agentStatus(agent)}</span><span className="table-subtitle">{agent.platform_trust_status === 'pinned' ? 'Platform Identity Pinned' : 'Platform Trust Missing'}</span></> },
-    { id: 'report', header: 'Report Freshness', priority: 'secondary', sortValue: (agent) => reportStatus(agent), exportValue: (agent) => reportStatus(agent), cell: (agent) => <><span className={`status-pill status-pill-${reportStatus(agent) === 'fresh' ? 'online' : reportStatus(agent)}`}>{reportStatus(agent)}</span><span className="table-subtitle">{formatDateTime(agent.last_scan_at, 'No Accepted Report')}</span></> },
-    { id: 'group', header: 'Group', priority: 'detail', sortValue: (agent) => agent.group_name, exportValue: (agent) => agent.group_name, cell: (agent) => <select aria-label={`Group for ${agent.hostname}`} className="select-input min-h-9" value={agent.group_id} disabled={!!agent.revoked_at} onChange={(event) => void submit(() => api.assignAgentGroup(agent.id, event.target.value))}>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select> },
-    { id: 'policy', header: 'Policy', priority: 'detail', sortValue: (agent) => agent.policy_name, exportValue: (agent) => `${agent.policy_name} v${agent.policy_version}`, cell: (agent) => <span className="table-primary">{agent.policy_name}<small>Expected V{agent.policy_version} · Reported V{agent.last_policy_version ?? '—'}</small></span> },
-    { id: 'heartbeat', header: 'Last Heartbeat', priority: 'detail', sortValue: (agent) => agent.last_seen_at ?? '', exportValue: (agent) => agent.last_seen_at, cell: (agent) => <span className="table-primary">{formatDateTime(agent.last_seen_at)}<small>{agent.latest_task_status ? `Latest Audit ${agent.latest_task_status}` : 'No Requested Audit'}</small></span> },
-    { id: 'actions', header: 'Actions', priority: 'detail', hideable: false, cell: (agent) => <button className="icon-button ml-auto" aria-label={`Revoke ${agent.hostname}`} title="Revoke agent" disabled={!!agent.revoked_at} onClick={() => setRevoking(agent)}><Prohibit size={15} /></button> },
-  ]
-
-  return <>
-  <SecurityTable
-    rows={agents}
-    columns={columns}
-    ariaLabel="Managed Linux Agents"
-    query={search}
-    onQueryChange={setSearch}
-    searchText={(agent) => `${agent.hostname} ${agent.group_name} ${agent.policy_name} ${agent.agent_version}`}
-    rowLabel={(agent) => agent.hostname}
-    searchPlaceholder="Search Hostname, Group, Policy, Or Version"
-    filename="lsa-agents.csv"
-    embedded
-    emptyTitle="No Agents In This Scope"
-    emptyDetail="Create an enrollment token, install the Linux package, and the host will appear after enrollment."
-    selectedRowIds={selected}
-    onSelectionChange={setSelected}
-    selectionSummary={false}
-    isRowSelectable={(agent) => !agent.revoked_at}
-    toolbarActions={<select className="select-input min-h-9" aria-label="Filter agent status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | AgentStatus)}><option value="all">All Statuses</option><option value="online">Online</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="never">Never Connected</option><option value="revoked">Revoked</option></select>}
-  />
-  <Dialog
-    open={revoking !== null}
-    onOpenChange={(open) => { if (!open) setRevoking(null) }}
-    eyebrow="Agent trust"
-    title={`Revoke ${revoking?.hostname ?? 'agent'}?`}
-    description="The agent identity will be rejected immediately. Existing reports remain available, but this installation cannot reconnect or submit new evidence."
-  >
-    <div className="rounded-lg border border-rose-900/40 bg-rose-950/10 px-4 py-3 text-xs leading-5 text-rose-700">Re-enrolling this host later creates a new agent identity and requires a new one-time enrollment token.</div>
-    <div className="mt-6 flex justify-end gap-3"><Button onClick={() => setRevoking(null)}>Cancel</Button><Button variant="danger" disabled={!revoking} onClick={() => { if (revoking) void submit(() => api.revokeAgent(revoking.id)).finally(() => setRevoking(null)) }}>Revoke agent</Button></div>
-  </Dialog>
-  </>
-}
-
-function GroupRail({ groups, agents, selectedGroupId, selectGroup, showCreate, setShowCreate, createGroup, policies, saving }: {
-  groups: AgentGroup[]
-  agents: LinuxAgent[]
-  selectedGroupId: string
-  selectGroup: (groupId: string) => void
-  showCreate: boolean
-  setShowCreate: (value: boolean) => void
-  createGroup: (event: FormEvent<HTMLFormElement>) => void
-  policies: AgentPolicy[]
-  saving: boolean
-}) {
-  const activeAgents = agents.filter(agent => !agent.revoked_at)
-  return <aside className="min-w-0 overflow-hidden border-b border-stone-200 bg-[#f7f3eb] lg:min-h-[690px] lg:border-b-0 lg:border-r" aria-label="Agent groups">
-    <div className="flex items-center justify-between border-b border-stone-200 px-4 py-4">
-      <div><p className="section-label">Fleet scope</p><p className="mt-1 text-xs text-stone-500">{groups.length} groups</p></div>
-      <button className="icon-button" onClick={() => setShowCreate(!showCreate)} aria-label="Create group"><Plus size={15} /></button>
-    </div>
-
-    {showCreate && <form className="grid min-w-0 gap-3 border-b border-stone-200 bg-[#f7f3eb] p-4" onSubmit={createGroup}>
-      <label className="form-field">Group name<input name="name" required placeholder="Database servers" /></label>
-      <label className="form-field">Description<input name="description" placeholder="Production database fleet" /></label>
-      <label className="form-field">Initial policy<select name="policy_id" className="select-input w-full" required>{policies.map(policy => <option key={policy.id} value={policy.id}>{policy.name}</option>)}</select></label>
-      <button className="button-primary min-h-9" disabled={saving || !policies.length}>Create group</button>
-    </form>}
-
-    <nav className="flex gap-2 overflow-x-auto p-3 lg:block lg:space-y-1" aria-label="Fleet groups">
-      <button className={`group-scope-item min-w-48 lg:min-w-0 ${selectedGroupId === 'all' ? 'group-scope-item-active' : ''}`} onClick={() => selectGroup('all')}>
-        <span className="group-scope-icon"><UsersThree size={17} /></span>
-        <span className="min-w-0 flex-1 text-left"><strong>All Agents</strong><small>Every Managed Linux Agent</small></span>
-        <span className="font-mono text-[10px] text-stone-500">{activeAgents.length}</span>
-      </button>
-      <div className="hidden px-3 pb-2 pt-5 lg:block"><span className="section-label">Groups</span></div>
-      {groups.map(group => {
-        const count = activeAgents.filter(agent => agent.group_id === group.id).length
-        return <button key={group.id} className={`group-scope-item min-w-48 lg:min-w-0 ${selectedGroupId === group.id ? 'group-scope-item-active' : ''}`} onClick={() => selectGroup(group.id)}>
-          <span className="group-scope-icon"><FolderSimple size={17} /></span>
-          <span className="min-w-0 flex-1 text-left"><strong>{group.name}</strong><small>{group.policy_name} · v{group.policy_version}</small></span>
-          <span className="font-mono text-[10px] text-stone-500">{count}</span>
-        </button>
-      })}
-    </nav>
-  </aside>
-}
 
 export function AgentsSettingsPage() {
   const { data, error, loading, reload, refresh } = useApi(async () => {
@@ -153,7 +34,7 @@ export function AgentsSettingsPage() {
     return { agents, groups, policies, controls, enrollmentTokens, packages, connectivity }
   }, [])
   const [selectedGroupId, setSelectedGroupId] = useState('all')
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('hosts')
+  const [activeTab, setActiveTab] = useState<AgentWorkspaceTab>('hosts')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | AgentStatus>('all')
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set())
@@ -367,7 +248,7 @@ export function AgentsSettingsPage() {
 
     <section className="panel overflow-hidden">
       <div className="grid min-w-0 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <GroupRail
+        <AgentGroupRail
           groups={data.groups}
           agents={data.agents}
           selectedGroupId={selectedGroupId}
@@ -380,24 +261,7 @@ export function AgentsSettingsPage() {
         />
 
         <div className="min-w-0">
-          <header className="border-b border-stone-200 px-5 pt-5 sm:px-7 sm:pt-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-stone-500">{selectedGroup ? <FolderSimple size={16} /> : <UsersThree size={16} />}<span className="section-label">{selectedGroup ? 'Agent group' : 'Fleet inventory'}</span></div>
-                <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-stone-800">{selectedGroup?.name ?? 'All Agents'}</h2>
-                <p className="mt-1 text-xs leading-5 text-stone-500">{selectedGroup?.description || (selectedGroup ? `${selectedGroup.policy_name} is applied to this group.` : 'Every agent across all policy groups.')}</p>
-              </div>
-              <div className="flex items-center gap-6 border-l border-stone-200 pl-5">
-                <div><strong className="block font-mono text-lg font-medium text-stone-800">{activeCount}</strong><span className="text-[10px] text-stone-600">active hosts</span></div>
-                {selectedGroup && <div><strong className="block font-mono text-lg font-medium text-stone-800">v{selectedGroup.policy_version}</strong><span className="text-[10px] text-stone-600">policy version</span></div>}
-              </div>
-            </div>
-            <TabList label="Group Workspace" className="mb-0 mt-6">
-              <TabButton active={activeTab === 'hosts'} onClick={() => setActiveTab('hosts')}><DesktopTower size={15} /> Hosts</TabButton>
-              {selectedGroup && <TabButton active={activeTab === 'policy'} onClick={() => setActiveTab('policy')}><SlidersHorizontal size={15} /> Policy</TabButton>}
-              <TabButton active={activeTab === 'deployment'} onClick={() => setActiveTab('deployment')}><DownloadSimple size={15} /> Deployment</TabButton>
-            </TabList>
-          </header>
+          <AgentWorkspaceHeader group={selectedGroup} activeCount={activeCount} activeTab={activeTab} onTabChange={setActiveTab} />
 
           {activeTab === 'hosts' && <div>
             {selectedAgents.size > 0 && <div className="flex flex-col gap-3 border-b border-[#b8c5ba] bg-[#edf1eb] px-5 py-4 sm:px-7 xl:flex-row xl:items-center">
@@ -406,7 +270,7 @@ export function AgentsSettingsPage() {
               <div className="flex gap-2"><select className="select-input min-h-9" aria-label="Bulk destination group" value={bulkGroupId} onChange={event => setBulkGroupId(event.target.value)}><option value="">Move to group…</option>{data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button-secondary min-h-9" disabled={saving || !bulkGroupId} onClick={() => void submit(() => api.bulkAssignAgentGroup([...selectedAgents], bulkGroupId)).then(() => { setSelectedAgents(new Set()); setBulkGroupId('') })}>Apply</button></div>
               <Button variant="danger" disabled={saving} onClick={() => setConfirmBulkRevoke(true)}>Revoke selected</Button>
             </div>}
-            <AgentTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} setSelected={setSelectedAgents} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
+            <AgentFleetTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} setSelected={setSelectedAgents} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
           </div>}
 
           {activeTab === 'deployment' && <div>
@@ -467,12 +331,11 @@ export function AgentsSettingsPage() {
             </div>
           </div>}
 
-          {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="grid min-h-[570px] min-w-0 md:grid-cols-[210px_minmax(0,1fr)]">
-            <nav className="min-w-0 overflow-hidden border-b border-stone-200 bg-[#f7f3eb] p-3 md:border-b-0 md:border-r" aria-label="Policy categories">
-              <button className={`policy-category-item ${selectedCategory === 'overview' && policyStage === 'configure' ? 'policy-category-item-active' : ''}`} onClick={() => { setSelectedCategory('overview'); setPolicyStage('configure') }}><SlidersHorizontal size={15} /><span>Overview</span></button>
-              <div className="px-3 pb-2 pt-5"><span className="section-label">Control categories</span></div>
-              <div className="flex gap-1 overflow-x-auto md:block md:space-y-1">{categories.map(([category, controls]) => <button key={category} className={`policy-category-item min-w-44 md:min-w-0 ${selectedCategory === category && policyStage === 'configure' ? 'policy-category-item-active' : ''}`} onClick={() => { setSelectedCategory(category); setPolicyStage('configure') }}><span className="min-w-0 flex-1 truncate text-left capitalize">{category.replaceAll('_', ' ')}</span><span className="font-mono text-[9px] text-stone-600">{controls.length}</span></button>)}</div>
-            </nav>
+          {activeTab === 'policy' && selectedGroup && assignedPolicy && <div className="min-h-[570px] min-w-0">
+            {policyStage === 'configure' && <div className="flex flex-col gap-3 border-b border-stone-200 bg-[#f7f3eb] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+              <div><p className="text-xs font-semibold text-stone-800">Policy workspace</p><p className="mt-1 text-[11px] text-stone-600">Choose the policy overview or one control category.</p></div>
+              <label className="flex min-w-0 items-center gap-3 text-xs font-medium text-stone-600"><SlidersHorizontal size={15} /><span className="sr-only">Policy section</span><select className="select-input min-h-9 w-full min-w-52 sm:w-auto" aria-label="Policy section" value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}><option value="overview">Overview</option>{categories.map(([category, controls]) => <option key={category} value={category}>{category.replaceAll('_', ' ')} · {controls.length}</option>)}</select></label>
+            </div>}
 
             <div className="min-w-0">
               {policyStage === 'review' ? <div>

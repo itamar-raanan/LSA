@@ -6,7 +6,7 @@ import './styles.css'
 
 const surface = new URLSearchParams(window.location.search).get('surface') ?? 'overview'
 const routes: Record<string, string> = {
-  login: '/login', overview: '/', assets: '/hosts', 'host-card': '/hosts?host=host-1', agents: '/agents', administration: '/settings/users',
+  login: '/login', overview: '/', assets: '/hosts', 'host-card': '/hosts?host=host-1', 'host-detail': '/hosts/host-1', agents: '/agents', 'agents-policy': '/agents', administration: '/settings/users',
 }
 const user = surface === 'login' ? null : {
   id: 'user-1', email: 'admin@lsa.local', name: 'Security Administrator', role: 'admin' as const,
