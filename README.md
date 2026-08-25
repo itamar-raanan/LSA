@@ -196,6 +196,12 @@ The seeded development ingestion token is `lsa_ingest_demo_secret`. It is intent
 
 ## Offline scanner workflow
 
+The **Evidence Intake** page now provides a versioned offline scanner ZIP containing
+the scanner roles and controls, example inventory, `run-offline.sh`, signing-key
+generator, embedded step-by-step README, and SHA-256 manifest. The package never
+contains an ingestion token or private signing key. Any authenticated console user
+can download it; credential and trust administration remains role-controlled.
+
 ### Enroll a host
 
 Sign in as an administrator, open **Linux hosts**, and choose **Enroll host**. LSA creates a persistent host UUID and a scoped ingestion token. The raw token is shown once; store it in a mode-0600 file on the Ansible controller and assign the displayed host UUID to `lsa_host_id` in inventory.

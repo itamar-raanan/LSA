@@ -32,6 +32,7 @@ const fixture = {
   controlCatalog: async () => [{ control_id: 'CIS-DEBIAN13-5.1.20', title: 'Ensure SSH Root Login Is Disabled', category: 'ssh', module: 'cis_debian13' }, { control_id: 'CIS-DEBIAN13-1.5.1', title: 'Ensure Core Dumps Are Restricted', category: 'kernel', module: 'cis_debian13' }],
   agentEnrollmentTokens: async () => [], agentPackages: async () => [{ id: 'linux-deb', version: '0.4.1', filename: 'lsa-agent_0.4.1_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) }],
   agentConnectivity: async () => ({ public_url: 'https://lsa.internal:8444', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) }, key_rotation: null }),
+  offlineScannerPackage: async () => ({ version: '0.6.1', filename: 'lsa-offline-scanner-0.6.1.zip', size_bytes: 786432, sha256: 'd'.repeat(64), audit_only: true }),
   agentPolicyVersions: async () => [{ version: 4, default_mode: 'audit', control_modes: {}, settings: { schedule_minutes: 60 }, created_by_name: 'Security Administrator', created_at: now }],
   users: async () => users, providers: async () => [{ id: 'provider-1', name: 'Corporate Entra ID', provider_type: 'entra', issuer_url: 'https://login.example.com/tenant', client_id: 'lsa', config: {}, is_enabled: true, secret_configured: true, created_at: now, updated_at: now }],
 }
