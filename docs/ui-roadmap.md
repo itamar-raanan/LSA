@@ -22,7 +22,7 @@ Acceptance criteria:
 
 ## Phase 2 — Core operations (high)
 
-Implementation status: in progress. Fleet status, inventory, group navigation, and workspace header behavior now live in focused Agent components. The policy category rail was replaced with one scoped selector, keeping Fleet Groups and the Hosts/Policy/Deployment workspace tabs as the only navigation levels. Host Detail now exposes URL-addressable Overview, Findings, Applications, and Evidence workspaces. The remaining structural task is extracting the Policy and Deployment renderers from the route-level orchestrator.
+Implementation status: complete. Fleet status, inventory, group navigation, workspace header, Policy, and Deployment behavior now live in focused Agent components, leaving the route page responsible for data loading and workspace orchestration. The policy category rail was replaced with one scoped selector, keeping Fleet Groups and the Hosts/Policy/Deployment workspace tabs as the only navigation levels. Host Detail exposes URL-addressable Overview, Findings, Applications, and Evidence workspaces.
 
 - Split Agents into Fleet, Group, Policy, and Deployment components.
 - Keep one clear primary action in each workspace state.
