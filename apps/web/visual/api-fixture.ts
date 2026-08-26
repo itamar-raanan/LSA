@@ -16,6 +16,13 @@ const users = [
   { id: 'user-2', email: 'analyst@example.com', name: 'Security Analyst', role: 'analyst', is_active: true, auth_source: 'oidc', provider_name: 'Corporate Entra ID', last_login_at: now, created_at: now },
   { id: 'user-3', email: 'audit@example.com', name: 'Compliance Auditor', role: 'auditor', is_active: true, auth_source: 'radius', provider_name: 'Corporate RADIUS', last_login_at: null, created_at: now },
 ]
+const vulnerability = {
+  id: 'vulnerability-1', source: 'OSV', source_id: 'DEBIAN-CVE-2026-1042', cve_id: 'CVE-2026-1042', aliases: ['DEBIAN-CVE-2026-1042'], summary: 'OpenSSH authentication bypass may permit unauthorized remote access.', severity: 'critical', cvss_score: 9.8, published_at: '2026-07-12T08:00:00Z', modified_at: now, references: [{ type: 'ADVISORY', url: 'https://security-tracker.debian.org/tracker/CVE-2026-1042' }], known_exploited: true, kev_date_added: '2026-08-12', kev_due_date: '2026-09-02', kev_required_action: 'Apply vendor updates and confirm that exposed SSH services run the fixed package version.', ransomware_use: 'Known', affected_hosts: 2, affected_versions: ['1:9.9p2-1'], fixed_versions: ['1:9.9p2-2'], exposure_count: 2, affected_applications: 1, application_names: ['openssh-server'],
+}
+const vulnerabilityExposures = [
+  { id: 'exposure-1', host_id: host.id, hostname: host.hostname, os_family: host.os_family, os_version: host.os_version, environment: 'production', application_id: 'application-1', application_name: 'openssh-server', application_kind: 'package', application_source: 'dpkg', installed_version: '1:9.9p2-1', fixed_versions: ['1:9.9p2-2'], detected_at: now, last_seen_at: now },
+  { id: 'exposure-2', host_id: host2.id, hostname: host2.hostname, os_family: host2.os_family, os_version: host2.os_version, environment: 'production', application_id: 'application-2', application_name: 'openssh-server', application_kind: 'package', application_source: 'dpkg', installed_version: '1:9.9p2-1', fixed_versions: ['1:9.9p2-2'], detected_at: now, last_seen_at: now },
+]
 
 export class ApiError extends Error { status = 500 }
 export const SESSION_INVALID_EVENT = 'lsa-session-invalid'
@@ -28,6 +35,9 @@ const fixture = {
   findings: async () => [finding], hostVulnerabilities: async () => [], applications: async () => [], reports: async () => [],
   findingPage: async () => ({ rows: [finding, { ...finding, id: 'finding-2', host_id: host2.id, hostname: host2.hostname, control_id: 'CIS-DEBIAN13-1.5.1', title: 'Restrict Core Dumps', severity: 'high', lifecycle: 'persistent' }], total: 2, page: 0, pageSize: 10 }),
   applicationEstatePage: async () => ({ rows: [], total: 0, page: 0, pageSize: 10 }),
+  vulnerabilitySummary: async () => ({ application_count: 127, affected_applications: 1, vulnerability_count: 1, exposure_count: 2, affected_hosts: 2, known_exploited: 1, severity_counts: { critical: 1, high: 0, medium: 0, low: 0, unknown: 0 }, last_sync: { id: 'sync-1', status: 'succeeded', trigger: 'manual', advisories_fetched: 3204, vulnerabilities_found: 1, matches_found: 2, started_at: '2026-08-20T11:45:00Z', completed_at: now, created_at: '2026-08-20T11:45:00Z', error: null }, intelligence_state: 'fresh', intelligence_age_hours: 0 }),
+  vulnerabilityPage: async () => ({ rows: [vulnerability], total: 1, page: 0, pageSize: 15 }),
+  vulnerabilityExposures: async () => vulnerabilityExposures,
   agents: async () => agents, agentGroups: async () => groups, agentPolicies: async () => policies,
   controlCatalog: async () => [{ control_id: 'CIS-DEBIAN13-5.1.20', title: 'Ensure SSH Root Login Is Disabled', category: 'ssh', module: 'cis_debian13' }, { control_id: 'CIS-DEBIAN13-1.5.1', title: 'Ensure Core Dumps Are Restricted', category: 'kernel', module: 'cis_debian13' }],
   agentEnrollmentTokens: async () => [], agentPackages: async () => [{ id: 'linux-deb', version: '0.4.1', filename: 'lsa-agent_0.4.1_all.deb', content_type: 'application/vnd.debian.binary-package', operating_system: 'Debian 13 / Ubuntu 24.04+', architecture: 'noarch', package_format: 'deb', release_channel: 'stable', audit_only: true, size_bytes: 204800, sha256: 'a'.repeat(64) }],

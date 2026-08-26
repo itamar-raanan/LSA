@@ -168,6 +168,28 @@ export interface ApplicationVulnerability {
   references: Array<Record<string, string>>
 }
 
+export interface VulnerabilityEstateItem extends ApplicationVulnerability {
+  exposure_count: number
+  affected_applications: number
+  application_names: string[]
+}
+
+export interface VulnerabilityExposure {
+  id: string
+  host_id: string
+  hostname: string
+  os_family: string
+  os_version: string
+  environment: string | null
+  application_id: string
+  application_name: string
+  application_source: string
+  installed_version: string | null
+  fixed_versions: string[]
+  detected_at: string
+  last_seen_at: string
+}
+
 export interface HostVulnerability extends ApplicationVulnerability {
   application_id: string
   application_name: string

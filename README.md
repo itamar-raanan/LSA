@@ -168,7 +168,7 @@ The database and evidence objects are stored in named Docker volumes. Migrations
 
 ### Vulnerability intelligence
 
-Open **Applications** to review package inventory, affected versions, matching advisories, fixed versions, CISA KEV priority, and the hosts exposed to each vulnerability. Administrators can queue an immediate refresh from this page. The `vulnerability-sync` container also refreshes automatically every 12 hours by default; configure the interval with `LSA_VULNERABILITY_REFRESH_HOURS`.
+Open **Applications** to review the installed software estate and correlate package versions across hosts. Open **Vulnerabilities** for the active CVE queue, severity and CVSS context, CISA KEV priority, affected hosts and software, available fixed versions, and source-advisory drill-down. Administrators can queue an immediate intelligence refresh or import an offline snapshot from the Vulnerabilities page. The `vulnerability-sync` container also refreshes automatically every 12 hours by default; configure the interval with `LSA_VULNERABILITY_REFRESH_HOURS`.
 
 Online synchronization sends only versioned Package URLs for active package inventory to OSV. It does not send hostnames, IP addresses, tags, findings, or credentials. The worker has outbound access, while the API, PostgreSQL, and MinIO remain attached only to the internal backend network.
 
@@ -182,7 +182,7 @@ For an air-gapped LSA server, create a scoped snapshot on a connected workstatio
   --output vulnerability-snapshot.json
 ```
 
-Transfer the JSON through the approved media workflow, then choose **Import Snapshot** on the **Applications** page. Imported data follows the same correlation and audit path as online synchronization. Snapshot files contain public advisory data plus the Package URLs present in the input reports; handle them according to the organization's software-inventory policy.
+Transfer the JSON through the approved media workflow, then choose **Import Snapshot** on the **Vulnerabilities** page. Imported data follows the same correlation and audit path as online synchronization. Snapshot files contain public advisory data plus the Package URLs present in the input reports; handle them according to the organization's software-inventory policy.
 
 For direct local development and testing, install Python 3.12+ and Node.js 22+:
 

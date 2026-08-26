@@ -2218,6 +2218,38 @@ def test_offline_vulnerability_snapshot_correlates_packages_and_kev(client):
     assert summary["severity_counts"]["high"] == 1
     assert summary["last_sync"]["trigger"] == "offline"
 
+    vulnerability_queue = client.get(
+        "/api/v1/vulnerabilities",
+        params={
+            "search": "CVE-2026-1234",
+            "severity": "high",
+            "known_exploited": "true",
+            "page": 1,
+            "page_size": 10,
+        },
+        headers=headers,
+    )
+    assert vulnerability_queue.status_code == 200, vulnerability_queue.text
+    assert vulnerability_queue.headers["X-Total-Count"] == "1"
+    queued_vulnerability = vulnerability_queue.json()[0]
+    assert queued_vulnerability["cve_id"] == "CVE-2026-1234"
+    assert queued_vulnerability["severity"] == "high"
+    assert queued_vulnerability["known_exploited"] is True
+    assert queued_vulnerability["affected_hosts"] == 1
+    assert queued_vulnerability["exposure_count"] == 1
+    assert queued_vulnerability["application_names"] == ["openssl"]
+    assert queued_vulnerability["fixed_versions"] == ["3.0.15-1"]
+
+    exposures = client.get(
+        f"/api/v1/vulnerabilities/{queued_vulnerability['id']}/exposures",
+        headers=headers,
+    )
+    assert exposures.status_code == 200, exposures.text
+    assert exposures.json()[0]["host_id"] == payload["host"]["host_id"]
+    assert exposures.json()[0]["hostname"] == payload["host"]["hostname"]
+    assert exposures.json()[0]["application_name"] == "openssl"
+    assert exposures.json()[0]["installed_version"] == "3.0.14-1"
+
     application_vulnerabilities = client.get(
         "/api/v1/applications/vulnerabilities",
         params={"name": "openssl", "kind": "package", "source": "dpkg"},

@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { BookOpen, Boxes, CornerDownLeft, FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { BookOpen, Boxes, Bug, CornerDownLeft, FileUp, LayoutDashboard, MonitorCog, Search, Server, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -21,6 +21,7 @@ const commands: CommandResult[] = [
   { id: 'overview', label: 'Security Overview', detail: 'Review fleet posture and critical exposure', path: '/', icon: LayoutDashboard, keywords: 'overview home metrics', group: 'Navigate' },
   { id: 'assets', label: 'Asset Inventory', detail: 'Search reporting Linux systems', path: '/hosts', icon: Server, keywords: 'hosts servers assets', group: 'Navigate' },
   { id: 'applications', label: 'Application Inventory', detail: 'Correlate packages, services, versions, and hosts', path: '/applications', icon: Boxes, keywords: 'applications packages services software versions', group: 'Navigate' },
+  { id: 'vulnerabilities', label: 'Vulnerabilities', detail: 'Prioritize CVEs, known exploitation, affected hosts, and fixes', path: '/vulnerabilities', icon: Bug, keywords: 'cve vulnerabilities osv kev cvss exploits patches fixes', group: 'Navigate' },
   { id: 'agents', label: 'Agents & Groups', detail: 'Manage agents, enrollment, and fleet groups', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints enrollment', group: 'Navigate', adminOnly: true },
   { id: 'findings', label: 'Security Findings', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'findings risk vulnerabilities', group: 'Navigate' },
   { id: 'remediation', label: 'Remediation Review', detail: 'Review requested changes and approval history', path: '/findings?view=remediation', icon: ShieldCheck, keywords: 'remediation changes approvals review', group: 'Navigate' },

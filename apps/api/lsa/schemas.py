@@ -345,6 +345,28 @@ class ApplicationVulnerabilityResponse(BaseModel):
     references: list[dict[str, str]]
 
 
+class VulnerabilityEstateItemResponse(ApplicationVulnerabilityResponse):
+    exposure_count: int
+    affected_applications: int
+    application_names: list[str]
+
+
+class VulnerabilityExposureResponse(BaseModel):
+    id: str
+    host_id: str
+    hostname: str
+    os_family: str
+    os_version: str
+    environment: str | None
+    application_id: str
+    application_name: str
+    application_source: str
+    installed_version: str | None
+    fixed_versions: list[str]
+    detected_at: datetime
+    last_seen_at: datetime
+
+
 class HostVulnerabilityResponse(ApplicationVulnerabilityResponse):
     application_id: str
     application_name: str

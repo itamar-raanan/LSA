@@ -1,19 +1,15 @@
 import { Gear, Package } from '@phosphor-icons/react'
-import { Boxes, RefreshCw, Server, ShieldAlert, Shapes, Upload } from 'lucide-react'
+import { Boxes, Server, ShieldAlert, Shapes } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { useAuth } from '../auth/useAuth'
 import { ApplicationInvestigationPanel } from '../components/ApplicationInvestigationPanel'
 import { PageHeader } from '../components/PageHeader'
 import { ErrorState, LoadingState } from '../components/StatePanel'
 import { SecurityMetricCard } from '../components/security/SecurityMetricCard'
 import { SecurityTable, type SecurityColumn } from '../components/security/SecurityTable'
-import { Button } from '../components/ui/Button'
 import { useApi } from '../hooks/useApi'
 import { useSecurityTableUrlState } from '../hooks/useSecurityTableUrlState'
-import { cn } from '../lib/utils'
 import { withInvestigationReturn } from '../lib/investigationContext'
 import { formatDate } from '../lib/dateTime'
 import type { ApplicationEstateItem } from '../types'
@@ -34,7 +30,6 @@ function stateLabel(item: ApplicationEstateItem) {
 }
 
 export function ApplicationsPage() {
-  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const requestedSearch = searchParams.get('search') ?? ''
@@ -47,8 +42,6 @@ export function ApplicationsPage() {
   const [kind, setKind] = useState<ApplicationKind>(requestedKind === 'package' || requestedKind === 'service' ? requestedKind : '')
   const [riskFilter, setRiskFilter] = useState<RiskFilter>(requestedRisk === 'vulnerable' || requestedRisk === 'kev' ? requestedRisk : 'all')
   const [selected, setSelected] = useState<ApplicationEstateItem | null>(null)
-  const [operation, setOperation] = useState<{ busy: boolean; message: string | null; error: string | null }>({ busy: false, message: null, error: null })
-  const snapshotInput = useRef<HTMLInputElement>(null)
   const ignoredApplication = useRef<string | null>(null)
   const estate = useApi(() => api.applicationEstatePage({
     search,
@@ -68,7 +61,6 @@ export function ApplicationsPage() {
     () => selected?.kind === 'package' ? api.applicationVulnerabilities(selected.name, selected.kind, selected.source) : Promise.resolve([]),
     [selected?.name, selected?.kind, selected?.source],
   )
-  const refreshIntelligence = intelligence.refresh
   const closeInvestigation = useCallback(() => {
     ignoredApplication.current = requestedApplication
     setSelected(null)
@@ -146,13 +138,6 @@ export function ApplicationsPage() {
     return () => { active = false }
   }, [estate.data?.data.applications, requestedApplication, selected])
 
-  useEffect(() => {
-    const status = intelligence.data?.last_sync?.status
-    if (status !== 'queued' && status !== 'running') return
-    const timer = window.setInterval(() => void refreshIntelligence(), 4000)
-    return () => window.clearInterval(timer)
-  }, [intelligence.data?.last_sync?.status, refreshIntelligence])
-
   const metrics = estate.data?.data.metrics
   const risk = intelligence.data
   const rows = useMemo<ApplicationRow[]>(() => (estate.data?.data.applications ?? [])
@@ -199,49 +184,12 @@ export function ApplicationsPage() {
     { id: 'observed', header: 'Last Observed', priority: 'detail', cell: (item) => <span className="font-mono text-xs">{formatDate(item.last_seen_at)}</span>, sortValue: (item) => item.last_seen_at, exportValue: (item) => item.last_seen_at },
   ], [metrics?.reporting_hosts, openInvestigation, selected])
 
-  async function queueRefresh() {
-    setOperation({ busy: true, message: null, error: null })
-    try {
-      const run = await api.queueVulnerabilitySync()
-      setOperation({ busy: false, message: `Intelligence Refresh ${run.status}.`, error: null })
-      await intelligence.refresh()
-    } catch (reason) {
-      setOperation({ busy: false, message: null, error: reason instanceof Error ? reason.message : 'Unable To Queue Refresh' })
-    }
-  }
-
-  async function importSnapshot(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    setOperation({ busy: true, message: null, error: null })
-    try {
-      const result = await api.importVulnerabilitySnapshot(file)
-      setOperation({ busy: false, message: `Imported ${result.vulnerabilities_found} Vulnerabilities And ${result.matches_found} Exposures.`, error: null })
-      await Promise.all([intelligence.reload(), estate.refresh(), vulnerabilities.refresh()])
-    } catch (reason) {
-      setOperation({ busy: false, message: null, error: reason instanceof Error ? reason.message : 'Snapshot Import Failed' })
-    }
-  }
-
-  const syncStatus = intelligence.data?.last_sync
-  const intelligenceState = intelligence.data?.intelligence_state
   return <div className="page-reveal">
     <PageHeader
       eyebrow="Software Estate"
       title="Applications"
-      detail="Correlate installed software, vulnerable versions, and affected Linux hosts using locally cached OSV advisories enriched with CISA exploitation intelligence."
-      action={user?.role === 'admin' ? <div className="flex flex-wrap justify-end gap-2">
-        <input ref={snapshotInput} className="sr-only" type="file" accept="application/json,.json" onChange={importSnapshot} aria-label="Import Vulnerability Snapshot" />
-        <Button onClick={() => snapshotInput.current?.click()} disabled={operation.busy}><Upload size={14} />Import Snapshot</Button>
-        <Button variant="primary" onClick={queueRefresh} disabled={operation.busy || syncStatus?.status === 'queued' || syncStatus?.status === 'running'}><RefreshCw className={syncStatus?.status === 'running' ? 'animate-spin' : ''} size={14} />Refresh Intelligence</Button>
-      </div> : undefined}
+      detail="Correlate installed packages, services, versions, and reporting Linux hosts. Open an application to review its related advisory and host context."
     />
-
-    {(operation.message || operation.error || intelligenceState === 'never' || intelligenceState === 'stale' || intelligenceState === 'refreshing' || intelligenceState === 'failed') && <section className={cn('intelligence-status', (operation.error || intelligenceState === 'failed') && 'intelligence-status-error')} aria-live="polite">
-      <ShieldAlert size={16} />
-      <div><strong>{operation.error ? 'Intelligence Update Failed' : intelligenceState === 'failed' ? 'Last Refresh Failed' : intelligenceState === 'refreshing' ? 'Intelligence Refresh In Progress' : intelligenceState === 'stale' ? 'Vulnerability Intelligence Is Stale' : intelligenceState === 'never' ? 'Vulnerability Intelligence Not Synchronized' : 'Vulnerability Intelligence Updated'}</strong><p>{operation.error ?? operation.message ?? syncStatus?.error ?? (intelligenceState === 'stale' ? 'Queue a refresh or import a current offline snapshot before making remediation decisions.' : intelligenceState === 'never' ? 'Queue the first online refresh or import an offline snapshot to begin package correlation.' : 'The synchronization worker will process the queued request.')}</p></div>
-    </section>}
 
     {estate.loading && !estate.data ? <LoadingState variant="table" /> : estate.error ? <ErrorState message={estate.error} retry={estate.reload} /> : !estate.data ? null : <>
       <section className="metric-grid application-metric-grid mb-4">

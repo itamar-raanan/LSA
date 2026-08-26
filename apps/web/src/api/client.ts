@@ -32,6 +32,8 @@ import type {
   ApplicationVulnerability,
   VulnerabilitySummary,
   VulnerabilitySyncRun,
+  VulnerabilityEstateItem,
+  VulnerabilityExposure,
   HostVulnerability,
   HostListFacets,
   FindingListFacets,
@@ -212,6 +214,20 @@ export const api = {
   },
   vulnerabilitySummary(): Promise<VulnerabilitySummary> {
     return request('/vulnerabilities/summary')
+  },
+  vulnerabilityPage(options: { search?: string; severity?: string; knownExploited?: boolean; page: number; pageSize: number; sort?: string; direction?: string }): Promise<PagedResult<VulnerabilityEstateItem>> {
+    return requestPage(queryPath('/vulnerabilities', {
+      search: options.search,
+      severity: options.severity,
+      known_exploited: options.knownExploited === undefined ? undefined : String(options.knownExploited),
+      page: options.page + 1,
+      page_size: options.pageSize,
+      sort: options.sort,
+      direction: options.direction,
+    }))
+  },
+  vulnerabilityExposures(vulnerabilityId: string): Promise<VulnerabilityExposure[]> {
+    return request(`/vulnerabilities/${encodeURIComponent(vulnerabilityId)}/exposures`)
   },
   applicationVulnerabilities(name: string, kind: string, source: string): Promise<ApplicationVulnerability[]> {
     const params = new URLSearchParams({ name, kind, source })

@@ -1,7 +1,7 @@
 import json
 from datetime import UTC, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,8 @@ from lsa.models import (
 from lsa.schemas import (
     ApplicationVulnerabilityResponse,
     HostVulnerabilityResponse,
+    VulnerabilityEstateItemResponse,
+    VulnerabilityExposureResponse,
     VulnerabilitySnapshotImportResponse,
     VulnerabilitySummaryResponse,
     VulnerabilitySyncRunResponse,
@@ -82,6 +84,190 @@ def base_vulnerability_response(
         "modified_at": vulnerability.modified_at,
         "references": vulnerability.references or [],
     }
+
+
+@router.get("/vulnerabilities", response_model=list[VulnerabilityEstateItemResponse])
+def list_vulnerabilities(
+    response: Response,
+    search: str = "",
+    severity: str = "",
+    known_exploited: bool | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    sort: str = "priority",
+    direction: str = "asc",
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[VulnerabilityEstateItemResponse]:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    application_identity = (
+        HostApplication.kind + ":" + HostApplication.source + ":" + HostApplication.name
+    )
+    filters = [
+        HostApplicationVulnerability.tenant_id == user.tenant_id,
+        HostApplicationVulnerability.resolved_at.is_(None),
+        HostApplication.removed_at.is_(None),
+        Host.deleted_at.is_(None),
+    ]
+    if severity:
+        filters.append(Vulnerability.severity == severity.lower())
+    if known_exploited is not None:
+        filters.append(Vulnerability.known_exploited.is_(known_exploited))
+    if search.strip():
+        needle = f"%{search.strip().lower()}%"
+        filters.append(
+            func.lower(
+                func.coalesce(Vulnerability.cve_id, "")
+                + " "
+                + Vulnerability.id
+                + " "
+                + Vulnerability.summary
+            ).like(needle)
+        )
+
+    aggregate = (
+        select(
+            Vulnerability.id.label("vulnerability_id"),
+            func.count(HostApplicationVulnerability.id).label("exposure_count"),
+            func.count(func.distinct(Host.id)).label("affected_hosts"),
+            func.count(func.distinct(application_identity)).label("affected_applications"),
+        )
+        .select_from(HostApplicationVulnerability)
+        .join(Vulnerability, Vulnerability.id == HostApplicationVulnerability.vulnerability_id)
+        .join(HostApplication, HostApplication.id == HostApplicationVulnerability.host_application_id)
+        .join(Host, Host.id == HostApplication.host_id)
+        .where(*filters)
+        .group_by(Vulnerability.id)
+        .subquery()
+    )
+    total = db.scalar(select(func.count()).select_from(aggregate)) or 0
+    severity_order = case(
+        (Vulnerability.severity == "critical", 0),
+        (Vulnerability.severity == "high", 1),
+        (Vulnerability.severity == "medium", 2),
+        (Vulnerability.severity == "low", 3),
+        (Vulnerability.severity == "info", 4),
+        else_=5,
+    )
+    sort_columns = {
+        "severity": (severity_order, Vulnerability.cvss_score),
+        "cvss": (Vulnerability.cvss_score,),
+        "hosts": (aggregate.c.affected_hosts,),
+        "exposures": (aggregate.c.exposure_count,),
+        "published": (Vulnerability.published_at,),
+        "identifier": (func.coalesce(Vulnerability.cve_id, Vulnerability.id),),
+    }
+    if sort == "priority" or sort not in sort_columns:
+        order_columns = (
+            Vulnerability.known_exploited.desc(),
+            severity_order.asc(),
+            Vulnerability.cvss_score.desc(),
+        )
+    else:
+        order_columns = tuple(
+            column.desc() if direction == "desc" else column.asc()
+            for column in sort_columns[sort]
+        )
+    rows = db.execute(
+        select(
+            Vulnerability,
+            aggregate.c.exposure_count,
+            aggregate.c.affected_hosts,
+            aggregate.c.affected_applications,
+        )
+        .join(aggregate, aggregate.c.vulnerability_id == Vulnerability.id)
+        .order_by(*order_columns, Vulnerability.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    vulnerability_ids = [vulnerability.id for vulnerability, *_ in rows]
+    detail_rows = []
+    if vulnerability_ids:
+        detail_rows = db.execute(
+            select(HostApplicationVulnerability, HostApplication, Host)
+            .join(HostApplication, HostApplication.id == HostApplicationVulnerability.host_application_id)
+            .join(Host, Host.id == HostApplication.host_id)
+            .where(
+                HostApplicationVulnerability.tenant_id == user.tenant_id,
+                HostApplicationVulnerability.vulnerability_id.in_(vulnerability_ids),
+                HostApplicationVulnerability.resolved_at.is_(None),
+                HostApplication.removed_at.is_(None),
+                Host.deleted_at.is_(None),
+            )
+        ).all()
+    grouped: dict[str, dict[str, set[str]]] = {
+        vulnerability_id: {"hosts": set(), "versions": set(), "fixed": set(), "applications": set()}
+        for vulnerability_id in vulnerability_ids
+    }
+    for match, application, host in detail_rows:
+        values = grouped[match.vulnerability_id]
+        values["hosts"].add(host.id)
+        if application.version:
+            values["versions"].add(application.version)
+        values["fixed"].update(match.fixed_versions or [])
+        values["applications"].add(application.name)
+
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Page"] = str(page)
+    response.headers["X-Page-Size"] = str(page_size)
+    return [
+        VulnerabilityEstateItemResponse(
+            **base_vulnerability_response(
+                vulnerability,
+                affected_hosts=affected_hosts,
+                affected_host_ids=sorted(grouped[vulnerability.id]["hosts"]),
+                affected_versions=sorted(grouped[vulnerability.id]["versions"]),
+                fixed_versions=sorted(grouped[vulnerability.id]["fixed"]),
+            ),
+            exposure_count=exposure_count,
+            affected_applications=affected_applications,
+            application_names=sorted(grouped[vulnerability.id]["applications"]),
+        )
+        for vulnerability, exposure_count, affected_hosts, affected_applications in rows
+    ]
+
+
+@router.get(
+    "/vulnerabilities/{vulnerability_id}/exposures",
+    response_model=list[VulnerabilityExposureResponse],
+)
+def vulnerability_exposures(
+    vulnerability_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[VulnerabilityExposureResponse]:
+    rows = db.execute(
+        select(HostApplicationVulnerability, HostApplication, Host)
+        .join(HostApplication, HostApplication.id == HostApplicationVulnerability.host_application_id)
+        .join(Host, Host.id == HostApplication.host_id)
+        .where(
+            HostApplicationVulnerability.tenant_id == user.tenant_id,
+            HostApplicationVulnerability.vulnerability_id == vulnerability_id,
+            HostApplicationVulnerability.resolved_at.is_(None),
+            HostApplication.removed_at.is_(None),
+            Host.deleted_at.is_(None),
+        )
+        .order_by(Host.hostname.asc(), HostApplication.name.asc())
+    ).all()
+    return [
+        VulnerabilityExposureResponse(
+            id=match.id,
+            host_id=host.id,
+            hostname=host.hostname,
+            os_family=host.os_family,
+            os_version=host.os_version,
+            environment=(host.tags or {}).get("environment"),
+            application_id=application.id,
+            application_name=application.name,
+            application_source=application.source,
+            installed_version=application.version,
+            fixed_versions=match.fixed_versions or [],
+            detected_at=match.detected_at,
+            last_seen_at=match.last_seen_at,
+        )
+        for match, application, host in rows
+    ]
 
 
 @router.get("/vulnerabilities/summary", response_model=VulnerabilitySummaryResponse)
