@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-const surfaces = ['login', 'overview', 'assets', 'host-card', 'host-detail', 'agents', 'agents-policy', 'evidence', 'administration'] as const
+const surfaces = ['login', 'overview', 'assets', 'host-card', 'host-detail', 'agents', 'agents-policy', 'vulnerabilities', 'vulnerability-investigation', 'vulnerability-investigation-exposures', 'evidence', 'administration'] as const
 
 for (const surface of surfaces) {
   test(`${surface} visual baseline`, async ({ page }) => {
@@ -14,6 +14,12 @@ for (const surface of surfaces) {
     if (surface === 'agents-policy') {
       await page.getByRole('button', { name: /Default Linux Fleet/ }).click()
       await page.getByRole('button', { name: 'Policy', exact: true }).click()
+    }
+    if (surface === 'vulnerability-investigation' || surface === 'vulnerability-investigation-exposures') {
+      await page.getByRole('button', { name: 'Investigate CVE-2026-1042' }).click()
+    }
+    if (surface === 'vulnerability-investigation-exposures') {
+      await page.locator('.finding-detail-body').evaluate(element => { element.scrollTop = element.scrollHeight })
     }
     await page.evaluate(() => document.fonts.ready)
     await expect(page.locator('.skeleton')).toHaveCount(0)

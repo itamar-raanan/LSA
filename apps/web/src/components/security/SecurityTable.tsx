@@ -167,7 +167,7 @@ export function SecurityTable<T extends { id: string }>({
       <div className="flex flex-wrap items-center justify-end gap-2">
         {selectionSummary && selectable && selectedRowIds && selectedRowIds.size > 0 && <div className="security-table-selection" role="status"><strong>{selectedRowIds.size}</strong> Selected<button type="button" onClick={() => onSelectionChange?.(new Set())}>Clear</button>{bulkActions}</div>}
         {toolbarActions}
-        <span className="security-table-count">{totalRows} Records</span>
+        <span className="security-table-count">{totalRows} {totalRows === 1 ? 'Record' : 'Records'}</span>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild><Button size="sm"><SlidersHorizontal size={14} />Options<CaretDown size={12} /></Button></DropdownMenu.Trigger>
           <DropdownMenu.Portal><DropdownMenu.Content align="end" className="soc-menu-content">

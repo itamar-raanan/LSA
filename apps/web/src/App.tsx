@@ -10,6 +10,7 @@ const HostDetailPage = lazy(() => import('./pages/HostDetailPage').then((module)
 const HostsPage = lazy(() => import('./pages/HostsPage').then((module) => ({ default: module.HostsPage })))
 const EvidenceIntakePage = lazy(() => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
 const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((module) => ({ default: module.ApplicationsPage })))
+const VulnerabilitiesPage = lazy(() => import('./pages/VulnerabilitiesPage').then((module) => ({ default: module.VulnerabilitiesPage })))
 const HowToPage = lazy(() => import('./pages/HowToPage').then((module) => ({ default: module.HowToPage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 const AuthenticationSettingsPage = lazy(() => import('./pages/settings/AuthenticationSettingsPage').then((module) => ({ default: module.AuthenticationSettingsPage })))
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="hosts" element={<HostsPage />} />
         <Route path="hosts/:hostId" element={<HostDetailPage />} />
         <Route path="applications" element={<ApplicationsPage />} />
+        <Route path="vulnerabilities" element={<VulnerabilitiesPage />} />
         <Route path="findings" element={<FindingsPage />} />
         <Route path="evidence" element={<EvidenceIntakePage />} />
         <Route path="how-to" element={<HowToPage />} />
