@@ -1,4 +1,5 @@
 const now = '2026-08-20T12:00:00Z'
+const visualSurface = new URLSearchParams(window.location.search).get('surface') ?? ''
 const host = {
   id: 'host-1', hostname: 'web-01', fqdn: 'web-01.example.com', operating_system: 'Debian GNU/Linux', os_family: 'debian', os_version: '13', kernel: '6.12.0-amd64', architecture: 'x86_64', ip_addresses: ['10.24.8.20'], tags: { environment: 'production', owner: 'Platform' }, compliance_score: 89.6, security_score: 82, last_scan_at: now,
   finding_counts: { critical: 1, high: 3, medium: 8, low: 4, info: 0 }, system_info: { cpu_model: 'Intel Xeon Gold', cpu_cores: 8, memory_mb: 16384, uptime_seconds: 432000, virtualization_type: 'kvm', virtualization_role: 'guest', system_vendor: 'QEMU', product_name: 'Standard PC', timezone: 'UTC' }, application_count: 127,
@@ -28,7 +29,7 @@ export class ApiError extends Error { status = 500 }
 export const SESSION_INVALID_EVENT = 'lsa-session-invalid'
 
 const fixture = {
-  publicProviders: async () => [], startOidc: () => undefined,
+  publicProviders: async () => visualSurface === 'login-auth-methods' ? [{ id: 'provider-1', name: 'Corporate Identity', provider_type: 'entra' }, { id: 'provider-2', name: 'Corporate RADIUS', provider_type: 'radius' }] : [], startOidc: () => undefined,
   dashboard: async () => ({ total_hosts: 18, healthy_hosts: 11, at_risk_hosts: 7, critical_hosts: 2, stale_hosts: 1, overall_security_score: 78.4, compliance_score: 84.7, finding_counts: { critical: 3, high: 12, medium: 28, low: 41, info: 9 }, os_distribution: { Debian: 12, Ubuntu: 6 }, highest_risk_hosts: [host2, host] }),
   hostPage: async (options: Record<string, unknown> = {}) => ({ rows: [host2, host], total: 2, page: Number(options.page ?? 0), pageSize: Number(options.pageSize ?? 10) }),
   hostFacets: async () => ({ total: 18, critical: 2, healthy: 11, stale: 1 }), host: async () => host,

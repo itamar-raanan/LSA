@@ -8,8 +8,8 @@ export function BrandMark({ compact = false, tone = 'dark' }: { compact?: boolea
       </div>
       {!compact && (
         <div>
-          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${tone === 'light' ? 'text-stone-900' : 'text-stone-100'}`}>Linux Security Auditor</p>
-          <p className={`mt-0.5 font-mono text-[9px] capitalize tracking-[0.18em] ${tone === 'light' ? 'text-stone-600' : 'text-stone-500'}`}>Fleet intelligence</p>
+          <p className={`text-[12px] font-semibold tracking-[-0.015em] ${tone === 'light' ? 'text-stone-900' : 'text-stone-100'}`}>Linux Security Auditor</p>
+          <p className={`mt-0.5 text-[9px] font-medium tracking-[0.08em] ${tone === 'light' ? 'text-stone-600' : 'text-stone-500'}`}>Fleet Intelligence</p>
         </div>
       )}
     </div>

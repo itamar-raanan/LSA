@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, vi } from 'vitest'
 import App from './App'
@@ -14,6 +14,9 @@ describe('App', () => {
     expect(await screen.findByRole('textbox', { name: 'Username' })).toHaveValue('')
     expect(screen.getByLabelText('Password')).toHaveValue('')
     expect(screen.queryByText('Emergency admin')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
+    fireEvent.click(screen.getByRole('button', { name: 'Show Password' }))
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text')
   })
 
   it('clears a rejected stored session and returns to login', async () => {
