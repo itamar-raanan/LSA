@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-27T12:45:43Z",
+  "title": "Design System: Linux Security Auditor",
+  "extensions": {
+    "colorMeta": {
+      "graphite-shell": {
+        "role": "neutral",
+        "displayName": "Graphite Shell",
+        "tonalRamp": ["oklch(15% 0.012 145)", "oklch(25% 0.012 145)", "oklch(35% 0.011 145)", "oklch(48% 0.010 145)", "oklch(60% 0.009 145)", "oklch(72% 0.008 145)", "oklch(84% 0.006 145)", "oklch(95% 0.004 145)"]
+      },
+      "warm-paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "tonalRamp": ["oklch(15% 0.018 82)", "oklch(25% 0.018 82)", "oklch(35% 0.017 82)", "oklch(48% 0.016 82)", "oklch(60% 0.015 82)", "oklch(72% 0.014 82)", "oklch(84% 0.012 82)", "oklch(95% 0.010 82)"]
+      },
+      "raised-paper": {
+        "role": "neutral",
+        "displayName": "Raised Paper",
+        "tonalRamp": ["oklch(15% 0.016 84)", "oklch(25% 0.016 84)", "oklch(35% 0.015 84)", "oklch(48% 0.014 84)", "oklch(60% 0.013 84)", "oklch(72% 0.012 84)", "oklch(84% 0.010 84)", "oklch(95% 0.008 84)"]
+      },
+      "evidence-surface": {
+        "role": "neutral",
+        "displayName": "Evidence Surface",
+        "tonalRamp": ["oklch(15% 0.012 86)", "oklch(25% 0.012 86)", "oklch(35% 0.011 86)", "oklch(48% 0.010 86)", "oklch(60% 0.009 86)", "oklch(72% 0.008 86)", "oklch(84% 0.006 86)", "oklch(95% 0.004 86)"]
+      },
+      "evidence-strong": {
+        "role": "neutral",
+        "displayName": "Evidence Strong",
+        "tonalRamp": ["oklch(15% 0.020 80)", "oklch(25% 0.020 80)", "oklch(35% 0.019 80)", "oklch(48% 0.018 80)", "oklch(60% 0.016 80)", "oklch(72% 0.014 80)", "oklch(84% 0.012 80)", "oklch(95% 0.010 80)"]
+      },
+      "evidence-soft": {
+        "role": "neutral",
+        "displayName": "Evidence Soft",
+        "tonalRamp": ["oklch(15% 0.019 78)", "oklch(25% 0.019 78)", "oklch(35% 0.018 78)", "oklch(48% 0.017 78)", "oklch(60% 0.015 78)", "oklch(72% 0.014 78)", "oklch(84% 0.012 78)", "oklch(95% 0.010 78)"]
+      },
+      "structural-line": {
+        "role": "neutral",
+        "displayName": "Structural Line",
+        "tonalRamp": ["oklch(15% 0.020 75)", "oklch(25% 0.020 75)", "oklch(35% 0.019 75)", "oklch(48% 0.018 75)", "oklch(60% 0.016 75)", "oklch(72% 0.014 75)", "oklch(84% 0.012 75)", "oklch(95% 0.010 75)"]
+      },
+      "structural-line-strong": {
+        "role": "neutral",
+        "displayName": "Structural Line Strong",
+        "tonalRamp": ["oklch(15% 0.022 75)", "oklch(25% 0.022 75)", "oklch(35% 0.021 75)", "oklch(48% 0.019 75)", "oklch(60% 0.017 75)", "oklch(72% 0.015 75)", "oklch(84% 0.013 75)", "oklch(95% 0.010 75)"]
+      },
+      "primary-ink": {
+        "role": "neutral",
+        "displayName": "Primary Ink",
+        "tonalRamp": ["oklch(15% 0.014 77)", "oklch(25% 0.014 77)", "oklch(35% 0.013 77)", "oklch(48% 0.012 77)", "oklch(60% 0.011 77)", "oklch(72% 0.009 77)", "oklch(84% 0.007 77)", "oklch(95% 0.004 77)"]
+      },
+      "metadata-ink": {
+        "role": "neutral",
+        "displayName": "Metadata Ink",
+        "tonalRamp": ["oklch(15% 0.020 76)", "oklch(25% 0.020 76)", "oklch(35% 0.019 76)", "oklch(48% 0.017 76)", "oklch(60% 0.015 76)", "oklch(72% 0.013 76)", "oklch(84% 0.010 76)", "oklch(95% 0.007 76)"]
+      },
+      "operational-amber": {
+        "role": "primary",
+        "displayName": "Operational Amber",
+        "tonalRamp": ["oklch(15% 0.080 70)", "oklch(25% 0.100 70)", "oklch(35% 0.120 70)", "oklch(48% 0.135 70)", "oklch(60% 0.125 70)", "oklch(72% 0.100 70)", "oklch(84% 0.065 70)", "oklch(95% 0.025 70)"]
+      },
+      "amber-strong": {
+        "role": "primary",
+        "displayName": "Amber Strong",
+        "tonalRamp": ["oklch(15% 0.085 72)", "oklch(25% 0.105 72)", "oklch(35% 0.125 72)", "oklch(48% 0.140 72)", "oklch(60% 0.130 72)", "oklch(72% 0.105 72)", "oklch(84% 0.068 72)", "oklch(95% 0.026 72)"]
+      },
+      "amber-ink": {
+        "role": "neutral",
+        "displayName": "Amber Ink",
+        "tonalRamp": ["oklch(15% 0.018 82)", "oklch(25% 0.018 82)", "oklch(35% 0.017 82)", "oklch(48% 0.016 82)", "oklch(60% 0.014 82)", "oklch(72% 0.012 82)", "oklch(84% 0.009 82)", "oklch(95% 0.006 82)"]
+      },
+      "incident-red": {
+        "role": "secondary",
+        "displayName": "Incident Red",
+        "tonalRamp": ["oklch(15% 0.075 22)", "oklch(25% 0.095 22)", "oklch(35% 0.115 22)", "oklch(48% 0.130 22)", "oklch(60% 0.120 22)", "oklch(72% 0.095 22)", "oklch(84% 0.060 22)", "oklch(95% 0.022 22)"]
+      },
+      "exposure-orange": {
+        "role": "secondary",
+        "displayName": "Exposure Orange",
+        "tonalRamp": ["oklch(15% 0.075 48)", "oklch(25% 0.095 48)", "oklch(35% 0.115 48)", "oklch(48% 0.130 48)", "oklch(60% 0.120 48)", "oklch(72% 0.095 48)", "oklch(84% 0.060 48)", "oklch(95% 0.022 48)"]
+      },
+      "stale-gold": {
+        "role": "secondary",
+        "displayName": "Stale Gold",
+        "tonalRamp": ["oklch(15% 0.070 82)", "oklch(25% 0.090 82)", "oklch(35% 0.110 82)", "oklch(48% 0.125 82)", "oklch(60% 0.115 82)", "oklch(72% 0.090 82)", "oklch(84% 0.058 82)", "oklch(95% 0.022 82)"]
+      },
+      "informational-blue": {
+        "role": "secondary",
+        "displayName": "Informational Blue",
+        "tonalRamp": ["oklch(15% 0.045 235)", "oklch(25% 0.060 235)", "oklch(35% 0.075 235)", "oklch(48% 0.085 235)", "oklch(60% 0.078 235)", "oklch(72% 0.060 235)", "oklch(84% 0.038 235)", "oklch(95% 0.015 235)"]
+      },
+      "assurance-green": {
+        "role": "secondary",
+        "displayName": "Assurance Green",
+        "tonalRamp": ["oklch(15% 0.045 150)", "oklch(25% 0.060 150)", "oklch(35% 0.075 150)", "oklch(48% 0.085 150)", "oklch(60% 0.078 150)", "oklch(72% 0.060 150)", "oklch(84% 0.038 150)", "oklch(95% 0.015 150)"]
+      },
+      "focus-amber": {
+        "role": "primary",
+        "displayName": "Focus Amber",
+        "tonalRamp": ["oklch(15% 0.075 68)", "oklch(25% 0.095 68)", "oklch(35% 0.115 68)", "oklch(48% 0.130 68)", "oklch(60% 0.120 68)", "oklch(72% 0.095 68)", "oklch(84% 0.060 68)", "oklch(95% 0.022 68)"]
+      },
+      "overlay": {
+        "role": "neutral",
+        "displayName": "Overlay",
+        "tonalRamp": ["oklch(15% 0.020 72)", "oklch(25% 0.020 72)", "oklch(35% 0.019 72)", "oklch(48% 0.017 72)", "oklch(60% 0.015 72)", "oklch(72% 0.013 72)", "oklch(84% 0.010 72)", "oklch(95% 0.006 72)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Primary page titles and route orientation." },
+      "headline": { "displayName": "Headline", "purpose": "Dialogs, inspectors, and investigation titles." },
+      "title": { "displayName": "Title", "purpose": "Panel headings and high-value row titles." },
+      "body": { "displayName": "Body", "purpose": "Instructions, explanations, and evidence context." },
+      "label": { "displayName": "Label", "purpose": "Kickers, table headers, metadata labels, and statuses." }
+    },
+    "shadows": [
+      { "name": "flat", "value": "none", "purpose": "Ordinary panels, cards, tables, and workspace sections." },
+      { "name": "raised-login", "value": "0 22px 60px -42px rgba(52, 43, 31, .42)", "purpose": "Diffuse ambient lift for the singular authentication form." },
+      { "name": "floating-overlay", "value": "0 32px 90px rgba(64, 49, 30, .24), inset 0 1px 0 rgba(255, 255, 255, .9)", "purpose": "Dialogs, inspectors, and temporary floating work surfaces." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(.23, 1, .32, 1)", "purpose": "Spatial transitions and calm reveal motion." },
+      { "name": "state-fast", "value": "140ms ease", "purpose": "Color, border, background, and focus-state changes." },
+      { "name": "press", "value": "120ms ease-out", "purpose": "Compact active-state compression and button feedback." }
+    ],
+    "breakpoints": [
+      { "name": "xs", "value": "479px" },
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "767px" },
+      { "name": "lg", "value": "1023px" },
+      { "name": "xl", "value": "1279px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The compact, decisive action used for the next safe operational step.",
+      "html": "<button class=\"ds-btn-primary\">Continue</button>",
+      "css": ".ds-btn-primary { display:inline-flex; height:34px; align-items:center; justify-content:center; border:1px solid #96601d; border-radius:5px; padding:0 14px; color:var(--accent-ink, #fffaf0); background:var(--accent, #a86b1f); font-family:var(--font-main, Geist, sans-serif); font-size:11px; font-weight:650; line-height:1; transition:transform 120ms ease-out, background-color 140ms ease, border-color 140ms ease; box-shadow:inset 0 1px 0 rgba(255,255,255,.22); } .ds-btn-primary:hover { border-color:#845116; background:#935b18; } .ds-btn-primary:focus-visible { outline:2px solid var(--focus, #9a611d); outline-offset:3px; } .ds-btn-primary:active { transform:scale(.97); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A restrained bordered action that stays subordinate to the primary path.",
+      "html": "<button class=\"ds-btn-secondary\">View evidence</button>",
+      "css": ".ds-btn-secondary { display:inline-flex; height:34px; align-items:center; justify-content:center; border:1px solid #d0c8bb; border-radius:5px; padding:0 14px; color:#504b43; background:#f9f7f1; font-family:var(--font-main, Geist, sans-serif); font-size:11px; font-weight:650; line-height:1; transition:transform 120ms ease-out, color 140ms ease, background-color 140ms ease, border-color 140ms ease; } .ds-btn-secondary:hover { border-color:#aea292; color:#292621; background:#fffdf9; } .ds-btn-secondary:focus-visible { outline:2px solid var(--focus, #9a611d); outline-offset:3px; } .ds-btn-secondary:active { transform:scale(.97); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A warm evidence field with a restrained amber focus treatment.",
+      "html": "<label class=\"ds-field\"><span>Asset name</span><input type=\"text\" placeholder=\"Search assets\"></label>",
+      "css": ".ds-field { display:flex; width:280px; flex-direction:column; gap:8px; color:#625c53; font-family:var(--font-main, Geist, sans-serif); font-size:12px; } .ds-field input { width:100%; height:38px; border:1px solid #d2cabd; border-radius:5px; padding:0 12px; outline:none; color:#302d28; background:var(--surface, #fbfaf6); font:inherit; transition:border-color 140ms ease, box-shadow 140ms ease; } .ds-field input::placeholder { color:#8e8579; } .ds-field input:hover { border-color:#b8ad9d; } .ds-field input:focus { border-color:#b2772d; box-shadow:0 0 0 2px rgba(178,119,45,.12); }"
+    },
+    {
+      "name": "Active Filter Chip",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "A compact pill for a selected filter or evidence scope.",
+      "html": "<button class=\"ds-filter-chip\">Critical findings</button>",
+      "css": ".ds-filter-chip { display:inline-flex; height:34px; align-items:center; border:1px solid #c99d60; border-radius:999px; padding:0 11px; color:#70440f; background:#f2e7d6; font-family:var(--font-main, Geist, sans-serif); font-size:11px; font-weight:600; letter-spacing:.01em; transition:transform 120ms ease, color 160ms ease, border-color 160ms ease, background 160ms ease; } .ds-filter-chip:hover { border-color:#b48445; color:#523107; background:#efe0c9; } .ds-filter-chip:focus-visible { outline:2px solid var(--focus, #9a611d); outline-offset:3px; } .ds-filter-chip:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Evidence Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A flat, border-led container for evidence, metrics, and operational context.",
+      "html": "<section class=\"ds-panel\"><header><small>Evidence source</small><h3>Latest accepted posture</h3></header><p>Server summaries from locally retained reports.</p></section>",
+      "css": ".ds-panel { width:320px; overflow:hidden; border:1px solid #d8d1c5; border-radius:7px; color:var(--text, #292722); background:var(--surface, #fbfaf6); font-family:var(--font-main, Geist, sans-serif); } .ds-panel header { border-bottom:1px solid #e0d9ce; padding:11px 14px; } .ds-panel small { color:#716b61; font-size:10px; font-weight:600; letter-spacing:.02em; } .ds-panel h3 { margin:3px 0 0; font-size:12px; font-weight:600; } .ds-panel p { margin:0; padding:14px; color:#716b61; font-size:11px; line-height:1.6; } .ds-panel:hover { border-color:#bdae99; } .ds-panel:focus-within { outline:2px solid var(--focus, #9a611d); outline-offset:3px; }"
+    },
+    {
+      "name": "Active Navigation Item",
+      "kind": "nav",
+      "description": "The current console destination inside the graphite operational shell.",
+      "html": "<nav class=\"ds-nav-shell\"><a class=\"ds-nav-active\" href=\"#\">Security findings</a></nav>",
+      "css": ".ds-nav-shell { width:220px; padding:10px; background:#292923; font-family:var(--font-main, Geist, sans-serif); } .ds-nav-active { display:flex; height:38px; align-items:center; border-radius:5px; padding:0 12px; color:#fffaf0; background:#3b3932; box-shadow:inset 2px 0 0 #d69a43; font-size:12px; font-weight:500; text-decoration:none; transition:color 140ms ease, background 140ms ease, transform 120ms ease-out; } .ds-nav-active:hover { color:#ffffff; background:#454239; } .ds-nav-active:focus-visible { outline:2px solid #d69a43; outline-offset:3px; } .ds-nav-active:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Online Status Pill",
+      "kind": "chip",
+      "description": "A text-first status label for healthy or connected system state.",
+      "html": "<span class=\"ds-status-online\">Online</span>",
+      "css": ".ds-status-online { display:inline-flex; width:fit-content; align-items:center; border:1px solid #b8c5ba; border-radius:999px; padding:4px 8px; color:#4f6f5c; background:#edf1eb; font-family:var(--font-main, Geist, sans-serif); font-size:10px; font-weight:600; letter-spacing:.02em; transition:border-color 140ms ease, background 140ms ease; } .ds-status-online:hover { border-color:#91aa97; background:#e7eee7; } .ds-status-online:focus-visible { outline:2px solid var(--focus, #9a611d); outline-offset:3px; }"
+    },
+    {
+      "name": "Critical Severity Badge",
+      "kind": "chip",
+      "description": "A squared, explicit critical-severity label for findings and exposures.",
+      "html": "<span class=\"ds-severity-critical\">critical</span>",
+      "css": ".ds-severity-critical { display:inline-flex; width:fit-content; align-items:center; border:1px solid rgba(183,79,82,.34); border-radius:4px; padding:3px 6px; color:#9d3f43; background:rgba(183,79,82,.08); font-family:var(--font-main, Geist, sans-serif); font-size:10px; font-weight:600; letter-spacing:.01em; transition:border-color 140ms ease, background 140ms ease; } .ds-severity-critical:hover { border-color:rgba(183,79,82,.55); background:rgba(183,79,82,.12); } .ds-severity-critical:focus-visible { outline:2px solid var(--focus, #9a611d); outline-offset:3px; }"
+    },
+    {
+      "name": "Brand Mark",
+      "kind": "custom",
+      "description": "The compact graphite instrument mark with three amber evidence bars.",
+      "html": "<span class=\"ds-brand-mark\" aria-label=\"Linux Security Auditor\"><i></i><i></i><i></i></span>",
+      "css": ".ds-brand-mark { display:grid; width:32px; height:32px; grid-template-columns:repeat(3,1fr); align-items:end; gap:3px; border:1px solid #5a5145; border-radius:5px; padding:6px; background:#35332d; box-shadow:inset 0 1px 0 rgba(255,255,255,.08); transition:border-color 140ms ease, transform 120ms ease-out; } .ds-brand-mark i { display:block; border-radius:1px 1px 0 0; background:#d49a45; } .ds-brand-mark i:nth-child(1) { height:45%; opacity:.55; } .ds-brand-mark i:nth-child(2) { height:90%; } .ds-brand-mark i:nth-child(3) { height:65%; opacity:.72; } .ds-brand-mark:hover { border-color:#766d5e; } .ds-brand-mark:focus-visible { outline:2px solid var(--focus, #9a611d); outline-offset:3px; } .ds-brand-mark:active { transform:scale(.97); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Security Instrument",
+    "overview": "Linux Security Auditor should feel like a calibrated instrument: precise, warm, calm, sharp, premium, and trustworthy. The graphite operational shell establishes orientation and restraint; the warm cream workspace and evidence surfaces keep dense analysis legible without becoming clinical.\n\nThe system favors compact enterprise analyst density and decisive hierarchy. Operators authenticate with minimal friction, enter a dense console, scan security state, and act without losing source evidence or host context. It explicitly rejects hacker or neon aesthetics, decorative gradients, black cards, oversized controls, ornamental color, and soft consumer-SaaS styling.",
+    "keyCharacteristics": [
+      "Compact, evidence-led information density.",
+      "Warm paper surfaces inside a graphite operational shell.",
+      "Structural borders and tonal layering instead of decorative shadow.",
+      "Amber reserved for action and current state.",
+      "Calm semantic color for assurance, incidents, severity, and evidence status."
+    ],
+    "rules": [
+      { "name": "The Amber Discipline Rule", "body": "Amber communicates action or current state; its rarity is part of the hierarchy.", "section": "colors" },
+      { "name": "The Metadata Contrast Rule", "body": "Operational metadata must maintain a contrast ratio of at least 4.5:1 on every warm surface.", "section": "colors" },
+      { "name": "The One-Family Rule", "body": "Use Geist everywhere; code-like and numeric content gains tabular alignment rather than a separate monospace personality.", "section": "typography" },
+      { "name": "The Context-Preservation Rule", "body": "Responsive layouts may stack or progressively disclose, but must not separate an action from the evidence, host, or security state needed to judge it.", "section": "layout" },
+      { "name": "The Flat-by-Default Rule", "body": "Borders and tonal layers carry structure; ambient shadow is reserved for login and temporary overlays.", "section": "elevation" },
+      { "name": "The Radius Ladder Rule", "body": "Use the 5px / 7px / 10px ladder for controls, panels, and overlays; do not introduce large soft consumer radii.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do use amber only for primary action, current state, or a narrow evidence emphasis.",
+      "Do preserve compact 34px controls and the 5px / 7px / 10px radius ladder.",
+      "Do use borders, section rules, and tonal layers to make dense evidence scannable.",
+      "Do keep metadata contrast at or above 4.5:1 and preserve visible keyboard focus.",
+      "Do keep actions beside the host, evidence, and security state required to judge them."
+    ],
+    "donts": [
+      "Don't use hacker styling, neon color, or decorative gradients.",
+      "Don't introduce black content cards, ornamental color, or shadow-heavy card stacks.",
+      "Don't enlarge routine controls or soften the interface into consumer-SaaS styling.",
+      "Don't use amber as ambient decoration or semantic status when a specific severity color exists.",
+      "Don't hide safety boundaries, evidence lineage, or stale-state consequences behind visual polish."
+    ]
+  }
+}

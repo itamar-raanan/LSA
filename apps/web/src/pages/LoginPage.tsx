@@ -1,9 +1,10 @@
-import { ArrowRight, Building2, CircleCheck, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { BrandMark } from '../components/BrandMark'
+import { Button } from '../components/ui/Button'
 import type { PublicIdentityProvider, User } from '../types'
 
 export function LoginPage() {
@@ -12,6 +13,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [providers, setProviders] = useState<PublicIdentityProvider[]>([])
   const [method, setMethod] = useState<'local' | 'radius'>('local')
   const [sessionNotice] = useState(() => {
@@ -53,52 +55,39 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-[100dvh] bg-[#eee9df] text-stone-900 lg:grid-cols-[1.1fr_0.9fr]">
-      <section className="login-aside relative hidden overflow-hidden border-r border-white/[.06] p-12 lg:flex lg:flex-col">
-        <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(113,124,115,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(113,124,115,.08)_1px,transparent_1px)] [background-size:56px_56px]" />
-        <div className="relative"><BrandMark /></div>
-        <div className="relative mt-auto max-w-[660px] pb-10">
-          <p className="mb-5 font-mono text-[10px] capitalize tracking-[0.2em] text-amber-400">Estate-wide assurance</p>
-          <h1 className="max-w-[12ch] text-5xl font-medium leading-[0.98] tracking-[-0.065em] text-stone-50 xl:text-6xl">Every Linux host. One security picture.</h1>
-          <p className="mt-7 max-w-[55ch] text-[15px] leading-7 text-stone-400">Collect signed audit evidence without granting the platform access to your servers. Track exposure, compliance, and change across the entire estate.</p>
-          <div className="mt-10 grid grid-cols-2 gap-x-12 gap-y-5 border-t border-stone-800 pt-7 text-xs text-stone-400">
-            {['No remote execution', 'Customer-controlled scans', 'Offline-capable bundles', 'Immutable report history'].map((item) => (
-              <div key={item} className="flex items-center gap-2"><CircleCheck size={16} className="text-amber-400" />{item}</div>
-            ))}
+    <main className="login-page">
+      <header className="login-brand"><BrandMark tone="light" /></header>
+      <section className="login-stage" aria-labelledby="login-title">
+        <div className="login-form-shell">
+          <div className="login-form-intro">
+            <span className="login-security-mark"><ShieldCheck size={18} /></span>
+            <div><p>LSA Management Console</p><h1 id="login-title">Access the console</h1></div>
           </div>
-        </div>
-      </section>
-
-      <section className="flex items-center justify-center px-5 py-12 sm:px-10">
-        <div className="login-form-shell w-full max-w-[470px]">
-          <div className="mb-12 lg:hidden"><BrandMark tone="light" /></div>
-          <div className="mb-8 grid size-11 place-items-center rounded-md border border-stone-300 bg-[#f8f5ee] text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,.8)]"><ShieldCheck size={21} /></div>
-          <h2 className="text-3xl font-medium tracking-[-0.045em]">Access the console</h2>
-          <p className="mt-2 text-sm leading-6 text-stone-600">Use your organization account to review the Linux estate.</p>
-          {sessionNotice && <p className="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">{sessionNotice}</p>}
-          {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="mt-8 space-y-2">
-            {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <button key={provider.id} className="button-secondary w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Building2 size={16} /> Continue with {provider.name}</span><ArrowRight size={16} /></button>)}
+          <p className="login-form-detail">Sign in with your organization account to review Linux security posture and evidence.</p>
+          {sessionNotice && <p className="login-notice" role="status">{sessionNotice}</p>}
+          {providers.filter((provider) => provider.provider_type !== 'radius').length > 0 && <div className="login-provider-list">
+            {providers.filter((provider) => provider.provider_type !== 'radius').map((provider) => <Button key={provider.id} className="w-full justify-between" onClick={() => void api.startOidc(provider.id)}><span className="flex items-center gap-2"><Building2 size={15} />Continue With {provider.name}</span><ArrowRight size={14} /></Button>)}
           </div>}
-          {providers.some((provider) => provider.provider_type === 'radius') && <div className="mt-7 flex gap-4 border-b border-stone-200 pb-3 text-[10px] capitalize tracking-wider text-stone-600">
-            <button className={method === 'local' ? 'text-amber-700' : ''} onClick={() => setMethod('local')}>Local</button>
-            <button className={method === 'radius' ? 'text-amber-700' : ''} onClick={() => setMethod('radius')}>RADIUS</button>
+          {providers.some((provider) => provider.provider_type === 'radius') && <div className="login-methods" role="group" aria-label="Authentication Method">
+            <button type="button" className={method === 'local' ? 'login-method-active' : ''} aria-pressed={method === 'local'} onClick={() => setMethod('local')}>Local Account</button>
+            <button type="button" className={method === 'radius' ? 'login-method-active' : ''} aria-pressed={method === 'radius'} onClick={() => setMethod('radius')}>RADIUS</button>
           </div>}
-          <form className="mt-7 space-y-5" onSubmit={submit}>
+          <form className="login-form" onSubmit={submit}>
             <label className="form-field">
               <span>Username</span>
-              <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required />
+              <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" autoFocus required />
             </label>
             <label className="form-field">
               <span>Password</span>
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+              <span className="login-password-field"><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /><button type="button" aria-label={showPassword ? 'Hide Password' : 'Show Password'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button></span>
             </label>
-            {error && <p className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-800">{error}</p>}
-            <button className="button-primary w-full justify-between" disabled={submitting}>
-              <span>{submitting ? 'Authenticating' : 'Continue'}</span><ArrowRight size={17} />
-            </button>
+            {error && <p className="login-error" role="alert">{error}</p>}
+            <Button variant="primary" className="w-full justify-between" disabled={submitting}><span>{submitting ? 'Authenticating' : 'Continue'}</span><ArrowRight size={14} /></Button>
           </form>
+          <div className="login-trust-note"><ShieldCheck size={14} /><span>Authorized access only. Authentication activity is recorded in the security audit log.</span></div>
         </div>
       </section>
+      <footer className="login-footer"><span>Linux Security Auditor</span><span>Management Access</span></footer>
     </main>
   )
 }
