@@ -22,6 +22,8 @@ for (const surface of surfaces) {
       await page.locator('.finding-detail-body').evaluate(element => { element.scrollTop = element.scrollHeight })
     }
     await page.evaluate(() => document.fonts.ready)
+    await page.waitForFunction(() => Array.from(document.images).every(image => image.complete))
+    await page.evaluate(() => Promise.all(Array.from(document.images).map(image => image.decode().catch(() => undefined))))
     await expect(page.locator('.skeleton')).toHaveCount(0)
     await expect(page).toHaveScreenshot(`${surface}.png`, { fullPage: true, animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.002 })
   })

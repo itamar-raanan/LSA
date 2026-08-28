@@ -2,8 +2,9 @@ import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { api } from '../api/client'
+import lsaLogo from '../assets/lsa-logo-transparent.png'
+import tuxSamuraiWallpaper from '../assets/tux-samurai-login.png'
 import { useAuth } from '../auth/useAuth'
-import { BrandMark } from '../components/BrandMark'
 import { Button } from '../components/ui/Button'
 import type { PublicIdentityProvider, User } from '../types'
 
@@ -56,7 +57,8 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
-      <header className="login-brand"><BrandMark tone="light" /></header>
+      <img className="login-wallpaper" src={tuxSamuraiWallpaper} alt="" aria-hidden="true" />
+      <header className="login-brand"><img className="login-logo" src={lsaLogo} alt="Linux Security Auditor" /></header>
       <section className="login-stage" aria-labelledby="login-title">
         <div className="login-form-shell">
           <div className="login-form-intro">
@@ -75,7 +77,7 @@ export function LoginPage() {
           <form className="login-form" onSubmit={submit}>
             <label className="form-field">
               <span>Username</span>
-              <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" autoFocus required />
+              <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required />
             </label>
             <label className="form-field">
               <span>Password</span>
