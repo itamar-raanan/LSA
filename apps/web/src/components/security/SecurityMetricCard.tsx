@@ -9,13 +9,15 @@ export function SecurityMetricCard({ title, value, detail, trend, tone = 'neutra
   const TrendIcon = trend == null || trend === 0 ? Minus : trend > 0 ? ArrowUpRight : ArrowDownRight
   const card = (
     <article className={cn('security-metric-card', `metric-tone-${tone}`)}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="metric-icon"><Icon size={17} /></div>
-        {trend != null && <span className="metric-trend"><TrendIcon size={13} />{trend === 0 ? 'No change' : `${Math.abs(trend)}%`}</span>}
+      <div className="metric-copy">
+        <p className="metric-value">{value}</p>
+        <p className="metric-title">{title}</p>
+        {detail && <p className="metric-detail">{detail}</p>}
       </div>
-      <p className="metric-value">{value}</p>
-      <p className="metric-title">{title}</p>
-      {detail && <p className="metric-detail">{detail}</p>}
+      <div className="metric-aside">
+        <div className="metric-icon"><Icon size={15} /></div>
+        {trend != null && <span className="metric-trend"><TrendIcon size={11} />{trend === 0 ? 'No change' : `${Math.abs(trend)}%`}</span>}
+      </div>
     </article>
   )
   return to ? <Link className="security-metric-link" to={to} aria-label={`${title}: ${value}`}>{card}</Link> : card
