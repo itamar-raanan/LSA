@@ -55,7 +55,7 @@ export function AgentDownloadPanel({ packages, platformUrl, platformTrust, enrol
     setDownloading(agentPackage.id)
     setError('')
     try {
-      const result = await api.downloadAgentPackage(agentPackage.id)
+      const result = await api.downloadAgentPackage(agentPackage)
       const url = URL.createObjectURL(result.blob)
       const anchor = document.createElement('a')
       anchor.href = url

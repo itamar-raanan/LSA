@@ -31,7 +31,7 @@ To prepare that reviewed wheelhouse explicitly:
 ./packaging/build-agent-wheelhouse.sh /secure/lsa-agent-wheelhouse x86_64
 ```
 
-Package installation never enables remediation. The 0.11.1 agent advertises audit,
+Package installation never enables remediation. The 0.11.2 agent advertises audit,
 runtime-integrity, governance-planning, signed-platform-control, and two-phase
 platform-key-rotation capabilities. It also advertises validation-only remediation
 contract, read-only dry-run, and deterministic recovery-planning support. Validation
