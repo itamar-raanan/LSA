@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import httpx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -16,6 +17,7 @@ from agent.lsa_agent import (
     _scan_due,
     accept_policy_version,
     http_client,
+    require_platform_success,
     platform_url,
     process_recovery_verification,
     process_remediation_checkpoint,
@@ -52,6 +54,22 @@ def test_enrollment_uses_only_the_integrity_protected_offline_wheelhouse():
     assert '--find-links "$WHEELHOUSE_DIR"' in script
     assert '"$INSTALL_DIR/venv/bin/pip" check' in script
     assert "pip install --disable-pip-version-check --no-cache-dir -r" not in script
+
+
+def test_enrollment_conflict_explains_safe_recovery():
+    response = httpx.Response(
+        409,
+        json={"detail": "This agent identity is already enrolled"},
+        request=httpx.Request("POST", "https://lsa.example.test/api/v1/agent/enroll"),
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        require_platform_success(response, "Agent enrollment")
+
+    message = str(error.value)
+    assert "This agent identity is already enrolled" in message
+    assert "revoke the stale agent" in message
+    assert "Do not delete local keys" in message
 
 
 def test_agent_attests_governance_planning_without_write_execution():

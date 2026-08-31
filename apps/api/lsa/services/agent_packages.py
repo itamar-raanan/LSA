@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 
 
-AGENT_VERSION = "0.11.1"
+AGENT_VERSION = "0.11.2"
 PACKAGE_ID = "linux-universal"
 PACKAGE_FILENAME = f"lsa-agent-{AGENT_VERSION}-linux-universal.tar.gz"
 PACKAGE_ROOT = f"lsa-agent-{AGENT_VERSION}"
