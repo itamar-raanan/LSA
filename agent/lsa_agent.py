@@ -60,7 +60,7 @@ except ImportError:  # executed directly by the systemd unit
     )
 
 
-VERSION = "0.11.0"
+VERSION = "0.11.1"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (

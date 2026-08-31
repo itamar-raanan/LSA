@@ -45,6 +45,15 @@ def test_runtime_version_matches_packaging_release():
     assert Path("agent/VERSION").read_text(encoding="utf-8").strip() == VERSION
 
 
+def test_enrollment_uses_only_the_integrity_protected_offline_wheelhouse():
+    script = Path("agent/lsa-agent-enroll").read_text(encoding="utf-8")
+    assert 'WHEELHOUSE_DIR="$INSTALL_DIR/wheelhouse"' in script
+    assert '--no-index' in script
+    assert '--find-links "$WHEELHOUSE_DIR"' in script
+    assert '"$INSTALL_DIR/venv/bin/pip" check' in script
+    assert "pip install --disable-pip-version-check --no-cache-dir -r" not in script
+
+
 def test_agent_attests_governance_planning_without_write_execution():
     assert "signed-change-set-planning-v1" in AGENT_CAPABILITIES
     assert "signed-platform-control-v1" in AGENT_CAPABILITIES

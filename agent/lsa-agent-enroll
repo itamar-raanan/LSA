@@ -38,9 +38,19 @@ done
 INSTALL_DIR=/opt/lsa-agent
 CONFIG_DIR=/etc/lsa-agent
 STATE_DIR=/var/lib/lsa-agent
+WHEELHOUSE_DIR="$INSTALL_DIR/wheelhouse"
 [ -f "$INSTALL_DIR/agent/lsa_agent.py" ] || { echo "LSA agent runtime is not installed." >&2; exit 1; }
 [ -f "$INSTALL_DIR/requirements.txt" ] || { echo "LSA agent requirements are not installed." >&2; exit 1; }
 [ -f "$INSTALL_DIR/integrity-manifest.json" ] || { echo "LSA agent integrity manifest is not installed." >&2; exit 1; }
+[ -d "$WHEELHOUSE_DIR" ] || { echo "LSA agent offline dependency wheelhouse is not installed. Download a complete agent package from the console." >&2; exit 1; }
+WHEEL_FOUND=false
+for wheel in "$WHEELHOUSE_DIR"/*.whl; do
+  if [ -f "$wheel" ]; then
+    WHEEL_FOUND=true
+    break
+  fi
+done
+[ "$WHEEL_FOUND" = true ] || { echo "LSA agent offline dependency wheelhouse is empty. Download a complete agent package from the console." >&2; exit 1; }
 "$PYTHON" "$INSTALL_DIR/agent/integrity.py" verify \
   --root "$INSTALL_DIR" --manifest "$INSTALL_DIR/integrity-manifest.json"
 
@@ -50,7 +60,13 @@ install -d -m 0700 "$STATE_DIR"
 if [ ! -x "$INSTALL_DIR/venv/bin/python" ]; then
   "$PYTHON" -m venv "$INSTALL_DIR/venv"
 fi
-"$INSTALL_DIR/venv/bin/pip" install --disable-pip-version-check --no-cache-dir -r "$INSTALL_DIR/requirements.txt"
+"$INSTALL_DIR/venv/bin/pip" install \
+  --disable-pip-version-check \
+  --no-cache-dir \
+  --no-index \
+  --find-links "$WHEELHOUSE_DIR" \
+  -r "$INSTALL_DIR/requirements.txt"
+"$INSTALL_DIR/venv/bin/pip" check
 
 "$PYTHON" - "$CONFIG_DIR/config.json" "$CONFIG_DIR/platform-command-key.pub" "$PLATFORM_URL" "$PLATFORM_COMMAND_KEY" <<'PY'
 import base64

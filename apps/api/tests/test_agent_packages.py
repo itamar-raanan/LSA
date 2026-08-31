@@ -4,6 +4,8 @@ import json
 import tarfile
 from pathlib import Path
 
+import pytest
+
 from lsa.services.agent_packages import (
     AGENT_VERSION,
     PACKAGE_ROOT,
@@ -27,11 +29,22 @@ def test_universal_package_contains_a_valid_runtime_manifest():
         for relative, expected in manifest["files"].items():
             content = archive.extractfile(f"{PACKAGE_ROOT}/{relative}").read()
             assert hashlib.sha256(content).hexdigest() == expected
+        assert any(name.startswith("wheelhouse/") and name.endswith(".whl") for name in manifest["files"])
+
+
+def test_universal_package_fails_closed_without_an_offline_wheelhouse(tmp_path, monkeypatch):
+    monkeypatch.setenv("LSA_AGENT_WHEELHOUSE_DIR", str(tmp_path / "missing-wheelhouse"))
+    linux_agent_package.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="wheelhouse is missing"):
+            linux_agent_package()
+    finally:
+        linux_agent_package.cache_clear()
 
 
 def test_native_release_artifacts_are_discovered_with_audit_only_metadata(tmp_path, monkeypatch):
-    debian = tmp_path / f"lsa-agent_{AGENT_VERSION}_all.deb"
-    rpm = tmp_path / f"lsa-agent-{AGENT_VERSION}-1.noarch.rpm"
+    debian = tmp_path / f"lsa-agent_{AGENT_VERSION}_amd64.deb"
+    rpm = tmp_path / f"lsa-agent-{AGENT_VERSION}-1.x86_64.rpm"
     debian.write_bytes(b"!<arch>\nexample-deb")
     rpm.write_bytes(b"\xed\xab\xee\xdbexample-rpm")
     monkeypatch.setenv("LSA_AGENT_PACKAGE_DIR", str(tmp_path))
@@ -43,6 +56,7 @@ def test_native_release_artifacts_are_discovered_with_audit_only_metadata(tmp_pa
         assert all(package.version == AGENT_VERSION for package in packages)
         assert all(package.release_channel == "stable" for package in packages)
         assert all(package.audit_only for package in packages)
+        assert all(package.architecture == "x86_64" for package in packages)
         assert all(len(package.sha256) == 64 for package in packages)
     finally:
         native_agent_packages.cache_clear()

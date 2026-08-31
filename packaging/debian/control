@@ -2,7 +2,7 @@ Package: lsa-agent
 Version: @VERSION@
 Section: admin
 Priority: optional
-Architecture: all
+Architecture: @ARCHITECTURE@
 Maintainer: Linux Security Auditor
 Depends: systemd, ca-certificates
 Recommends: python3 (>= 3.11), python3-venv

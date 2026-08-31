@@ -5,13 +5,14 @@ import hashlib
 import io
 import json
 import os
+import platform
 import tarfile
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 
-AGENT_VERSION = "0.11.0"
+AGENT_VERSION = "0.11.1"
 PACKAGE_ID = "linux-universal"
 PACKAGE_FILENAME = f"lsa-agent-{AGENT_VERSION}-linux-universal.tar.gz"
 PACKAGE_ROOT = f"lsa-agent-{AGENT_VERSION}"
@@ -19,14 +20,14 @@ PACKAGE_ROOT = f"lsa-agent-{AGENT_VERSION}"
 NATIVE_PACKAGE_SPECS = (
     (
         "linux-deb",
-        f"lsa-agent_{AGENT_VERSION}_all.deb",
+        f"lsa-agent_{AGENT_VERSION}_*.deb",
         "application/vnd.debian.binary-package",
         "Debian 13 / Ubuntu 24.04+",
         "deb",
     ),
     (
         "linux-rpm",
-        f"lsa-agent-{AGENT_VERSION}-1.noarch.rpm",
+        f"lsa-agent-{AGENT_VERSION}-1.*.rpm",
         "application/x-rpm",
         "RHEL / Rocky / AlmaLinux 9+",
         "rpm",
@@ -67,6 +68,8 @@ install -d -m 0755 /usr/lib/systemd/system /usr/sbin
 rm -rf "$INSTALL_DIR/agent" "$INSTALL_DIR/scanner"
 cp -R "$SOURCE_DIR/agent" "$INSTALL_DIR/agent"
 cp -R "$SOURCE_DIR/scanner" "$INSTALL_DIR/scanner"
+rm -rf "$INSTALL_DIR/wheelhouse"
+cp -R "$SOURCE_DIR/wheelhouse" "$INSTALL_DIR/wheelhouse"
 cp "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/requirements.txt"
 cp "$SOURCE_DIR/integrity-manifest.json" "$INSTALL_DIR/integrity-manifest.json"
 
@@ -105,6 +108,34 @@ def _native_package_root() -> Path:
     if configured:
         return Path(configured).resolve()
     return _source_root() / "dist" / "agents"
+
+
+def _wheelhouse_root(source_root: Path) -> Path:
+    configured = os.environ.get("LSA_AGENT_WHEELHOUSE_DIR")
+    return Path(configured).resolve() if configured else source_root / "agent" / "wheelhouse"
+
+
+def _wheelhouse_files(source_root: Path) -> list[Path]:
+    root = _wheelhouse_root(source_root)
+    if not root.is_dir():
+        raise RuntimeError(f"Agent package wheelhouse is missing: {root}")
+    wheels = sorted(path for path in root.glob("*.whl") if path.is_file() and not path.is_symlink())
+    if not wheels:
+        raise RuntimeError(f"Agent package wheelhouse contains no wheels: {root}")
+    return wheels
+
+
+def _package_architecture() -> str:
+    machine = platform.machine().lower()
+    return {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "arm64", "arm64": "arm64"}.get(machine, machine)
+
+
+def _native_artifact_architecture(filename: str) -> str:
+    if filename.endswith("_amd64.deb") or filename.endswith(".x86_64.rpm"):
+        return "x86_64"
+    if filename.endswith("_arm64.deb") or filename.endswith(".aarch64.rpm"):
+        return "arm64"
+    return "architecture-specific"
 
 
 def _package_files(source_root: Path) -> list[tuple[Path, str, int]]:
@@ -146,6 +177,8 @@ def _integrity_manifest(source_root: Path) -> bytes:
     files["requirements.txt"] = hashlib.sha256(
         (source_root / "agent" / "requirements.txt").read_bytes()
     ).hexdigest()
+    for path in _wheelhouse_files(source_root):
+        files[f"wheelhouse/{path.name}"] = hashlib.sha256(path.read_bytes()).hexdigest()
     return (
         json.dumps(
             {"algorithm": "sha256", "files": files, "manifest_version": 1},
@@ -159,6 +192,7 @@ def _integrity_manifest(source_root: Path) -> bytes:
 @lru_cache(maxsize=1)
 def linux_agent_package() -> AgentPackage:
     source_root = _source_root()
+    wheelhouse = _wheelhouse_files(source_root)
     output = io.BytesIO()
     with (
         gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed,
@@ -172,6 +206,13 @@ def linux_agent_package() -> AgentPackage:
             (source_root / "agent" / "requirements.txt").read_bytes(),
             0o644,
         )
+        for path in wheelhouse:
+            _add_bytes(
+                archive,
+                f"{PACKAGE_ROOT}/wheelhouse/{path.name}",
+                path.read_bytes(),
+                0o644,
+            )
         _add_bytes(
             archive,
             f"{PACKAGE_ROOT}/integrity-manifest.json",
@@ -197,7 +238,7 @@ def linux_agent_package() -> AgentPackage:
         filename=PACKAGE_FILENAME,
         content_type="application/gzip",
         operating_system="Linux (Debian, Ubuntu, RHEL)",
-        architecture="x86_64 / arm64",
+        architecture=_package_architecture(),
         package_format="tar.gz",
         release_channel="stable",
         audit_only=True,
@@ -210,19 +251,20 @@ def linux_agent_package() -> AgentPackage:
 def native_agent_packages() -> tuple[AgentPackage, ...]:
     root = _native_package_root()
     packages: list[AgentPackage] = []
-    for package_id, filename, content_type, operating_system, package_format in NATIVE_PACKAGE_SPECS:
-        path = root / filename
-        if not path.is_file():
+    for package_id, pattern, content_type, operating_system, package_format in NATIVE_PACKAGE_SPECS:
+        candidates = sorted(root.glob(pattern))
+        if not candidates:
             continue
+        path = candidates[0]
         data = path.read_bytes()
         packages.append(
             AgentPackage(
                 package_id=package_id,
                 version=AGENT_VERSION,
-                filename=filename,
+                filename=path.name,
                 content_type=content_type,
                 operating_system=operating_system,
-                architecture="noarch",
+                architecture=_native_artifact_architecture(path.name),
                 package_format=package_format,
                 release_channel="stable",
                 audit_only=True,
