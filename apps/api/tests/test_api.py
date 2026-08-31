@@ -770,6 +770,62 @@ def test_reusable_tenant_enrollment_token_tracks_and_limits_host_enrollments(cli
     assert revoked.status_code == 204
 
 
+def test_revoked_agent_can_recover_an_interrupted_enrollment(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    group = client.get("/api/v1/agent-groups", headers=headers).json()[0]
+    token_response = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "recovery enrollment",
+            "group_id": group["id"],
+            "token_type": "reusable",
+            "max_uses": 3,
+            "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+        },
+    )
+    assert token_response.status_code == 201, token_response.text
+    enrollment_token = token_response.json()["token"]
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    request = {
+        "name": "recovery-agent",
+        "public_key": b64encode(public_key).decode(),
+        "agent_version": "0.11.2",
+        "capabilities": ["audit"],
+        "hostname": "recovery-agent",
+        "machine_id_hash": f"sha256:{hashlib.sha256(b'recovery-agent').hexdigest()}",
+        "operating_system": "Debian GNU/Linux",
+        "os_family": "debian",
+        "os_version": "13",
+        "kernel": "6.12.0",
+        "architecture": "x86_64",
+    }
+    enrollment_headers = {"Authorization": f"Bearer {enrollment_token}"}
+
+    first = client.post("/api/v1/agent/enroll", headers=enrollment_headers, json=request)
+    assert first.status_code == 201, first.text
+    active_retry = client.post("/api/v1/agent/enroll", headers=enrollment_headers, json=request)
+    assert active_retry.status_code == 409
+    assert active_retry.json()["detail"] == "This agent identity is already enrolled"
+
+    revoked = client.delete(f"/api/v1/agents/{first.json()['agent_id']}", headers=headers)
+    assert revoked.status_code == 204
+
+    recovered = client.post("/api/v1/agent/enroll", headers=enrollment_headers, json=request)
+    assert recovered.status_code == 201, recovered.text
+    assert recovered.json()["agent_id"] == first.json()["agent_id"]
+    assert recovered.json()["host_id"] == first.json()["host_id"]
+    assert recovered.json()["ingestion_token"] != first.json()["ingestion_token"]
+
+    agents = client.get("/api/v1/agents", headers=headers).json()
+    restored = next(agent for agent in agents if agent["id"] == first.json()["agent_id"])
+    assert restored["revoked_at"] is None
+
+
 def test_production_bootstrap_does_not_create_demo_token():
     with SessionLocal() as db:
         bootstrap(

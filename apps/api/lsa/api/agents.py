@@ -959,9 +959,10 @@ def enroll_agent(
         raise HTTPException(status_code=409, detail="Enrollment platform identity is unavailable")
     _, public_key_raw = _validate_public_key(request.public_key)
     fingerprint = hashlib.sha256(public_key_raw).hexdigest()
-    if db.scalar(
+    identity_agent = db.scalar(
         select(LinuxAgent).where(LinuxAgent.tenant_id == enrollment.tenant_id, LinuxAgent.fingerprint == fingerprint)
-    ):
+    )
+    if identity_agent is not None and identity_agent.revoked_at is None:
         raise HTTPException(status_code=409, detail="This agent identity is already enrolled")
     host = db.scalar(
         select(Host).where(Host.tenant_id == enrollment.tenant_id, Host.machine_id_hash == request.machine_id_hash)
@@ -990,8 +991,11 @@ def enroll_agent(
         db.add(host)
     elif host.deleted_at is not None:
         raise HTTPException(status_code=409, detail="This host was deleted and cannot be enrolled")
-    if db.scalar(select(LinuxAgent).where(LinuxAgent.host_id == host.id)):
+    host_agent = db.scalar(select(LinuxAgent).where(LinuxAgent.host_id == host.id))
+    if host_agent is not None and host_agent.revoked_at is None:
         raise HTTPException(status_code=409, detail="This host already has an enrolled agent")
+    if identity_agent is not None and host_agent is not None and identity_agent.id != host_agent.id:
+        raise HTTPException(status_code=409, detail="Agent identity belongs to a different revoked host")
     host.hostname = request.hostname
     host.fqdn = request.fqdn
     host.machine_id_hash = request.machine_id_hash
@@ -1011,32 +1015,46 @@ def enroll_agent(
         token_prefix=raw_ingestion_token[:20],
         token_hash=hash_ingestion_token(raw_ingestion_token),
     )
-    signing_key = SigningKey(
-        tenant_id=enrollment.tenant_id,
-        host_id=host.id,
-        name=f"Agent: {request.name}",
-        public_key=request.public_key,
-        fingerprint=fingerprint,
-    )
-    db.add_all([ingestion_token, signing_key])
+    recovering_agent = identity_agent or host_agent
+    if recovering_agent is not None and recovering_agent.fingerprint == fingerprint:
+        signing_key = db.get(SigningKey, recovering_agent.signing_key_id)
+        if signing_key is None:
+            raise HTTPException(status_code=409, detail="Revoked agent signing identity is unavailable")
+        signing_key.revoked_at = None
+        signing_key.host_id = host.id
+        signing_key.name = f"Agent: {request.name}"
+    else:
+        signing_key = SigningKey(
+            tenant_id=enrollment.tenant_id,
+            host_id=host.id,
+            name=f"Agent: {request.name}",
+            public_key=request.public_key,
+            fingerprint=fingerprint,
+        )
+        db.add(signing_key)
+    db.add(ingestion_token)
     db.flush()
-    agent = LinuxAgent(
-        tenant_id=enrollment.tenant_id,
-        host_id=host.id,
-        group_id=group.id,
-        ingestion_token_id=ingestion_token.id,
-        signing_key_id=signing_key.id,
-        name=request.name,
-        public_key=request.public_key,
-        fingerprint=fingerprint,
-        agent_version=request.agent_version,
-        capabilities=request.capabilities,
-        capabilities_attested_at=now_utc(),
-        platform_command_key_id=platform_key.id,
-        platform_command_key_fingerprint=platform_key.fingerprint,
-        platform_envelope_sequence=1,
-        last_seen_at=now_utc(),
-    )
+    if recovering_agent is None:
+        agent = LinuxAgent(tenant_id=enrollment.tenant_id, host_id=host.id)
+    else:
+        agent = recovering_agent
+    agent.group_id = group.id
+    agent.ingestion_token_id = ingestion_token.id
+    agent.signing_key_id = signing_key.id
+    agent.name = request.name
+    agent.public_key = request.public_key
+    agent.fingerprint = fingerprint
+    agent.agent_version = request.agent_version
+    agent.capabilities = request.capabilities
+    agent.capabilities_attested_at = now_utc()
+    agent.platform_command_key_id = platform_key.id
+    agent.platform_command_key_fingerprint = platform_key.fingerprint
+    agent.platform_envelope_sequence = 1
+    agent.last_seen_at = now_utc()
+    agent.last_policy_version = None
+    agent.revoked_at = None
+    agent.pending_platform_command_key_id = None
+    agent.pending_platform_command_key_fingerprint = None
     staged_key = db.scalar(
         select(PlatformCommandSigningKey).where(
             PlatformCommandSigningKey.tenant_id == enrollment.tenant_id,
@@ -1060,7 +1078,7 @@ def enroll_agent(
             tenant_id=enrollment.tenant_id,
             actor_type="agent",
             actor_id=agent.id,
-            action="agent.enrolled",
+            action="agent.reenrolled" if recovering_agent is not None else "agent.enrolled",
             target_type="host",
             target_id=host.id,
             details={
@@ -1070,6 +1088,7 @@ def enroll_agent(
                 "enrollment_token_id": enrollment.id,
                 "enrollment_token_type": enrollment.token_type,
                 "enrollment_token_use_count": enrollment.use_count,
+                "recovered_revoked_agent": recovering_agent is not None,
             },
         )
     )

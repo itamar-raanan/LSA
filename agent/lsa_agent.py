@@ -60,7 +60,7 @@ except ImportError:  # executed directly by the systemd unit
     )
 
 
-VERSION = "0.11.1"
+VERSION = "0.11.2"
 DEFAULT_CONFIG = Path("/etc/lsa-agent/config.json")
 DEFAULT_STATE_DIR = Path("/var/lib/lsa-agent")
 AGENT_CAPABILITIES = (
@@ -483,6 +483,34 @@ def http_client(config: dict[str, Any]) -> httpx.Client:
     return httpx.Client(base_url=platform_url(config), verify=False, timeout=120.0)
 
 
+def require_platform_success(response: httpx.Response, action: str) -> None:
+    if response.is_success:
+        return
+    detail = ""
+    try:
+        payload = response.json()
+        if isinstance(payload, dict) and isinstance(payload.get("detail"), str):
+            detail = payload["detail"].strip()
+    except (ValueError, json.JSONDecodeError):
+        pass
+    if not detail:
+        detail = response.text.strip()[:500] or response.reason_phrase
+    guidance = ""
+    if response.status_code == 409 and detail in {
+        "This agent identity is already enrolled",
+        "This host already has an enrolled agent",
+    }:
+        guidance = (
+            " The console already has an active agent for this host. Do not delete local keys. "
+            "In Agents, revoke the stale agent, then run this enrollment command again."
+        )
+    elif response.status_code == 409 and "predates platform identity pinning" in detail:
+        guidance = " Create a new enrollment token in the console, then retry."
+    elif response.status_code == 409 and "platform identity is unavailable" in detail:
+        guidance = " Create a new enrollment token after activating a platform signing key."
+    raise RuntimeError(f"{action} failed (HTTP {response.status_code}): {detail}.{guidance}".rstrip("."))
+
+
 def signed_headers(key: Ed25519PrivateKey, agent_id: str, method: str, path: str, body: bytes) -> dict[str, str]:
     timestamp = str(int(datetime.now(UTC).timestamp()))
     body_hash = hashlib.sha256(body).hexdigest()
@@ -512,7 +540,7 @@ def enroll(config: dict[str, Any], token: str) -> None:
             headers={"Authorization": f"Bearer {token}"},
             json=payload,
         )
-        response.raise_for_status()
+        require_platform_success(response, "Agent enrollment")
         result = response.json()
     try:
         state = verify_platform_envelope(
