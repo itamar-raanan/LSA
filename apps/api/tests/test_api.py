@@ -163,9 +163,11 @@ def test_admin_can_download_versioned_agent_package(client):
         assert f"{root}/scanner/playbooks/scan.yml" in names
         assert f"{root}/scanner/library/lsa_application_inventory.py" in names
         assert f"{root}/scanner/roles/lsa_report/tasks/main.yml" in names
+        assert any(name.startswith(f"{root}/wheelhouse/") and name.endswith(".whl") for name in names)
         assert archive.getmember(f"{root}/install.sh").mode == 0o755
         install_script = archive.extractfile(f"{root}/install.sh").read().decode()
         assert "--platform-command-key" in install_script
+        assert 'cp -R "$SOURCE_DIR/wheelhouse" "$INSTALL_DIR/wheelhouse"' in install_script
 
 
 def test_agent_package_download_requires_admin_session(client):

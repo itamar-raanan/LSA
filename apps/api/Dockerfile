@@ -1,14 +1,15 @@
 FROM debian:13-slim AS agent-package-builder
 
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dpkg-dev python3 rpm \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dpkg-dev python3 python3-pip python3-venv rpm \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /source
 COPY agent ./agent
 COPY scanner ./scanner
 COPY packaging ./packaging
-RUN chmod 0755 packaging/build-agent-packages.sh agent/lsa-agent-enroll \
-    && packaging/build-agent-packages.sh /agent-dist
+RUN chmod 0755 packaging/build-agent-packages.sh packaging/build-agent-wheelhouse.sh agent/lsa-agent-enroll \
+    && packaging/build-agent-wheelhouse.sh /agent-wheelhouse \
+    && LSA_AGENT_WHEELHOUSE_DIR=/agent-wheelhouse packaging/build-agent-packages.sh /agent-dist
 
 FROM python:3.13-slim
 
@@ -20,7 +21,8 @@ RUN apt-get update \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/apps/api \
-    LSA_AGENT_PACKAGE_DIR=/app/agent-dist
+    LSA_AGENT_PACKAGE_DIR=/app/agent-dist \
+    LSA_AGENT_WHEELHOUSE_DIR=/app/agent-wheelhouse
 
 WORKDIR /app
 
@@ -31,6 +33,7 @@ RUN pip install --no-cache-dir .
 COPY agent ./agent
 COPY scanner ./scanner
 COPY --from=agent-package-builder /agent-dist ./agent-dist
+COPY --from=agent-package-builder /agent-wheelhouse ./agent-wheelhouse
 
 RUN groupadd --system lsa \
     && useradd --system --gid lsa --home-dir /app --shell /usr/sbin/nologin lsa \
