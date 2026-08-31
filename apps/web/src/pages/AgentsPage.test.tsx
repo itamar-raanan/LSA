@@ -128,6 +128,7 @@ describe('Agents', () => {
   })
 
   it('creates a reusable tenant enrollment credential for automated provisioning', async () => {
+    const enrollmentTokenCallsBeforeRender = vi.mocked(api.agentEnrollmentTokens).mock.calls.length
     vi.mocked(api.createAgentEnrollmentToken).mockResolvedValueOnce({
       id: 'tenant-token-1',
       name: 'Tenant Automation',
@@ -153,6 +154,7 @@ describe('Agents', () => {
       token_type: 'reusable',
       max_uses: null,
     })))
+    await waitFor(() => expect(api.agentEnrollmentTokens).toHaveBeenCalledTimes(enrollmentTokenCallsBeforeRender + 2))
     expect(await screen.findByText('lsa_tenant_enroll_test')).toBeInTheDocument()
     expect(screen.getByText(/Store it in your deployment secret manager/)).toBeInTheDocument()
   })

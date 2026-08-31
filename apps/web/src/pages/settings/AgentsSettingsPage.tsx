@@ -50,7 +50,7 @@ export function AgentsSettingsPage() {
     try {
       await action()
       close?.()
-      await reload()
+      await refresh()
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : 'Unable to save changes')
     } finally {
