@@ -305,8 +305,10 @@ def download_agent_package(package_id: str, user: User = Depends(current_user)) 
         media_type=package.content_type,
         headers={
             "Content-Disposition": f'attachment; filename="{package.filename}"',
-            "Cache-Control": "private, max-age=3600",
+            "Cache-Control": "private, no-store, max-age=0",
+            "Pragma": "no-cache",
             "X-LSA-Agent-SHA256": package.sha256,
+            "X-LSA-Agent-Version": package.version,
             "X-Content-Type-Options": "nosniff",
         },
     )

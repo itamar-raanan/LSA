@@ -76,7 +76,7 @@ password to receive a hidden prompt:
 
 `--insecure` exists only for an isolated localhost lab and must not be used for the
 production acceptance record. With signed evidence enforced, complete acceptance
-also includes enrolling agent 0.11.1, receiving its signed report, running a second
+also includes enrolling agent 0.11.2, receiving its signed report, running a second
 cycle after reboot, and confirming that the Applications and Findings workspaces
 reflect the new report.
 

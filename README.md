@@ -129,7 +129,7 @@ Agent sizing is per managed host. The figures below describe available headroom 
 | **CPU** | 1 available vCPU | 2 available vCPU during larger audit profiles |
 | **Memory** | 512 MiB available | 1 GiB available during an audit |
 | **Disk** | 500 MiB free for runtime, virtual environment, controls, state, and initial reports | 1 GiB or more, plus capacity for retained report history |
-| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable internal DNS and time synchronization; agent 0.11.1 requires no public internet after package download, encrypts HTTPS traffic, and authenticates platform control responses with a pinned Ed25519 identity, but does not validate the gateway certificate or hostname |
+| **Network** | Outbound TCP 8444 to the LSA agent gateway | Reliable internal DNS and time synchronization; agent 0.11.2 requires no public internet after package download, encrypts HTTPS traffic, and authenticates platform control responses with a pinned Ed25519 identity, but does not validate the gateway certificate or hostname |
 
 The host requires Python 3.11 or newer, `venv` support, systemd, and root privileges so read-only controls can inspect protected system state. Enrollment installs constrained Python dependencies into `/opt/lsa-agent/venv`, so it also requires access to the dependency source or an internal/offline package mirror. No inbound agent port is required.
 
@@ -143,7 +143,7 @@ For selected high-confidence controls, a plan also snapshots a versioned declara
 
 Approved catalog-backed plans can be prepared as signed change sets from **Security Findings → Change Sets**. The workspace shows current readiness gates, canary targets, maintenance and batch boundaries, immutable SHA-256 payload identity, and the tenant Ed25519 signature. A different administrator must authorize the envelope. This is a governance-only workflow: authorization never creates an agent task, and the current agent cannot execute a change set.
 
-Managed agents advertise `signed-change-set-planning-v1` when they can provide the identity, policy, freshness, and integrity evidence required by this workflow. Agent 0.11.1 additionally supports validation, recovery planning, explicitly requested encrypted checkpoints, and a separate recovery-readiness verification. After a successful preflight, an administrator can prepare AES-256-GCM backup material under `/var/lib/lsa-agent/remediation-checkpoints`; the root-only encryption key remains on that agent and backup contents never enter the platform receipt. Verification authenticates the accepted journal, decrypts each blob in memory, and compares the original source digest before returning signed metadata only. The checkpoint store is capped at 256 MiB. Host configuration, restore, service control, sysctl changes, and remediation execution remain unavailable.
+Managed agents advertise `signed-change-set-planning-v1` when they can provide the identity, policy, freshness, and integrity evidence required by this workflow. Agent 0.11.2 additionally supports validation, recovery planning, explicitly requested encrypted checkpoints, and a separate recovery-readiness verification. After a successful preflight, an administrator can prepare AES-256-GCM backup material under `/var/lib/lsa-agent/remediation-checkpoints`; the root-only encryption key remains on that agent and backup contents never enter the platform receipt. Verification authenticates the accepted journal, decrypts each blob in memory, and compares the original source digest before returning signed metadata only. The checkpoint store is capped at 256 MiB. Host configuration, restore, service control, sysctl changes, and remediation execution remain unavailable.
 
 Agents poll the platform rather than accepting inbound connections. Their signed heartbeats drive online, stale, and offline status. Each audit uses the shared scanner to report the same package and service inventory as offline mode. On-demand audits are persisted, allow-listed tasks consumed on the next poll—not remote shell commands.
 
@@ -237,7 +237,7 @@ curl --fail-with-body \
 Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
 
 ```bash
-sudo apt install ./lsa-agent_0.11.1_amd64.deb
+sudo apt install ./lsa-agent_0.11.2_amd64.deb
 # Copy the complete enrollment command from the console; it includes the public platform key.
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```

@@ -150,6 +150,9 @@ def test_admin_can_download_versioned_agent_package(client):
     downloaded = client.get(f"/api/v1/agent-packages/{package['id']}/download", headers=headers)
     assert downloaded.status_code == 200, downloaded.text
     assert downloaded.headers["content-disposition"] == (f'attachment; filename="{package["filename"]}"')
+    assert downloaded.headers["cache-control"] == "private, no-store, max-age=0"
+    assert downloaded.headers["pragma"] == "no-cache"
+    assert downloaded.headers["x-lsa-agent-version"] == package["version"]
     assert hashlib.sha256(downloaded.content).hexdigest() == package["sha256"]
     assert downloaded.headers["x-lsa-agent-sha256"] == package["sha256"]
 

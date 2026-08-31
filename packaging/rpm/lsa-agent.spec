@@ -54,6 +54,9 @@ systemctl daemon-reload >/dev/null 2>&1 || true
 /usr/lib/systemd/system/lsa-agent.service
 
 %changelog
+* Mon Aug 31 2026 Linux Security Auditor - 0.11.2-1
+- Prevent stale package downloads and support interrupted enrollment recovery
+
 * Mon Aug 31 2026 Linux Security Auditor - 0.11.1-1
 - Bundle an integrity-protected Python wheelhouse for offline enrollment.
 

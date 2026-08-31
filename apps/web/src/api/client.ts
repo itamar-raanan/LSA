@@ -346,17 +346,19 @@ export const api = {
   agentPackages(): Promise<AgentPackage[]> {
     return request('/agent-packages')
   },
-  async downloadAgentPackage(packageId: string): Promise<{ blob: Blob; filename: string }> {
+  async downloadAgentPackage(agentPackage: Pick<AgentPackage, 'id' | 'version' | 'sha256'>): Promise<{ blob: Blob; filename: string }> {
     const token = localStorage.getItem('lsa_session')
-    const response = await fetch(`${API_URL}/agent-packages/${encodeURIComponent(packageId)}/download`, {
+    const release = new URLSearchParams({ version: agentPackage.version, sha256: agentPackage.sha256 })
+    const response = await fetch(`${API_URL}/agent-packages/${encodeURIComponent(agentPackage.id)}/download?${release}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
     })
     if (!response.ok) {
       const payload = await response.json().catch(() => ({ detail: 'Agent package download failed' }))
       throw new ApiError(payload.detail ?? 'Agent package download failed', response.status)
     }
     const disposition = response.headers.get('Content-Disposition') ?? ''
-    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `lsa-agent-${packageId}.tar.gz`
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `lsa-agent-${agentPackage.version}-${agentPackage.id}.tar.gz`
     return { blob: await response.blob(), filename }
   },
   offlineScannerPackage(): Promise<OfflineScannerPackage> {

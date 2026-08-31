@@ -113,6 +113,10 @@ def smoke(base_url: str, email: str, password: str) -> None:
             raise RuntimeError(f"Agent package {package['id']} failed checksum validation")
         if package_headers.get("X-LSA-Agent-SHA256") != package["sha256"]:
             raise RuntimeError(f"Agent package {package['id']} omitted its checksum header")
+        if package_headers.get("X-LSA-Agent-Version") != package["version"]:
+            raise RuntimeError(f"Agent package {package['id']} returned a stale version")
+        if "no-store" not in package_headers.get("Cache-Control", ""):
+            raise RuntimeError(f"Agent package {package['id']} permits stale download caching")
         if package["package_format"] == "deb" and not package_data.startswith(b"!<arch>\n"):
             raise RuntimeError("Debian agent package has an invalid archive header")
         if package["package_format"] == "rpm" and not package_data.startswith(b"\xed\xab\xee\xdb"):
