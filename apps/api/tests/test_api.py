@@ -829,6 +829,80 @@ def test_revoked_agent_can_recover_an_interrupted_enrollment(client):
     assert restored["revoked_at"] is None
 
 
+def test_admin_can_prepare_a_hidden_host_for_agent_reenrollment(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    group = client.get("/api/v1/agent-groups", headers=headers).json()[0]
+    token_response = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "hidden host recovery",
+            "group_id": group["id"],
+            "token_type": "reusable",
+            "max_uses": 3,
+            "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+        },
+    )
+    assert token_response.status_code == 201, token_response.text
+    enrollment_token = token_response.json()["token"]
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    enrollment_request = {
+        "name": "hidden-recovery-agent",
+        "public_key": b64encode(public_key).decode(),
+        "agent_version": "0.11.2",
+        "capabilities": ["audit"],
+        "hostname": "hidden-recovery-agent",
+        "machine_id_hash": f"sha256:{hashlib.sha256(b'hidden-recovery-agent').hexdigest()}",
+        "operating_system": "Debian GNU/Linux",
+        "os_family": "debian",
+        "os_version": "13",
+        "kernel": "6.12.0",
+        "architecture": "x86_64",
+    }
+    enrollment_headers = {"Authorization": f"Bearer {enrollment_token}"}
+    enrolled = client.post(
+        "/api/v1/agent/enroll", headers=enrollment_headers, json=enrollment_request
+    )
+    assert enrolled.status_code == 201, enrolled.text
+
+    deleted = client.delete(f"/api/v1/hosts/{enrolled.json()['host_id']}", headers=headers)
+    assert deleted.status_code == 204
+    assert all(
+        host["id"] != enrolled.json()["host_id"]
+        for host in client.get("/api/v1/hosts", headers=headers).json()
+    )
+
+    recovery = client.get("/api/v1/agent-enrollment-recovery", headers=headers)
+    assert recovery.status_code == 200, recovery.text
+    record = next(item for item in recovery.json() if item["agent_id"] == enrolled.json()["agent_id"])
+    assert record["hostname"] == "hidden-recovery-agent"
+    assert record["reason"] == "host_deleted"
+
+    prepared = client.post(
+        f"/api/v1/agent-enrollment-recovery/{enrolled.json()['agent_id']}/prepare",
+        headers=headers,
+    )
+    assert prepared.status_code == 204, prepared.text
+    restored_hosts = client.get("/api/v1/hosts", headers=headers).json()
+    assert any(host["id"] == enrolled.json()["host_id"] for host in restored_hosts)
+    restored_agent = next(
+        agent
+        for agent in client.get("/api/v1/agents", headers=headers).json()
+        if agent["id"] == enrolled.json()["agent_id"]
+    )
+    assert restored_agent["revoked_at"] is not None
+
+    reenrolled = client.post(
+        "/api/v1/agent/enroll", headers=enrollment_headers, json=enrollment_request
+    )
+    assert reenrolled.status_code == 201, reenrolled.text
+    assert reenrolled.json()["agent_id"] == enrolled.json()["agent_id"]
+
+
 def test_production_bootstrap_does_not_create_demo_token():
     with SessionLocal() as db:
         bootstrap(

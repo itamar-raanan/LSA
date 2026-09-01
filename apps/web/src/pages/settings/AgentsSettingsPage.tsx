@@ -15,10 +15,10 @@ import { useApi } from '../../hooks/useApi'
 
 export function AgentsSettingsPage() {
   const { data, error, loading, reload, refresh } = useApi(async () => {
-    const [agents, groups, policies, controls, enrollmentTokens, packages, connectivity] = await Promise.all([
-      api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(), api.agentConnectivity(),
+    const [agents, groups, policies, controls, enrollmentTokens, packages, connectivity, enrollmentRecovery] = await Promise.all([
+      api.agents(), api.agentGroups(), api.agentPolicies(), api.controlCatalog(), api.agentEnrollmentTokens(), api.agentPackages(), api.agentConnectivity(), api.agentEnrollmentRecovery(),
     ])
-    return { agents, groups, policies, controls, enrollmentTokens, packages, connectivity }
+    return { agents, groups, policies, controls, enrollmentTokens, packages, connectivity, enrollmentRecovery }
   }, [])
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const [activeTab, setActiveTab] = useState<AgentWorkspaceTab>('hosts')
@@ -118,7 +118,7 @@ export function AgentsSettingsPage() {
             <AgentFleetTable agents={visibleAgents} groups={data.groups} packageVersion={data.packages[0]?.version} submit={action => submit(action)} selected={selectedAgents} setSelected={setSelectedAgents} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
           </div>}
 
-          {activeTab === 'deployment' && <AgentDeploymentWorkspace connectivity={data.connectivity} enrollmentTokens={data.enrollmentTokens} groups={data.groups} packages={data.packages} selectedGroup={selectedGroup} saving={saving} submit={submit} />}
+          {activeTab === 'deployment' && <AgentDeploymentWorkspace connectivity={data.connectivity} enrollmentTokens={data.enrollmentTokens} enrollmentRecovery={data.enrollmentRecovery} groups={data.groups} packages={data.packages} selectedGroup={selectedGroup} saving={saving} submit={submit} />}
 
           {activeTab === 'policy' && selectedGroup && assignedPolicy && <AgentPolicyWorkspace assignedPolicy={assignedPolicy} controls={data.controls} policies={data.policies} saving={saving} selectedGroup={selectedGroup} submit={submit} />}
         </div>
