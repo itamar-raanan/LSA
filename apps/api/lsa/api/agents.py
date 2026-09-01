@@ -1073,17 +1073,28 @@ def enroll_agent(
     )
     if identity_agent is not None and identity_agent.revoked_at is None:
         raise HTTPException(status_code=409, detail="This agent identity is already enrolled")
-    host = db.scalar(
-        select(Host).where(Host.tenant_id == enrollment.tenant_id, Host.machine_id_hash == request.machine_id_hash)
-    )
+    host = db.get(Host, identity_agent.host_id) if identity_agent is not None else None
+    if identity_agent is not None and (host is None or host.tenant_id != enrollment.tenant_id):
+        raise HTTPException(status_code=409, detail="Agent identity host relationship is unavailable")
     if host is None:
-        host = db.scalar(
+        candidates = db.scalars(
             select(Host).where(
                 Host.tenant_id == enrollment.tenant_id,
                 Host.hostname == request.hostname,
-                Host.machine_id_hash.like("pending:%"),
+                or_(
+                    Host.machine_id_hash == request.machine_id_hash,
+                    Host.machine_id_hash.like("pending:%"),
+                ),
                 Host.deleted_at.is_(None),
             )
+        ).all()
+        host = next(
+            (
+                candidate
+                for candidate in candidates
+                if db.scalar(select(LinuxAgent.id).where(LinuxAgent.host_id == candidate.id)) is None
+            ),
+            None,
         )
     if host is None:
         host = Host(

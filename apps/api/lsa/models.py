@@ -156,7 +156,7 @@ class TlsCertificate(Base):
 class Host(Base):
     __tablename__ = "hosts"
     __table_args__ = (
-        Index("ix_hosts_tenant_machine", "tenant_id", "machine_id_hash", unique=True),
+        Index("ix_hosts_tenant_machine", "tenant_id", "machine_id_hash"),
         Index("ix_hosts_tenant_active_hostname", "tenant_id", "deleted_at", "hostname"),
         Index("ix_hosts_tenant_active_score", "tenant_id", "deleted_at", "security_score"),
         Index("ix_hosts_tenant_active_scan", "tenant_id", "deleted_at", "last_scan_at"),
