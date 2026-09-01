@@ -773,6 +773,61 @@ def test_reusable_tenant_enrollment_token_tracks_and_limits_host_enrollments(cli
     assert revoked.status_code == 204
 
 
+def test_cloned_agents_with_the_same_machine_id_enroll_as_distinct_hosts(client):
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    group = client.get("/api/v1/agent-groups", headers=headers).json()[0]
+    token_response = client.post(
+        "/api/v1/agent-enrollment-tokens",
+        headers=headers,
+        json={
+            "name": "cloned fleet enrollment",
+            "group_id": group["id"],
+            "token_type": "reusable",
+            "max_uses": 2,
+            "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+        },
+    )
+    assert token_response.status_code == 201, token_response.text
+    enrollment_headers = {"Authorization": f"Bearer {token_response.json()['token']}"}
+    shared_machine_id = f"sha256:{hashlib.sha256(b'golden-image-machine-id').hexdigest()}"
+
+    def enroll_clone(hostname: str):
+        private_key = Ed25519PrivateKey.generate()
+        public_key = private_key.public_key().public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+        return client.post(
+            "/api/v1/agent/enroll",
+            headers=enrollment_headers,
+            json={
+                "name": hostname,
+                "public_key": b64encode(public_key).decode(),
+                "agent_version": "0.11.2",
+                "capabilities": ["audit"],
+                "hostname": hostname,
+                "machine_id_hash": shared_machine_id,
+                "operating_system": "Debian GNU/Linux",
+                "os_family": "debian",
+                "os_version": "13",
+                "kernel": "6.12.0",
+                "architecture": "x86_64",
+            },
+        )
+
+    first = enroll_clone("clone-web-01")
+    second = enroll_clone("clone-web-02")
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert first.json()["host_id"] != second.json()["host_id"]
+    assert first.json()["agent_id"] != second.json()["agent_id"]
+    with SessionLocal() as db:
+        hosts = db.scalars(
+            select(Host).where(Host.machine_id_hash == shared_machine_id)
+        ).all()
+        assert {host.hostname for host in hosts} == {"clone-web-01", "clone-web-02"}
+
+
 def test_revoked_agent_can_recover_an_interrupted_enrollment(client):
     headers = {"Authorization": f"Bearer {login(client)}"}
     group = client.get("/api/v1/agent-groups", headers=headers).json()[0]

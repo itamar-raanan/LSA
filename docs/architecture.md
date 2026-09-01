@@ -29,7 +29,7 @@ Each agent belongs to exactly one group. Each group points to one policy, and ev
 
 `receive → authenticate → validate archive → resolve signing key → verify signature and host scope → resolve host → compare → persist provenance → audit → aggregate`
 
-The canonical contract lives in `packages/contracts/report-v1.schema.json`. A report ID is immutable and globally unique. Host UUIDs are platform-generated; a hash of `/etc/machine-id` provides a secondary binding signal without exposing the raw machine identifier.
+The canonical contract lives in `packages/contracts/report-v1.schema.json`. A report ID is immutable and globally unique. Host UUIDs are platform-generated; a hash of `/etc/machine-id` provides a secondary binding signal without exposing the raw machine identifier. Managed agents use their locally generated Ed25519 key fingerprint as the primary identity, so separately enrolled virtual machines may safely share a machine ID inherited from the same golden image. Offline report imports retain their explicit host UUID and machine-consistency validation.
 
 ## Data workspace API
 
