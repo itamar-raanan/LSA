@@ -843,6 +843,17 @@ class LinuxAgentResponse(BaseModel):
     created_at: datetime
 
 
+class AgentEnrollmentRecoveryResponse(BaseModel):
+    agent_id: str
+    host_id: str
+    hostname: str
+    agent_version: str
+    fingerprint: str
+    reason: Literal["host_deleted", "credentials_revoked", "inventory_incomplete"]
+    last_seen_at: datetime | None
+    created_at: datetime
+
+
 class AgentGroupAssignment(BaseModel):
     group_id: str
 

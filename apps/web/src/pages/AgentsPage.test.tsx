@@ -12,6 +12,8 @@ vi.mock('../auth/useAuth', () => ({
 vi.mock('../api/client', () => ({
   api: {
     agents: vi.fn().mockResolvedValue([]),
+    agentEnrollmentRecovery: vi.fn().mockResolvedValue([]),
+    prepareAgentReenrollment: vi.fn().mockResolvedValue(undefined),
     agentGroups: vi.fn().mockResolvedValue([
       { id: 'group-1', name: 'Default Linux Fleet', description: '', policy_id: 'policy-1', policy_name: 'Monitor (Audit Only)', policy_version: 1, agent_count: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
       { id: 'group-2', name: 'Production Servers', description: '', policy_id: 'policy-2', policy_name: 'Production Baseline', policy_version: 3, agent_count: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
@@ -157,6 +159,28 @@ describe('Agents', () => {
     await waitFor(() => expect(api.agentEnrollmentTokens).toHaveBeenCalledTimes(enrollmentTokenCallsBeforeRender + 2))
     expect(await screen.findByText('lsa_tenant_enroll_test')).toBeInTheDocument()
     expect(screen.getByText(/Store it in your deployment secret manager/)).toBeInTheDocument()
+  })
+
+  it('prepares a hidden asset record for safe re-enrollment', async () => {
+    vi.mocked(api.agentEnrollmentRecovery).mockResolvedValueOnce([{
+      agent_id: 'agent-hidden',
+      host_id: 'host-hidden',
+      hostname: 'pucca-playground-island',
+      agent_version: '0.11.2',
+      fingerprint: 'a'.repeat(64),
+      reason: 'host_deleted',
+      last_seen_at: null,
+      created_at: '2026-09-01T00:00:00Z',
+    }])
+    render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Deployment' }))
+    expect(screen.getByText('Enrollment Recovery Required')).toBeInTheDocument()
+    expect(screen.getByText('pucca-playground-island')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare Re-enrollment' }))
+    expect(screen.getByRole('dialog', { name: 'Prepare pucca-playground-island For Re-enrollment?' })).toHaveTextContent('Reports, findings, and audit history remain preserved')
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare Re-enrollment' }))
+    await waitFor(() => expect(api.prepareAgentReenrollment).toHaveBeenCalledWith('agent-hidden'))
   })
 
   it('keeps signing key activation locked until every agent acknowledges it', async () => {

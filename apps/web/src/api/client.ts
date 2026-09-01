@@ -20,6 +20,7 @@ import type {
   AgentPolicy,
   AgentGroup,
   LinuxAgent,
+  AgentEnrollmentRecovery,
   ControlCatalogItem,
   AgentEnrollmentTokenCreated,
   AgentEnrollmentToken,
@@ -306,6 +307,12 @@ export const api = {
   },
   agents(): Promise<LinuxAgent[]> {
     return request('/agents')
+  },
+  agentEnrollmentRecovery(): Promise<AgentEnrollmentRecovery[]> {
+    return request('/agent-enrollment-recovery')
+  },
+  prepareAgentReenrollment(agentId: string): Promise<void> {
+    return request(`/agent-enrollment-recovery/${agentId}/prepare`, { method: 'POST' })
   },
   assignAgentGroup(id: string, groupId: string): Promise<LinuxAgent> {
     return request(`/agents/${id}/group`, { method: 'PATCH', body: JSON.stringify({ group_id: groupId }) })

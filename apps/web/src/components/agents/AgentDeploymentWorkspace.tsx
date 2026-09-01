@@ -1,8 +1,8 @@
-import { Copy, DownloadSimple, Prohibit } from '@phosphor-icons/react'
+import { ArrowClockwise, Copy, DownloadSimple, Prohibit, Warning } from '@phosphor-icons/react'
 import { FormEvent, useState } from 'react'
 import { api } from '../../api/client'
 import { formatDateTime } from '../../lib/dateTime'
-import type { AgentConnectivity, AgentEnrollmentToken, AgentGroup, AgentPackage, PlatformCommandTrust } from '../../types'
+import type { AgentConnectivity, AgentEnrollmentRecovery, AgentEnrollmentToken, AgentGroup, AgentPackage, PlatformCommandTrust } from '../../types'
 import { AgentDownloadPanel } from '../AgentDownloadPanel'
 import { Button } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
@@ -10,9 +10,10 @@ import { Dialog } from '../ui/Dialog'
 type EnrollmentType = 'one_time' | 'reusable'
 type RotationDecision = 'activate' | 'abort'
 
-export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, groups, packages, selectedGroup, saving, submit }: {
+export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, enrollmentRecovery, groups, packages, selectedGroup, saving, submit }: {
   connectivity: AgentConnectivity
   enrollmentTokens: AgentEnrollmentToken[]
+  enrollmentRecovery: AgentEnrollmentRecovery[]
   groups: AgentGroup[]
   packages: AgentPackage[]
   selectedGroup: AgentGroup | null
@@ -26,6 +27,7 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, group
   const [createdTokenType, setCreatedTokenType] = useState<EnrollmentType>('one_time')
   const [createdTokenMaxUses, setCreatedTokenMaxUses] = useState<number | null>(null)
   const [rotationDecision, setRotationDecision] = useState<RotationDecision | null>(null)
+  const [recoveryTarget, setRecoveryTarget] = useState<AgentEnrollmentRecovery | null>(null)
 
   const activeReusableToken = enrollmentTokens.find(item => item.token_type === 'reusable' && !item.revoked_at && new Date(item.expires_at).getTime() > Date.now() && (item.max_uses === null || item.use_count < item.max_uses))
 
@@ -106,6 +108,20 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, group
           </form>}
         </section>
       </div>
+      {enrollmentRecovery.length > 0 && <section className="border-t border-stone-200 bg-[#f7f3eb] px-5 py-5 sm:px-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-sm font-semibold text-stone-800"><Warning size={17} className="shrink-0 text-[#b74f52]" /> Enrollment Recovery Required</div>
+            <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-600">LSA found {enrollmentRecovery.length} hidden or incomplete enrollment {enrollmentRecovery.length === 1 ? 'record' : 'records'}. Prepare a host for re-enrollment to restore it to Assets, revoke stale credentials, and preserve its existing reports.</p>
+          </div>
+        </div>
+        <div className="mt-4 divide-y divide-stone-200 border-y border-stone-200">
+          {enrollmentRecovery.map(record => <div key={record.agent_id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1"><strong className="block truncate text-xs font-semibold text-stone-800">{record.hostname}</strong><span className="mt-1 block text-[11px] text-stone-500">{record.reason === 'host_deleted' ? 'Hidden asset record' : record.reason === 'credentials_revoked' ? 'Incomplete agent credentials' : 'Incomplete inventory relationship'} · Agent {record.agent_version}</span></div>
+            <Button className="shrink-0" disabled={saving || record.reason === 'inventory_incomplete'} onClick={() => setRecoveryTarget(record)}><ArrowClockwise size={14} /> Prepare Re-enrollment</Button>
+          </div>)}
+        </div>
+      </section>}
     </div>
     <Dialog
       open={rotationDecision !== null}
@@ -116,6 +132,15 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, group
     >
       {rotationDecision === 'activate' && <div className="rounded-lg border border-amber-900/30 bg-amber-950/10 px-4 py-3 text-xs leading-5 text-amber-900">Create a new enrollment token after activation. Existing hosts remain connected because they acknowledged the replacement key before this action became available.</div>}
       <div className="mt-6 flex justify-end gap-3"><Button disabled={saving} onClick={() => setRotationDecision(null)}>Cancel</Button><Button variant={rotationDecision === 'activate' ? 'primary' : 'danger'} disabled={saving} onClick={() => void submit(() => rotationDecision === 'activate' ? api.activatePlatformCommandKeyRotation() : api.abortPlatformCommandKeyRotation()).then(() => setRotationDecision(null))}>{saving ? 'Updating Trust' : rotationDecision === 'activate' ? 'Activate Key' : 'Abort Rotation'}</Button></div>
+    </Dialog>
+    <Dialog
+      open={recoveryTarget !== null}
+      onOpenChange={(open) => { if (!open && !saving) setRecoveryTarget(null) }}
+      title={`Prepare ${recoveryTarget?.hostname ?? 'Host'} For Re-enrollment?`}
+      description="LSA will restore the hidden asset record and revoke its stale agent credentials. Reports, findings, and audit history remain preserved."
+    >
+      <div className="rounded-lg border border-[#b8c5ba] bg-[#edf1eb] px-4 py-3 text-xs leading-5 text-stone-700">After this action, create a new enrollment token and run the enrollment command again on the host. Keep the existing files under <code>/etc/lsa-agent</code> and <code>/var/lib/lsa-agent</code>.</div>
+      <div className="mt-6 flex justify-end gap-3"><Button disabled={saving} onClick={() => setRecoveryTarget(null)}>Cancel</Button><Button variant="primary" disabled={saving || !recoveryTarget} onClick={() => { if (recoveryTarget) void submit(() => api.prepareAgentReenrollment(recoveryTarget.agent_id)).then(() => setRecoveryTarget(null)) }}>{saving ? 'Preparing Host' : 'Prepare Re-enrollment'}</Button></div>
     </Dialog>
   </>
 }

@@ -747,6 +747,17 @@ export interface LinuxAgent {
   created_at: string
 }
 
+export interface AgentEnrollmentRecovery {
+  agent_id: string
+  host_id: string
+  hostname: string
+  agent_version: string
+  fingerprint: string
+  reason: 'host_deleted' | 'credentials_revoked' | 'inventory_incomplete'
+  last_seen_at: string | null
+  created_at: string
+}
+
 export interface AgentTask {
   id: string
   agent_id: string

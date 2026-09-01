@@ -47,6 +47,7 @@ from lsa.schemas import (
     AgentBulkSelection,
     AgentEnrollmentRequest,
     AgentEnrollmentResponse,
+    AgentEnrollmentRecoveryResponse,
     AgentEnrollmentTokenCreate,
     AgentEnrollmentTokenCreated,
     AgentEnrollmentTokenResponse,
@@ -563,6 +564,114 @@ def list_agents(user: User = Depends(current_user), db: Session = Depends(get_db
         select(LinuxAgent).where(LinuxAgent.tenant_id == user.tenant_id).order_by(LinuxAgent.created_at.desc())
     ).all()
     return [_agent_response(db, agent) for agent in agents]
+
+
+@router.get(
+    "/agent-enrollment-recovery",
+    response_model=list[AgentEnrollmentRecoveryResponse],
+)
+def list_agent_enrollment_recovery(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> list[AgentEnrollmentRecoveryResponse]:
+    require_admin(user)
+    agents = db.scalars(
+        select(LinuxAgent)
+        .where(LinuxAgent.tenant_id == user.tenant_id)
+        .order_by(LinuxAgent.created_at.desc())
+    ).all()
+    records: list[AgentEnrollmentRecoveryResponse] = []
+    for agent in agents:
+        host = db.get(Host, agent.host_id)
+        token = db.get(IngestionToken, agent.ingestion_token_id)
+        key = db.get(SigningKey, agent.signing_key_id)
+        reason = None
+        if host is None:
+            reason = "inventory_incomplete"
+        elif host.deleted_at is not None:
+            reason = "host_deleted"
+        elif agent.revoked_at is None and (
+            token is None
+            or token.revoked_at is not None
+            or key is None
+            or key.revoked_at is not None
+        ):
+            reason = "credentials_revoked"
+        if reason is None:
+            continue
+        records.append(
+            AgentEnrollmentRecoveryResponse(
+                agent_id=agent.id,
+                host_id=agent.host_id,
+                hostname=host.hostname if host is not None else agent.name,
+                agent_version=agent.agent_version,
+                fingerprint=agent.fingerprint,
+                reason=reason,
+                last_seen_at=agent.last_seen_at,
+                created_at=agent.created_at,
+            )
+        )
+    return records
+
+
+@router.post("/agent-enrollment-recovery/{agent_id}/prepare", status_code=204)
+def prepare_agent_reenrollment(
+    agent_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    require_admin(user)
+    _lock_tenant(db, user.tenant_id)
+    agent = db.scalar(
+        select(LinuxAgent)
+        .where(LinuxAgent.id == agent_id, LinuxAgent.tenant_id == user.tenant_id)
+        .with_for_update()
+    )
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent enrollment record not found")
+    host = db.scalar(select(Host).where(Host.id == agent.host_id).with_for_update())
+    if host is None or host.tenant_id != user.tenant_id:
+        raise HTTPException(
+            status_code=409,
+            detail="The host inventory relationship is missing and requires database repair",
+        )
+    token = db.get(IngestionToken, agent.ingestion_token_id)
+    key = db.get(SigningKey, agent.signing_key_id)
+    recoverable = (
+        host.deleted_at is not None
+        or token is None
+        or token.revoked_at is not None
+        or key is None
+        or key.revoked_at is not None
+    )
+    if not recoverable:
+        raise HTTPException(
+            status_code=409,
+            detail="This enrollment is healthy; revoke the visible agent instead",
+        )
+    reset_at = now_utc()
+    host.deleted_at = None
+    _revoke_agent_credentials(db, agent, reset_at)
+    agent.pending_platform_command_key_id = None
+    agent.pending_platform_command_key_fingerprint = None
+    agent.platform_command_key_acknowledged_at = None
+    db.add(
+        AuditEvent(
+            tenant_id=user.tenant_id,
+            actor_type="user",
+            actor_id=user.id,
+            action="agent.enrollment_recovery_prepared",
+            target_type="linux_agent",
+            target_id=agent.id,
+            details={
+                "host_id": host.id,
+                "hostname": host.hostname,
+                "host_restored": True,
+                "evidence_preserved": True,
+            },
+        )
+    )
+    db.commit()
+    return Response(status_code=204)
 
 
 def _selected_agents(
