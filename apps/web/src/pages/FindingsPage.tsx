@@ -1,4 +1,4 @@
-import { FolderOpen, ShieldWarning } from '@phosphor-icons/react'
+import { FolderOpen } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
@@ -143,7 +143,7 @@ function FindingsQueuePage() {
   }
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Risk Queue" title="Security Findings" detail="Select a control category, prioritize its unresolved findings, and open an operator-ready remediation guide without losing your place in the queue." />
+    <PageHeader title="Findings" detail="Prioritize unresolved controls by category, severity, and affected host, then open the remediation guidance in context." />
     <TabList label="Security Finding Workspaces">
       <TabLink to="/findings" active>Findings Queue</TabLink>
       <TabLink to="/findings?view=remediation">Remediation Review</TabLink>
@@ -154,12 +154,11 @@ function FindingsQueuePage() {
         <div><span className="detail-label">Open Findings</span><strong>{facets.data?.total ?? 0}</strong></div>
         <div><span className="detail-label">Critical</span><strong className={facets.data?.critical ? 'text-rose-500' : ''}>{facets.data?.critical ?? 0}</strong></div>
         <div><span className="detail-label">Affected Hosts</span><strong>{facets.data?.affected_hosts ?? 0}</strong></div>
-        <div><span className="detail-label">Control Categories</span><strong>{categories.length}</strong></div>
       </div>
 
       <div className="findings-workspace-grid">
         <aside className="findings-category-rail" aria-label="Control categories">
-          <div className="findings-category-heading"><div><p className="section-label">Control Categories</p><p>Choose one category to inspect its queue.</p></div><FolderOpen size={18} /></div>
+          <div className="findings-category-heading"><div><strong>Control Categories</strong><p>Critical categories are opened first.</p></div><FolderOpen size={18} /></div>
           <nav className="findings-category-list">
             {categories.map((item) => {
               const categoryFacet = facets.data?.categories.find((facet) => facet.category === item.id)
@@ -176,13 +175,11 @@ function FindingsQueuePage() {
 
         <div className="min-w-0">
           {!selectedCategory ? <div className="findings-category-empty">
-            <ShieldWarning size={26} />
-            <h2>Select A Control Category</h2>
-            <p>All scanner categories remain visible on the left. Choose one to search, sort, filter, export, and investigate its current findings.</p>
+            <h2>No Control Category Available</h2>
+            <p>The category catalog will appear after the first accepted scanner report.</p>
           </div> : <>
             <header className="findings-queue-header">
-              <div><p className="section-label">{selectedCategory.name}</p><h2>{selectedCategory.name} Findings</h2><p>{selectedCategory.detail}. Showing findings from every host's latest accepted report.</p></div>
-              <span className="settings-state">{data?.total ?? 0} Matching</span>
+              <div><h2>{selectedCategory.name}</h2><p>{selectedCategory.detail}. Findings reflect each host's latest accepted report.</p></div>
             </header>
             <SecurityTable
               key={selectedCategory.id}
@@ -193,6 +190,7 @@ function FindingsQueuePage() {
               rowLabel={(finding) => finding.title}
               searchPlaceholder="Search Finding, Control, Host, Or Observed State"
               filename={`lsa-${selectedCategory.id}-findings.csv`}
+              defaultHiddenColumnIds={['observed', 'impact']}
               pageSize={10}
               query={tableState.query}
               onQueryChange={(value) => { setSelectedFinding(null); tableState.setQuery(value) }}
@@ -201,6 +199,11 @@ function FindingsQueuePage() {
               serverPagination={{ page: data?.page ?? tableState.page, pageSize: data?.pageSize ?? 10, totalRows: data?.total ?? 0, onPageChange: tableState.setPage }}
               emptyTitle="No Findings Match This View"
               emptyDetail="Adjust the severity, lifecycle, or search terms. The category remains part of the scanner catalog."
+              renderExpanded={(finding) => <dl className="finding-row-detail">
+                <div><dt>Observed State</dt><dd>{finding.actual || 'No Concrete Value Reported'}</dd></div>
+                <div><dt>Expected State</dt><dd>{finding.expected || 'See The Control Guidance'}</dd></div>
+                <div><dt>Change Impact</dt><dd>{finding.reboot_required ? 'Reboot Required' : finding.service_restart ? 'Service Restart' : 'No Restart Reported'} · {finding.remediation_commands.length} Apply Steps</dd></div>
+              </dl>}
               embedded
               toolbarActions={<><select className="select-input min-h-9" aria-label="Filter by severity" value={severity} onChange={(event) => { const value = event.target.value as Severity | 'all'; setSeverity(value); updateParams({ severity: value, finding: null }) }}><option value="all">All Severities</option>{severityOrder.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select><select className="select-input min-h-9" aria-label="Filter by lifecycle" value={lifecycle} onChange={(event) => { const value = event.target.value; setLifecycle(value); updateParams({ lifecycle: value, finding: null }) }}><option value="all">All Lifecycles</option>{lifecycleOptions.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></>}
             />

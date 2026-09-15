@@ -1,8 +1,8 @@
-import { ArrowClockwise, Copy, DownloadSimple, Prohibit, Warning } from '@phosphor-icons/react'
-import { FormEvent, useState } from 'react'
+import { ArrowClockwise, CheckCircle, Circle, Copy, DownloadSimple, Prohibit, SpinnerGap, Warning } from '@phosphor-icons/react'
+import { FormEvent, useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { formatDateTime } from '../../lib/dateTime'
-import type { AgentConnectivity, AgentEnrollmentRecovery, AgentEnrollmentToken, AgentGroup, AgentPackage, PlatformCommandTrust } from '../../types'
+import type { AgentConnectivity, AgentEnrollmentProgress, AgentEnrollmentRecovery, AgentEnrollmentToken, AgentGroup, AgentPackage, PlatformCommandTrust } from '../../types'
 import { AgentDownloadPanel } from '../AgentDownloadPanel'
 import { Button } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
@@ -22,6 +22,9 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, enrol
 }) {
   const [showDownloads, setShowDownloads] = useState(false)
   const [token, setToken] = useState('')
+  const [createdTokenId, setCreatedTokenId] = useState('')
+  const [progress, setProgress] = useState<AgentEnrollmentProgress | null>(null)
+  const [progressError, setProgressError] = useState('')
   const [enrollmentTrust, setEnrollmentTrust] = useState<PlatformCommandTrust | null>(null)
   const [enrollmentType, setEnrollmentType] = useState<EnrollmentType>('one_time')
   const [createdTokenType, setCreatedTokenType] = useState<EnrollmentType>('one_time')
@@ -30,6 +33,22 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, enrol
   const [recoveryTarget, setRecoveryTarget] = useState<AgentEnrollmentRecovery | null>(null)
 
   const activeReusableToken = enrollmentTokens.find(item => item.token_type === 'reusable' && !item.revoked_at && new Date(item.expires_at).getTime() > Date.now() && (item.max_uses === null || item.use_count < item.max_uses))
+
+  useEffect(() => {
+    if (!createdTokenId) return
+    let active = true
+    const load = async () => {
+      try {
+        const next = await api.agentEnrollmentProgress(createdTokenId)
+        if (active) { setProgress(next); setProgressError('') }
+      } catch (caught) {
+        if (active) setProgressError(caught instanceof Error ? caught.message : 'Verification status could not be loaded')
+      }
+    }
+    void load()
+    const timer = window.setInterval(() => void load(), 5_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [createdTokenId])
 
   function createEnrollment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -44,14 +63,24 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, enrol
         max_uses: enrollmentType === 'reusable' && maxUsesText ? Number(maxUsesText) : null,
       })
       setToken(created.token)
+      setCreatedTokenId(created.id)
+      setProgress(null)
       setEnrollmentTrust(created.platform_trust)
       setCreatedTokenType(created.token_type)
       setCreatedTokenMaxUses(created.max_uses)
     })
   }
 
+  const deployedAgent = progress?.agents[0]
+  const deploymentSteps = [
+    { label: 'Instructions Generated', detail: 'Package and enrollment command are ready.', done: !!token },
+    { label: 'Agent Enrolled', detail: deployedAgent ? `${deployedAgent.hostname} created an agent identity.` : 'Waiting for the enrollment request.', done: !!deployedAgent },
+    { label: 'First Communication', detail: deployedAgent?.first_communication_at ? `Authenticated at ${formatDateTime(deployedAgent.first_communication_at)}.` : 'Waiting for an authenticated request after enrollment.', done: !!deployedAgent?.first_communication_at },
+    { label: 'Operational', detail: deployedAgent?.operational_state === 'operational' ? 'Policy is synchronized and a current report is accepted.' : deployedAgent?.next_action ?? 'Waiting for communication, policy sync, and the first accepted report.', done: deployedAgent?.operational_state === 'operational' },
+  ]
+
   return <>
-    {showDownloads && <AgentDownloadPanel packages={packages} platformUrl={connectivity.public_url} platformTrust={enrollmentTrust ?? connectivity.platform_trust} enrollmentToken={token || undefined} close={() => setShowDownloads(false)} />}
+    {showDownloads && <AgentDownloadPanel packages={packages} platformUrl={connectivity.public_url} platformTrust={enrollmentTrust ?? connectivity.platform_trust} enrollmentToken={token || undefined} reusableCredential={createdTokenType === 'reusable'} close={() => setShowDownloads(false)} />}
     <div>
       <div className="border-b border-stone-200 px-5 py-5 sm:px-7">
         <p className="section-label">Agent deployment</p>
@@ -69,7 +98,9 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, enrol
             <div><span className="detail-label">Operating mode</span><strong className="mt-2 block text-sm font-semibold text-stone-800">Audit only</strong><span className="table-subtitle">Host configuration is not changed</span></div>
           </div>
           <div className="mt-4 border-t border-stone-200 pt-4"><span className="detail-label">Platform identity fingerprint</span><code className="mt-2 block break-all text-[10px] text-stone-500">SHA256:{connectivity.platform_trust.fingerprint}</code></div>
-          <div className="mt-5 border-t border-stone-200 pt-5">
+          <details className="mt-5 border-t border-stone-200 pt-5">
+            <summary className="cursor-pointer text-xs font-semibold text-stone-700">Advanced Platform Trust</summary>
+          <div className="mt-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <span className="detail-label">Signing Key Rotation</span>
@@ -88,7 +119,8 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, enrol
               </div> : <Button className="shrink-0" disabled={saving} onClick={() => void submit(() => api.stagePlatformCommandKeyRotation())}>Stage New Key</Button>}
             </div>
           </div>
-          <Button className="mt-6" disabled={!packages.length} onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> View packages and commands</Button>
+          </details>
+          <Button className="mt-6" disabled={!packages.length} onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> Choose Package</Button>
         </section>
 
         <section className="min-w-0 px-5 py-6 sm:px-7">
@@ -96,7 +128,15 @@ export function AgentDeploymentWorkspace({ connectivity, enrollmentTokens, enrol
           {token ? <div className="mt-4">
             <p className="text-xs leading-5 text-stone-500">Copy this token now; it will not be shown again. {createdTokenType === 'one_time' ? 'It becomes invalid after one successful enrollment.' : `It can enroll multiple hosts until expiry${createdTokenMaxUses ? ` or ${createdTokenMaxUses} successful uses` : ''}. Store it in your deployment secret manager.`}</p>
             <code className="mt-4 block min-w-0 overflow-x-auto rounded-lg border border-stone-200 bg-[#f7f3eb] px-4 py-3 text-xs text-[#4f6f5c]">{token}</code>
-            <div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy token</Button><Button variant="primary" onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> Continue to installation</Button></div>
+            <div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => void navigator.clipboard.writeText(token)}><Copy size={15} /> Copy Token</Button><Button variant="primary" onClick={() => setShowDownloads(true)}><DownloadSimple size={15} /> Continue To Installation</Button></div>
+            <div className="deployment-verification" aria-label="Deployment Verification">
+              <div className="flex items-center justify-between gap-3"><h4>Deployment Verification</h4>{createdTokenId && !progress && !progressError && <SpinnerGap className="animate-spin text-stone-500" size={15} />}</div>
+              <p className="mt-1 text-[10px] leading-5 text-stone-500">This tracker reflects server-observed events. Copying a command does not mark the agent as installed.</p>
+              <ol>{deploymentSteps.map((step, index) => <li key={step.label} className={step.done ? 'deployment-step-complete' : ''}>{step.done ? <CheckCircle weight="fill" size={17} /> : <Circle size={17} />}<div><strong>{step.label}</strong><span>{step.detail}</span></div>{index < deploymentSteps.length - 1 && <i />}</li>)}</ol>
+              {progress && progress.token_state !== 'active' && !deployedAgent && <div className="deployment-blocked"><Warning size={15} /><span>This credential is {progress.token_state}. Create a new credential before retrying enrollment.</span></div>}
+              {progressError && <div className="deployment-blocked"><Warning size={15} /><span>{progressError}. Verification will retry automatically.</span></div>}
+              {!deployedAgent && <details className="mt-3 text-[10px] leading-5 text-stone-600"><summary className="cursor-pointer font-semibold text-stone-700">If The Agent Does Not Appear</summary><ol className="mt-2 list-decimal space-y-1 pl-4"><li>Confirm the enrollment credential is still active and assigned to the intended group.</li><li>On the host, run <code>systemctl status lsa-agent.service</code>.</li><li>Review <code>journalctl -u lsa-agent.service -n 100 --no-pager</code>.</li><li>Verify DNS, system time, and outbound TCP access to the agent gateway on port 8444.</li></ol></details>}
+            </div>
           </div> : <form className="mt-4 grid gap-4" onSubmit={createEnrollment}>
             {activeReusableToken && <div className="rounded-xl border border-[#b8c5ba] bg-[#edf1eb] p-4 text-xs leading-5 text-stone-600"><div className="flex min-w-0 items-start justify-between gap-4"><div className="min-w-0"><strong className="block truncate font-medium text-stone-800">{activeReusableToken.name}</strong><span className="mt-1 block">Reusable tenant token · {activeReusableToken.group_name}</span><span className="mt-1 block">{activeReusableToken.use_count}{activeReusableToken.max_uses === null ? ' uses' : ` of ${activeReusableToken.max_uses} uses`} · Expires {formatDateTime(activeReusableToken.expires_at)}</span></div><Button type="button" disabled={saving} onClick={() => void submit(() => api.revokeAgentEnrollmentToken(activeReusableToken.id))}><Prohibit size={14} /> Revoke</Button></div></div>}
             <label className="form-field">Credential type<select name="token_type" className="select-input w-full" value={enrollmentType} onChange={event => setEnrollmentType(event.target.value as EnrollmentType)}><option value="one_time">One-time token</option><option value="reusable">Reusable tenant token</option></select><small>{enrollmentType === 'one_time' ? 'Best for manual enrollment of one host.' : 'Best for automated provisioning. Only one reusable token can be active per tenant.'}</small></label>

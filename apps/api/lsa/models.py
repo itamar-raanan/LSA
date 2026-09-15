@@ -373,6 +373,9 @@ class LinuxAgent(Base):
         DateTime(timezone=True), nullable=True
     )
     platform_envelope_sequence: Mapped[int] = mapped_column(default=0)
+    first_communication_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_policy_version: Mapped[int | None] = mapped_column(nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

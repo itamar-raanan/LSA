@@ -75,4 +75,11 @@ describe('SecurityTable', () => {
     expect(screen.getByRole('button', { name: 'Collapse Additional Details For Row 1' })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('row', { name: 'State Offline' })).toBeInTheDocument()
   })
+
+  it('hides optional context from the default scan path', () => {
+    render(<SecurityTable rows={[rows[0]]} columns={columns} defaultHiddenColumnIds={['state']} searchText={(row) => row.name} ariaLabel="Focused Assets" />)
+
+    expect(screen.queryByRole('columnheader', { name: 'State' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Options' })).toBeInTheDocument()
+  })
 })

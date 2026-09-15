@@ -834,13 +834,42 @@ class LinuxAgentResponse(BaseModel):
     fingerprint: str
     platform_trust_status: Literal["pinned", "missing"]
     platform_command_key_fingerprint: str | None
+    fqdn: str | None
+    operating_system: str
+    os_family: str
+    os_version: str
+    kernel: str
+    architecture: str
+    ip_addresses: list[str]
+    enrollment_state: Literal["enrolled", "revoked"]
+    connectivity_state: Literal["awaiting_first_contact", "online", "stale", "offline", "revoked"]
+    configuration_state: Literal["awaiting", "synced", "outdated", "revoked"]
+    version_state: Literal["current", "update_available", "unknown"]
+    operational_state: Literal["awaiting_first_contact", "operational", "attention", "revoked"]
+    report_state: Literal["current", "stale", "never"]
+    status_reason: str
+    next_action: str | None
+    desired_agent_version: str
+    first_communication_at: datetime | None
     last_seen_at: datetime | None
     last_policy_version: int | None
     last_scan_at: datetime | None
+    latest_task_id: str | None
     latest_task_status: str | None
     latest_task_created_at: datetime | None
+    latest_task_completed_at: datetime | None
+    latest_task_error: str | None
     revoked_at: datetime | None
     created_at: datetime
+
+
+class AgentEnrollmentProgressResponse(BaseModel):
+    token_id: str
+    token_state: Literal["active", "consumed", "exhausted", "expired", "revoked"]
+    use_count: int
+    max_uses: int | None
+    expires_at: datetime
+    agents: list[LinuxAgentResponse]
 
 
 class AgentEnrollmentRecoveryResponse(BaseModel):

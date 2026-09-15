@@ -738,13 +738,42 @@ export interface LinuxAgent {
   fingerprint: string
   platform_trust_status: 'pinned' | 'missing'
   platform_command_key_fingerprint: string | null
+  fqdn: string | null
+  operating_system: string
+  os_family: string
+  os_version: string
+  kernel: string
+  architecture: string
+  ip_addresses: string[]
+  enrollment_state: 'enrolled' | 'revoked'
+  connectivity_state: 'awaiting_first_contact' | 'online' | 'stale' | 'offline' | 'revoked'
+  configuration_state: 'awaiting' | 'synced' | 'outdated' | 'revoked'
+  version_state: 'current' | 'update_available' | 'unknown'
+  operational_state: 'awaiting_first_contact' | 'operational' | 'attention' | 'revoked'
+  report_state: 'current' | 'stale' | 'never'
+  status_reason: string
+  next_action: string | null
+  desired_agent_version: string
+  first_communication_at: string | null
   last_seen_at: string | null
   last_policy_version: number | null
   last_scan_at: string | null
+  latest_task_id: string | null
   latest_task_status: 'queued' | 'dispatched' | 'completed' | 'failed' | 'cancelled' | null
   latest_task_created_at: string | null
+  latest_task_completed_at: string | null
+  latest_task_error: string | null
   revoked_at: string | null
   created_at: string
+}
+
+export interface AgentEnrollmentProgress {
+  token_id: string
+  token_state: 'active' | 'consumed' | 'exhausted' | 'expired' | 'revoked'
+  use_count: number
+  max_uses: number | null
+  expires_at: string
+  agents: LinuxAgent[]
 }
 
 export interface AgentEnrollmentRecovery {

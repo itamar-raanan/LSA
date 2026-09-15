@@ -4,9 +4,11 @@ import { TabButton, TabList } from '../ui/Tabs'
 
 export type AgentWorkspaceTab = 'hosts' | 'policy' | 'deployment'
 
-export function AgentWorkspaceHeader({ group, activeCount, activeTab, onTabChange }: {
+export function AgentWorkspaceHeader({ group, activeCount, attentionCount, awaitingCount, activeTab, onTabChange }: {
   group: AgentGroup | null
   activeCount: number
+  attentionCount: number
+  awaitingCount: number
   activeTab: AgentWorkspaceTab
   onTabChange: (tab: AgentWorkspaceTab) => void
 }) {
@@ -18,7 +20,9 @@ export function AgentWorkspaceHeader({ group, activeCount, activeTab, onTabChang
         <p className="mt-1 text-xs leading-5 text-stone-500">{group?.description || (group ? `${group.policy_name} is applied to this group.` : 'Every agent across all policy groups.')}</p>
       </div>
       <div className="flex items-center gap-6 border-l border-stone-200 pl-5">
-        <div><strong className="block font-mono text-lg font-medium text-stone-800">{activeCount}</strong><span className="text-[10px] text-stone-600">active hosts</span></div>
+        <div><strong className="block text-lg font-semibold text-stone-800">{activeCount}</strong><span className="text-[10px] text-stone-600">Managed</span></div>
+        <div><strong className="block text-lg font-semibold text-stone-800">{attentionCount}</strong><span className="text-[10px] text-stone-600">Needs Attention</span></div>
+        <div><strong className="block text-lg font-semibold text-stone-800">{awaitingCount}</strong><span className="text-[10px] text-stone-600">Awaiting Contact</span></div>
         {group && <div><strong className="block font-mono text-lg font-medium text-stone-800">v{group.policy_version}</strong><span className="text-[10px] text-stone-600">policy version</span></div>}
       </div>
     </div>
