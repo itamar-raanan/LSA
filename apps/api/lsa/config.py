@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     s3_server_side_encryption: Literal["AES256", "aws:kms", "none"] = "AES256"
     public_url: str = "https://localhost:8443"
     agent_public_url: str = "https://localhost:8444"
+    agent_online_minutes: int = Field(default=5, ge=1, le=60)
+    agent_offline_hours: int = Field(default=24, ge=1, le=168)
+    agent_report_stale_hours: int = Field(default=24, ge=1, le=720)
     allow_private_identity_providers: bool = False
     tls_certificate_path: str = "/tmp/lsa-tls/tls.crt"
     tls_private_key_path: str = "/tmp/lsa-tls/tls.key"

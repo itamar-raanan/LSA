@@ -24,7 +24,8 @@ vi.mock('../api/client', () => ({
     ]),
     controlCatalog: vi.fn().mockResolvedValue([{ control_id: 'CIS-DEBIAN13-1.1.1', title: 'Disable unused filesystem', category: 'filesystem', module: 'cis_debian13' }]),
     agentEnrollmentTokens: vi.fn().mockResolvedValue([]),
-    createAgentEnrollmentToken: vi.fn().mockResolvedValue({ token: 'lsa_enroll_test_token', token_type: 'one_time', max_uses: null, use_count: 0, platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
+    agentEnrollmentProgress: vi.fn().mockResolvedValue({ token_id: 'token-1', token_state: 'active', use_count: 0, max_uses: null, expires_at: '2026-12-01T00:00:00Z', agents: [] }),
+    createAgentEnrollmentToken: vi.fn().mockResolvedValue({ id: 'token-1', name: 'Test Enrollment', group_id: 'group-1', token: 'lsa_enroll_test_token', token_prefix: 'lsa_enroll_test', expires_at: '2026-12-01T00:00:00Z', token_type: 'one_time', max_uses: null, use_count: 0, platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) } }),
     agentConnectivity: vi.fn().mockResolvedValue({ public_url: 'https://lsa.example.test:8444', platform_trust: { key_id: 'platform-key-1', key_version: 1, algorithm: 'Ed25519', public_key: 'cHVibGljLWtleQ==', fingerprint: 'f'.repeat(64) }, key_rotation: null }),
     stagePlatformCommandKeyRotation: vi.fn().mockResolvedValue({}),
     activatePlatformCommandKeyRotation: vi.fn().mockResolvedValue({}),
@@ -53,8 +54,8 @@ describe('Agents', () => {
     render(<MemoryRouter initialEntries={['/agents']}><Routes><Route element={<AppShell />}><Route path="agents" element={<div>Agent route</div>} /></Route></Routes></MemoryRouter>)
 
     const navigation = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
-    expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('href', '/agents')
-    expect(navigation.getByRole('link', { name: 'Agents & groups' })).toHaveAttribute('aria-current', 'page')
+    expect(navigation.getByRole('link', { name: 'Agents' })).toHaveAttribute('href', '/agents')
+    expect(navigation.getByRole('link', { name: 'Agents' })).toHaveAttribute('aria-current', 'page')
     expect(navigation.getByRole('link', { name: 'Applications' })).toHaveAttribute('href', '/applications')
     expect(navigation.queryByRole('link', { name: 'Certificates' })).not.toBeInTheDocument()
     expect(navigation.getByRole('link', { name: 'Administration' })).toHaveAttribute('href', '/settings')
@@ -93,10 +94,10 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Policy' }))
     expect(screen.getByRole('heading', { name: 'Production Baseline' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Deploy agent/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Deploy Agent/ }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Token name' }), { target: { value: 'Production Deployment' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create one-time token' }))
-    fireEvent.click(await screen.findByRole('button', { name: /Continue to installation/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Continue To Installation/ }))
     expect(screen.getByRole('heading', { name: 'Install the unified Linux agent' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Download Package' })).toHaveLength(1)
     expect(screen.getByText(/sudo apt install .*lsa-agent_0.4.1_all.deb/)).toBeInTheDocument()
@@ -109,16 +110,18 @@ describe('Agents', () => {
 
   it('separates connection and report freshness and explains agent revocation', async () => {
     vi.mocked(api.agents).mockResolvedValueOnce([{
-      id: 'agent-1', host_id: 'host-1', hostname: 'web-01', group_id: 'group-1', group_name: 'Default Linux Fleet', policy_name: 'Monitor (Audit Only)', policy_version: 1, agent_version: '0.4.1', capabilities: ['audit'], fingerprint: 'fingerprint', platform_trust_status: 'pinned', platform_command_key_fingerprint: 'f'.repeat(64), last_seen_at: new Date().toISOString(), last_policy_version: 1, last_scan_at: new Date().toISOString(), latest_task_status: 'completed', latest_task_created_at: new Date().toISOString(), revoked_at: null, created_at: '2026-01-01T00:00:00Z',
+      id: 'agent-1', host_id: 'host-1', hostname: 'web-01', fqdn: 'web-01.example.test', operating_system: 'Debian GNU/Linux', os_family: 'debian', os_version: '13', kernel: '6.12.0', architecture: 'x86_64', ip_addresses: ['10.0.0.10'], group_id: 'group-1', group_name: 'Default Linux Fleet', policy_name: 'Monitor (Audit Only)', policy_version: 1, agent_version: '0.4.1', desired_agent_version: '0.4.1', version_state: 'current', capabilities: ['audit'], fingerprint: 'fingerprint', platform_trust_status: 'pinned', platform_command_key_fingerprint: 'f'.repeat(64), enrollment_state: 'enrolled', connectivity_state: 'online', configuration_state: 'synced', operational_state: 'operational', report_state: 'current', status_reason: 'Agent is operational.', next_action: null, first_communication_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), last_policy_version: 1, last_scan_at: new Date().toISOString(), latest_task_id: 'task-1', latest_task_status: 'completed', latest_task_created_at: new Date().toISOString(), latest_task_completed_at: new Date().toISOString(), latest_task_error: null, revoked_at: null, created_at: '2026-01-01T00:00:00Z',
     }])
     render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
 
     const row = (await screen.findByText('web-01')).closest('tr')
     expect(row).not.toBeNull()
-    expect(screen.getByRole('columnheader', { name: 'Connection' })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: 'Report Freshness' })).toBeInTheDocument()
-    expect(within(row!).getByText('online')).toBeInTheDocument()
-    expect(within(row!).getByText('fresh')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Operational State' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Last Communication' })).toBeInTheDocument()
+    expect(within(row!).getByText('operational')).toBeInTheDocument()
+    fireEvent.click(within(row!).getByRole('button', { name: /^web-01/ }))
+    expect(screen.getByRole('dialog', { name: 'web-01' })).toHaveTextContent('Configuration And Version')
+    fireEvent.click(screen.getByRole('button', { name: 'Close Agent Details' }))
     fireEvent.click(within(row!).getByRole('checkbox', { name: 'Select web-01' }))
     expect(screen.getByText('1 selected')).toBeInTheDocument()
 
@@ -145,7 +148,7 @@ describe('Agents', () => {
     })
     render(<MemoryRouter><AgentsSettingsPage /></MemoryRouter>)
 
-    fireEvent.click(await screen.findByRole('button', { name: /Deploy agent/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Deploy Agent/ }))
     fireEvent.change(screen.getByRole('combobox', { name: /Credential type/ }), { target: { value: 'reusable' } })
     expect(screen.getByRole('spinbutton', { name: /Maximum enrollments/ })).toBeInTheDocument()
     fireEvent.change(screen.getByRole('textbox', { name: 'Token name' }), { target: { value: 'Tenant Automation' } })

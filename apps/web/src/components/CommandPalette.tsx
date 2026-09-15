@@ -18,16 +18,16 @@ interface CommandResult {
 }
 
 const commands: CommandResult[] = [
-  { id: 'overview', label: 'Security Overview', detail: 'Review fleet posture and critical exposure', path: '/', icon: LayoutDashboard, keywords: 'overview home metrics', group: 'Navigate' },
-  { id: 'assets', label: 'Asset Inventory', detail: 'Search reporting Linux systems', path: '/hosts', icon: Server, keywords: 'hosts servers assets', group: 'Navigate' },
-  { id: 'applications', label: 'Application Inventory', detail: 'Correlate packages, services, versions, and hosts', path: '/applications', icon: Boxes, keywords: 'applications packages services software versions', group: 'Navigate' },
+  { id: 'overview', label: 'Overview', detail: 'Review fleet posture and critical exposure', path: '/', icon: LayoutDashboard, keywords: 'security overview home metrics', group: 'Navigate' },
+  { id: 'findings', label: 'Findings', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'security findings risk controls', group: 'Navigate' },
+  { id: 'assets', label: 'Assets', detail: 'Search reporting Linux systems', path: '/hosts', icon: Server, keywords: 'hosts servers asset inventory', group: 'Navigate' },
   { id: 'vulnerabilities', label: 'Vulnerabilities', detail: 'Prioritize CVEs, known exploitation, affected hosts, and fixes', path: '/vulnerabilities', icon: Bug, keywords: 'cve vulnerabilities osv kev cvss exploits patches fixes', group: 'Navigate' },
-  { id: 'agents', label: 'Agents & Groups', detail: 'Manage agents, enrollment, and fleet groups', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints enrollment', group: 'Navigate', adminOnly: true },
-  { id: 'findings', label: 'Security Findings', detail: 'Triage findings by control category', path: '/findings', icon: ShieldAlert, keywords: 'findings risk vulnerabilities', group: 'Navigate' },
+  { id: 'applications', label: 'Applications', detail: 'Correlate packages, services, versions, and hosts', path: '/applications', icon: Boxes, keywords: 'application inventory packages services software versions', group: 'Navigate' },
+  { id: 'agents', label: 'Agents', detail: 'Manage agents, enrollment, fleet groups, and policy assignment', path: '/agents', icon: MonitorCog, keywords: 'agents groups endpoints enrollment', group: 'Navigate', adminOnly: true },
   { id: 'remediation', label: 'Remediation Review', detail: 'Review requested changes and approval history', path: '/findings?view=remediation', icon: ShieldCheck, keywords: 'remediation changes approvals review', group: 'Navigate' },
   { id: 'change-sets', label: 'Signed Change Sets', detail: 'Review readiness gates, canaries, and independent authorization', path: '/findings?view=change-sets', icon: ShieldCheck, keywords: 'remediation signed change sets canary authorization', group: 'Navigate' },
-  { id: 'evidence', label: 'Evidence Intake', detail: 'Upload an offline evidence bundle', path: '/evidence', icon: FileUp, keywords: 'offline upload report evidence intake', group: 'Navigate' },
-  { id: 'how-to', label: 'How To Use LSA', detail: 'Learn collection, investigation, and evidence workflows', path: '/how-to', icon: BookOpen, keywords: 'help guide getting started analyst secops agent offline ansible', group: 'Navigate' },
+  { id: 'evidence', label: 'Offline Reports', detail: 'Download the scanner or upload an offline evidence bundle', path: '/evidence', icon: FileUp, keywords: 'offline upload report evidence intake', group: 'Navigate' },
+  { id: 'how-to', label: 'User Guide', detail: 'Learn collection, investigation, and evidence workflows', path: '/how-to', icon: BookOpen, keywords: 'how to help guide getting started analyst secops agent offline ansible', group: 'Navigate' },
   { id: 'credentials', label: 'Administration · Credentials & Trust', detail: 'Manage ingestion tokens and signing keys', path: '/settings/credentials', icon: ShieldCheck, keywords: 'administration tokens signing keys credentials trust', group: 'Navigate', adminOnly: true },
   { id: 'certificates', label: 'Administration · TLS Certificates', detail: 'Review the console HTTPS identity', path: '/settings/certificates', icon: ShieldCheck, keywords: 'administration tls https certificate', group: 'Navigate', adminOnly: true },
   { id: 'administration', label: 'Administration', detail: 'Identity, trust, users, and access', path: '/settings', icon: Settings, keywords: 'settings admin users tokens', group: 'Navigate', adminOnly: true },

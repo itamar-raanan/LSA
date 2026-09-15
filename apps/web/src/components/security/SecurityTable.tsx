@@ -52,6 +52,7 @@ interface SecurityTableProps<T> {
   serverPagination?: SecurityTableServerPagination
   bulkActions?: ReactNode
   selectionSummary?: boolean
+  defaultHiddenColumnIds?: string[]
 }
 
 export function SecurityTable<T extends { id: string }>({
@@ -80,12 +81,13 @@ export function SecurityTable<T extends { id: string }>({
   serverPagination,
   bulkActions,
   selectionSummary = true,
+  defaultHiddenColumnIds = [],
 }: SecurityTableProps<T>) {
   const [internalQuery, setInternalQuery] = useState('')
   const [internalSort, setInternalSort] = useState<SecurityTableSort | null>(null)
   const [internalPage, setInternalPage] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set(defaultHiddenColumnIds))
   const query = controlledQuery ?? internalQuery
   const sort = controlledSort === undefined ? internalSort : controlledSort
   const page = serverPagination?.page ?? controlledPage ?? internalPage

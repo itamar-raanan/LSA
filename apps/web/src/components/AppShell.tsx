@@ -16,18 +16,20 @@ interface NavigationItem { to: string; label: string; icon: typeof Gauge; adminO
 interface NavigationGroup { label: string; items: NavigationItem[] }
 
 const navigation: NavigationGroup[] = [
-  { label: 'Workspace', items: [
+  { label: 'Investigate', items: [
     { to: '/', label: 'Overview', icon: Gauge },
+    { to: '/findings', label: 'Findings', icon: ShieldAlert },
     { to: '/hosts', label: 'Assets', icon: Server },
-    { to: '/applications', label: 'Applications', icon: Boxes },
     { to: '/vulnerabilities', label: 'Vulnerabilities', icon: Bug },
-    { to: '/agents', label: 'Agents & groups', icon: MonitorCog, adminOnly: true },
-    { to: '/findings', label: 'Security findings', icon: ShieldAlert },
-    { to: '/evidence', label: 'Evidence Intake', icon: FileBarChart },
+    { to: '/applications', label: 'Applications', icon: Boxes },
   ] },
-  { label: 'System', items: [
-    { to: '/how-to', label: 'How To', icon: BookOpen },
+  { label: 'Collect', items: [
+    { to: '/agents', label: 'Agents', icon: MonitorCog, adminOnly: true },
+    { to: '/evidence', label: 'Offline Reports', icon: FileBarChart },
+  ] },
+  { label: 'Manage', items: [
     { to: '/settings', label: 'Administration', icon: Settings, adminOnly: true },
+    { to: '/how-to', label: 'User Guide', icon: BookOpen },
   ] },
 ]
 

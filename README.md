@@ -234,7 +234,7 @@ curl --fail-with-body \
 
 ## Managed agent workflow
 
-Open **Agents** in the primary console navigation, choose **Install agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
+Open **Agents** in the primary console navigation, choose **Deploy Agent**, and download the package for the target distribution. Assign a policy to a group and create a short-lived, one-time enrollment token. On Debian or Ubuntu, for example:
 
 ```bash
 sudo apt install ./lsa-agent_0.11.2_amd64.deb
@@ -242,7 +242,9 @@ sudo apt install ./lsa-agent_0.11.2_amd64.deb
 sudo lsa-agent-enroll --platform-url 'https://lsa.example.com:8444' --token 'lsa_enroll_...' --platform-command-key 'COPY_FROM_CONSOLE'
 ```
 
-The **Agents** workspace opens on **All hosts**. Select a group in the left fleet rail to view its hosts and effective policy. From there, administrators can publish categorized control overrides, request an audit, move agents to another group, or revoke them.
+The **Agents** workspace opens on **All Agents**. Select a group in the left fleet rail to view its agents and effective policy. Deployment verification distinguishes four observed stages: instructions generated, identity enrolled, first authenticated communication, and operational readiness. An agent is operational only after it communicates, acknowledges the assigned policy, and submits a current accepted report. From the inventory, administrators can inspect agent details, queue an asynchronous audit, move agents to another group, or revoke access.
+
+Connection health is calculated by the API so every operator sees the same state. The defaults are online within five minutes, delayed for up to 24 hours, and offline afterward; report evidence becomes stale after 24 hours. Override these thresholds with `LSA_AGENT_ONLINE_MINUTES`, `LSA_AGENT_OFFLINE_HOURS`, and `LSA_AGENT_REPORT_STALE_HOURS`. Revoking access does not uninstall the host service or delete historical evidence. Re-enrollment requires a new credential.
 
 Agent 0.4 verifies a package-generated SHA-256 manifest before each cycle and refuses to run a scan when its runtime or local control catalog has changed. It also remembers the highest accepted group-policy version and rejects policy rollback. Package transport checksums remain available in the console; the runtime manifest protects the installed executable and scanner content after download.
 

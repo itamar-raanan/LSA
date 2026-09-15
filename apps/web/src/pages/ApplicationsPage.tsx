@@ -213,6 +213,7 @@ export function ApplicationsPage() {
           rowLabel={(item) => item.name}
           searchPlaceholder="Search Application, Version, Or Publisher"
           filename="lsa-application-inventory.csv"
+          defaultHiddenColumnIds={['type', 'source', 'observed']}
           pageSize={10}
           embedded
           emptyTitle="No Applications Found"

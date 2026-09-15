@@ -258,6 +258,20 @@ def test_agent_enrollment_and_signed_policy_poll(client):
     assert enrollment.status_code == 201, enrollment.text
     enrollment_data = enrollment.json()
     agent_id = enrollment_data["agent_id"]
+    enrolled_agent = next(
+        item for item in client.get("/api/v1/agents", headers=headers).json()
+        if item["id"] == agent_id
+    )
+    assert enrolled_agent["connectivity_state"] == "awaiting_first_contact"
+    assert enrolled_agent["operational_state"] == "awaiting_first_contact"
+    assert enrolled_agent["first_communication_at"] is None
+    progress = client.get(
+        f"/api/v1/agent-enrollment-tokens/{token_response.json()['id']}/progress",
+        headers=headers,
+    )
+    assert progress.status_code == 200, progress.text
+    assert progress.json()["token_state"] == "consumed"
+    assert progress.json()["agents"][0]["id"] == agent_id
     trust = enrollment_data["platform_trust"]
     envelope = enrollment_data["platform_envelope"]
     Ed25519PublicKey.from_public_bytes(b64decode(trust["public_key"])).verify(
@@ -432,6 +446,25 @@ def test_new_agent_receives_signed_monotonic_control_responses(client):
     agents = client.get("/api/v1/agents", headers=headers)
     assert agents.status_code == 200
     assert agents.json()[0]["hostname"] == "signed-control-agent"
+    assert agents.json()[0]["connectivity_state"] == "online"
+    assert agents.json()[0]["first_communication_at"] is not None
+    assert agents.json()[0]["configuration_state"] == "synced"
+
+    with SessionLocal() as db:
+        stored_agent = db.get(LinuxAgent, agent_id)
+        assert stored_agent is not None
+        stored_agent.last_seen_at = now_utc() - timedelta(hours=25)
+        db.commit()
+    offline = client.get(f"/api/v1/agents/{agent_id}", headers=headers)
+    assert offline.json()["connectivity_state"] == "offline"
+    assert offline.json()["operational_state"] == "attention"
+
+    with SessionLocal() as db:
+        stored_agent = db.get(LinuxAgent, agent_id)
+        assert stored_agent is not None
+        stored_agent.last_seen_at = now_utc() - timedelta(minutes=6)
+        db.commit()
+    assert client.get(f"/api/v1/agents/{agent_id}", headers=headers).json()["connectivity_state"] == "stale"
 
     queued = client.post(
         "/api/v1/agents/actions/run-audit",

@@ -26,7 +26,7 @@ describe('CommandPalette', () => {
     expect(screen.queryByRole('option', { name: /Administration/ })).not.toBeInTheDocument()
     fireEvent.keyDown(search, { key: 'ArrowDown' })
     fireEvent.keyDown(search, { key: 'Enter' })
-    expect(screen.getByTestId('location')).toHaveTextContent('/hosts')
+    expect(screen.getByTestId('location')).toHaveTextContent('/findings')
   })
 
   it('searches console entities and opens a host with its investigation context', async () => {

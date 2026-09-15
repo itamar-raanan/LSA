@@ -24,6 +24,7 @@ import type {
   ControlCatalogItem,
   AgentEnrollmentTokenCreated,
   AgentEnrollmentToken,
+  AgentEnrollmentProgress,
   PolicyMode,
   AgentConnectivity,
   AgentPackage,
@@ -308,6 +309,9 @@ export const api = {
   agents(): Promise<LinuxAgent[]> {
     return request('/agents')
   },
+  agent(id: string): Promise<LinuxAgent> {
+    return request(`/agents/${id}`)
+  },
   agentEnrollmentRecovery(): Promise<AgentEnrollmentRecovery[]> {
     return request('/agent-enrollment-recovery')
   },
@@ -334,6 +338,9 @@ export const api = {
   },
   agentEnrollmentTokens(): Promise<AgentEnrollmentToken[]> {
     return request('/agent-enrollment-tokens')
+  },
+  agentEnrollmentProgress(id: string): Promise<AgentEnrollmentProgress> {
+    return request(`/agent-enrollment-tokens/${id}/progress`)
   },
   revokeAgentEnrollmentToken(id: string): Promise<void> {
     return request(`/agent-enrollment-tokens/${id}`, { method: 'DELETE' })

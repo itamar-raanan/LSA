@@ -47,6 +47,7 @@ from lsa.schemas import (
     AgentBulkSelection,
     AgentEnrollmentRequest,
     AgentEnrollmentResponse,
+    AgentEnrollmentProgressResponse,
     AgentEnrollmentRecoveryResponse,
     AgentEnrollmentTokenCreate,
     AgentEnrollmentTokenCreated,
@@ -71,6 +72,8 @@ from lsa.schemas import (
     RemediationRecoveryVerificationReceiptSubmission,
     RemediationValidationReceiptSubmission,
 )
+from lsa.config import get_settings
+from lsa.services.agent_packages import AGENT_VERSION
 from lsa.security import hash_ingestion_token
 from lsa.services.platform_command_trust import (
     active_platform_command_key,
@@ -109,6 +112,14 @@ def _aware(value):
     if value is not None and value.tzinfo is None:
         return value.replace(tzinfo=now_utc().tzinfo)
     return value
+
+
+def _version_parts(value: str) -> tuple[int, ...] | None:
+    try:
+        parts = tuple(int(part) for part in value.split("."))
+    except (AttributeError, ValueError):
+        return None
+    return parts if parts else None
 
 
 def _lock_tenant(db: Session, tenant_id: str) -> None:
@@ -268,6 +279,91 @@ def _agent_response(db: Session, agent: LinuxAgent) -> LinuxAgentResponse:
     latest_task = db.scalar(
         select(AgentTask).where(AgentTask.agent_id == agent.id).order_by(AgentTask.created_at.desc())
     )
+    settings = get_settings()
+    now = now_utc()
+    first_communication = _aware(agent.first_communication_at)
+    last_seen = _aware(agent.last_seen_at)
+    last_scan = _aware(host.last_scan_at)
+    if agent.revoked_at is not None:
+        connectivity_state = "revoked"
+    elif first_communication is None:
+        connectivity_state = "awaiting_first_contact"
+    elif last_seen is not None and now - last_seen <= timedelta(minutes=settings.agent_online_minutes):
+        connectivity_state = "online"
+    elif last_seen is not None and now - last_seen <= timedelta(hours=settings.agent_offline_hours):
+        connectivity_state = "stale"
+    else:
+        connectivity_state = "offline"
+
+    if agent.revoked_at is not None:
+        configuration_state = "revoked"
+    elif agent.last_policy_version is None:
+        configuration_state = "awaiting"
+    elif agent.last_policy_version == version.version:
+        configuration_state = "synced"
+    else:
+        configuration_state = "outdated"
+
+    installed_version = _version_parts(agent.agent_version)
+    desired_version = _version_parts(AGENT_VERSION)
+    if installed_version is None or desired_version is None:
+        version_state = "unknown"
+    elif installed_version == desired_version:
+        version_state = "current"
+    elif installed_version < desired_version:
+        version_state = "update_available"
+    else:
+        version_state = "unknown"
+    report_is_stale = last_scan is None or now - last_scan > timedelta(hours=settings.agent_report_stale_hours)
+    report_state = "never" if last_scan is None else "stale" if report_is_stale else "current"
+    if agent.revoked_at is not None:
+        operational_state, status_reason, next_action = (
+            "revoked",
+            "Agent access has been revoked.",
+            "Re-enroll the host with a new credential if access should be restored.",
+        )
+    elif first_communication is None:
+        operational_state, status_reason, next_action = (
+            "awaiting_first_contact",
+            "Enrollment completed, but the agent has not authenticated after installation.",
+            "Start the lsa-agent service and verify outbound access to the agent gateway.",
+        )
+    elif connectivity_state != "online":
+        operational_state, status_reason, next_action = (
+            "attention",
+            "Agent communication is delayed." if connectivity_state == "stale" else "Agent is offline.",
+            "Check the agent service, gateway reachability, system time, and service logs.",
+        )
+    elif agent.platform_command_key_id is None:
+        operational_state, status_reason, next_action = (
+            "attention",
+            "Platform command identity is not pinned.",
+            "Re-enroll this agent with the current platform trust key.",
+        )
+    elif configuration_state != "synced":
+        operational_state, status_reason, next_action = (
+            "attention",
+            "The assigned policy has not been acknowledged." if configuration_state == "awaiting" else "The agent reports an older policy version.",
+            "Allow the next agent poll, then inspect service logs if policy sync remains pending.",
+        )
+    elif latest_task is not None and latest_task.status == "failed":
+        operational_state, status_reason, next_action = (
+            "attention",
+            "The latest requested audit failed.",
+            "Open the agent details to review the task error, then queue a new audit after correcting it.",
+        )
+    elif report_is_stale:
+        operational_state, status_reason, next_action = (
+            "attention",
+            "No current accepted audit report is available.",
+            "Queue an audit and wait for the agent to submit an accepted report.",
+        )
+    else:
+        operational_state, status_reason, next_action = (
+            "operational",
+            "Agent is communicating, policy is synchronized, and the latest report is current.",
+            None,
+        )
     return LinuxAgentResponse(
         id=agent.id,
         host_id=agent.host_id,
@@ -281,11 +377,31 @@ def _agent_response(db: Session, agent: LinuxAgent) -> LinuxAgentResponse:
         fingerprint=agent.fingerprint,
         platform_trust_status="pinned" if agent.platform_command_key_id else "missing",
         platform_command_key_fingerprint=agent.platform_command_key_fingerprint,
+        fqdn=host.fqdn,
+        operating_system=host.operating_system,
+        os_family=host.os_family,
+        os_version=host.os_version,
+        kernel=host.kernel,
+        architecture=host.architecture,
+        ip_addresses=host.ip_addresses or [],
+        enrollment_state="revoked" if agent.revoked_at is not None else "enrolled",
+        connectivity_state=connectivity_state,
+        configuration_state=configuration_state,
+        version_state=version_state,
+        operational_state=operational_state,
+        report_state=report_state,
+        status_reason=status_reason,
+        next_action=next_action,
+        desired_agent_version=AGENT_VERSION,
+        first_communication_at=agent.first_communication_at,
         last_seen_at=agent.last_seen_at,
         last_policy_version=agent.last_policy_version,
         last_scan_at=host.last_scan_at,
+        latest_task_id=latest_task.id if latest_task else None,
         latest_task_status=latest_task.status if latest_task else None,
         latest_task_created_at=latest_task.created_at if latest_task else None,
+        latest_task_completed_at=latest_task.completed_at if latest_task else None,
+        latest_task_error=latest_task.error if latest_task else None,
         revoked_at=agent.revoked_at,
         created_at=agent.created_at,
     )
@@ -315,6 +431,8 @@ async def signed_agent_principal(request: Request, db: Session = Depends(get_db)
         public_key.verify(signature, message)
     except InvalidSignature as exc:
         raise HTTPException(status_code=401, detail="Invalid agent signature") from exc
+    if agent.first_communication_at is None:
+        agent.first_communication_at = now_utc()
     return AgentPrincipal(
         agent=agent,
         signed_control_requested=request.headers.get("X-LSA-Platform-Control") == "signed-v1",
@@ -564,6 +682,15 @@ def list_agents(user: User = Depends(current_user), db: Session = Depends(get_db
         select(LinuxAgent).where(LinuxAgent.tenant_id == user.tenant_id).order_by(LinuxAgent.created_at.desc())
     ).all()
     return [_agent_response(db, agent) for agent in agents]
+
+
+@router.get("/agents/{agent_id}", response_model=LinuxAgentResponse)
+def get_agent(agent_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_admin(user)
+    agent = db.get(LinuxAgent, agent_id)
+    if agent is None or agent.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return _agent_response(db, agent)
 
 
 @router.get(
@@ -964,6 +1091,50 @@ def list_enrollment_tokens(user: User = Depends(current_user), db: Session = Dep
     return result
 
 
+@router.get(
+    "/agent-enrollment-tokens/{token_id}/progress",
+    response_model=AgentEnrollmentProgressResponse,
+)
+def enrollment_progress(token_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_admin(user)
+    token = db.get(AgentEnrollmentToken, token_id)
+    if token is None or token.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="Enrollment token not found")
+    now = now_utc()
+    if token.revoked_at is not None:
+        token_state = "revoked"
+    elif _aware(token.expires_at) <= now:
+        token_state = "expired"
+    elif token.max_uses is not None and token.use_count >= token.max_uses:
+        token_state = "exhausted"
+    elif token.token_type == "one_time" and token.used_at is not None:
+        token_state = "consumed"
+    else:
+        token_state = "active"
+    events = db.scalars(
+        select(AuditEvent).where(
+            AuditEvent.tenant_id == user.tenant_id,
+            AuditEvent.action.in_(["agent.enrolled", "agent.reenrolled"]),
+        ).order_by(AuditEvent.created_at.desc())
+    ).all()
+    agent_ids = list(dict.fromkeys(
+        event.actor_id for event in events
+        if isinstance(event.details, dict) and event.details.get("enrollment_token_id") == token.id
+    ))
+    agents = db.scalars(
+        select(LinuxAgent).where(LinuxAgent.tenant_id == user.tenant_id, LinuxAgent.id.in_(agent_ids))
+    ).all() if agent_ids else []
+    by_id = {agent.id: agent for agent in agents}
+    return AgentEnrollmentProgressResponse(
+        token_id=token.id,
+        token_state=token_state,
+        use_count=token.use_count,
+        max_uses=token.max_uses,
+        expires_at=token.expires_at,
+        agents=[_agent_response(db, by_id[agent_id]) for agent_id in agent_ids if agent_id in by_id],
+    )
+
+
 @router.delete("/agent-enrollment-tokens/{token_id}", status_code=204)
 def revoke_enrollment_token(token_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     require_admin(user)
@@ -1170,6 +1341,7 @@ def enroll_agent(
     agent.platform_command_key_id = platform_key.id
     agent.platform_command_key_fingerprint = platform_key.fingerprint
     agent.platform_envelope_sequence = 1
+    agent.first_communication_at = None
     agent.last_seen_at = now_utc()
     agent.last_policy_version = None
     agent.revoked_at = None

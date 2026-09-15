@@ -9,6 +9,7 @@ interface AgentDownloadPanelProps {
   platformUrl: string
   platformTrust: PlatformCommandTrust
   enrollmentToken?: string
+  reusableCredential?: boolean
   close: () => void
 }
 
@@ -22,7 +23,7 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
 
-export function AgentDownloadPanel({ packages, platformUrl, platformTrust, enrollmentToken, close }: AgentDownloadPanelProps) {
+export function AgentDownloadPanel({ packages, platformUrl, platformTrust, enrollmentToken, reusableCredential = false, close }: AgentDownloadPanelProps) {
   const [downloading, setDownloading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
@@ -33,7 +34,8 @@ export function AgentDownloadPanel({ packages, platformUrl, platformTrust, enrol
     () => {
       if (!selectedPackage) return 'No agent package is available.'
       const trustArgument = `--platform-command-key ${shellQuote(platformTrust.public_key)}`
-      const enrollment = `sudo lsa-agent-enroll --platform-url ${shellQuote(platformUrl)} --token ${shellQuote(tokenValue)} ${trustArgument}`
+      const tokenArgument = reusableCredential ? '"${LSA_ENROLLMENT_TOKEN}"' : shellQuote(tokenValue)
+      const enrollment = `sudo lsa-agent-enroll --platform-url ${shellQuote(platformUrl)} --token ${tokenArgument} ${trustArgument}`
       if (selectedPackage.package_format === 'deb') {
         return `sudo apt install ./${selectedPackage.filename}\n${enrollment}`
       }
@@ -42,7 +44,7 @@ export function AgentDownloadPanel({ packages, platformUrl, platformTrust, enrol
       }
       return `tar -xzf ${selectedPackage.filename}\ncd lsa-agent-${selectedPackage.version}\nsudo ./install.sh --platform-url ${shellQuote(platformUrl)} --token ${shellQuote(tokenValue)} ${trustArgument}`
     },
-    [platformTrust.public_key, platformUrl, selectedPackage, tokenValue],
+    [platformTrust.public_key, platformUrl, reusableCredential, selectedPackage, tokenValue],
   )
 
   async function copy(label: string, value: string) {
@@ -98,6 +100,7 @@ export function AgentDownloadPanel({ packages, platformUrl, platformTrust, enrol
         <button className="button-secondary min-h-9 px-3" onClick={() => void copy('command', installCommand)}>{copied === 'command' ? <Check size={14} /> : <Copy size={14} />} {copied === 'command' ? 'Copied' : 'Copy command'}</button>
       </div>
       <pre className="mt-4 overflow-x-auto rounded-xl border border-stone-200 bg-[#f7f3eb] p-4 font-mono text-[11px] leading-6 text-[#4f6f5c]"><code>{installCommand}</code></pre>
+      {reusableCredential && <p className="mt-2 text-[11px] leading-5 text-stone-600">Load <code>LSA_ENROLLMENT_TOKEN</code> from your deployment secret manager before running this command. The reusable credential is intentionally excluded from copied shell history.</p>}
       <div className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-stone-600"><Check size={14} className="mt-0.5 shrink-0 text-[#4f6f5c]" /><p><strong className="font-medium text-stone-700">Platform identity is pinned during enrollment.</strong> The public key is not secret. The agent verifies the signed enrollment proof before saving credentials. TLS certificate verification remains disabled, while platform responses are authenticated by this pinned Ed25519 identity.</p></div>
       <p className="mt-2 break-all font-mono text-[10px] text-stone-500">Platform fingerprint · SHA256:{platformTrust.fingerprint}</p>
       {!enrollmentToken && <p className="mt-2 text-[11px] text-amber-800/80">Create an enrollment token before running the command and replace the token placeholder.</p>}

@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, Database, Gauge, ShieldAlert, ShieldCheck, ShieldX, WifiOff } from 'lucide-react'
+import { Activity, ArrowRight, ChevronDown, Gauge, ShieldAlert, ShieldCheck, ShieldX, WifiOff } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
@@ -38,9 +38,9 @@ export function DashboardPage() {
     return { dashboard, recentHosts: recentHosts.rows, findings: [...criticalFindings.rows, ...highFindings.rows] }
   }, [])
 
-  if (loading) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Loading the current fleet posture and exposure queue." /><LoadingState variant="dashboard" /></>
-  if (error) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Current fleet posture and exposure queue." /><ErrorState message={error} retry={reload} /></>
-  if (!data || data.dashboard.total_hosts === 0) return <><PageHeader eyebrow="Security Operations" title="Security Overview" detail="Current fleet posture and exposure queue." /><EmptyState title="No Telemetry Available" detail="Enroll a Linux endpoint or import an offline report to establish the first fleet baseline." action={<Link to="/evidence" className="button-primary">Import Offline Evidence <ArrowRight size={14} /></Link>} /></>
+  if (loading) return <><PageHeader title="Overview" detail="Loading the current fleet posture and exposure queue." /><LoadingState variant="dashboard" /></>
+  if (error) return <><PageHeader title="Overview" detail="Current fleet posture and exposure queue." /><ErrorState message={error} retry={reload} /></>
+  if (!data || data.dashboard.total_hosts === 0) return <><PageHeader title="Overview" detail="Current fleet posture and exposure queue." /><EmptyState title="No Telemetry Available" detail="Enroll a Linux endpoint or import an offline report to establish the first fleet baseline." action={<Link to="/evidence" className="button-primary">Import Offline Evidence <ArrowRight size={14} /></Link>} /></>
 
   const { dashboard, recentHosts: hosts, findings } = data
   const priorityFindings = findings
@@ -71,12 +71,9 @@ export function DashboardPage() {
   const hostInvestigationUrl = (hostId: string) => withInvestigationReturn(`/hosts/${hostId}`, location)
 
   return <div className="page-reveal">
-    <PageHeader eyebrow="Security Operations" title="Security Overview" detail="See what requires attention, investigate the affected systems, and confirm whether fleet posture is improving." />
+    <PageHeader title="Overview" detail="See what requires attention, investigate affected systems, and confirm whether fleet posture is improving." />
 
-    <section className="dashboard-data-context" aria-label="Dashboard Data Context">
-      <div><Activity size={15} /><span><strong>Latest Accepted Posture</strong>{latestReportAt ? `Updated ${formatDateTime(latestReportAt)}` : 'No Endpoint Report Time Available'}</span></div>
-      <div><Database size={15} /><span><strong>Evidence Source</strong>Server Summaries From Locally Retained Reports</span></div>
-    </section>
+    <p className="dashboard-freshness"><Activity size={14} />Latest accepted posture {latestReportAt ? `received ${formatDateTime(latestReportAt)}` : 'has no report time'}</p>
 
     <section className="metric-grid dashboard-metric-grid" aria-label="Security Metrics">
       <SecurityMetricCard title="Critical Findings" value={dashboard.finding_counts.critical ?? 0} detail={`${dashboard.finding_counts.high ?? 0} High Severity Findings`} tone={(dashboard.finding_counts.critical ?? 0) ? 'critical' : 'success'} icon={ShieldAlert} to="/findings?severity=critical" />
@@ -101,17 +98,20 @@ export function DashboardPage() {
       </article>
     </section>
 
-    <section className="mt-4 grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-      <article className="soc-panel posture-panel">
-        <div className="panel-heading"><div><p className="panel-kicker">Estate Posture</p><h2>Asset Health Distribution</h2></div><StatusBadge label={`${dashboard.stale_hosts} Stale`} tone={dashboard.stale_hosts ? 'warning' : 'online'} /></div>
-        <div className="posture-content">
-          <RiskScore value={dashboard.overall_security_score} />
-          <div className="posture-chart" aria-label="Asset Health Distribution Chart"><Suspense fallback={<div className="chart-skeleton" />}><DashboardChart type="health" data={healthData} /></Suspense></div>
-          <div className="posture-legend">{healthData.map((item) => <div key={item.name}><span style={{ backgroundColor: item.color }} /><p><strong>{item.value}</strong><small>{item.name}</small></p></div>)}</div>
-        </div>
-      </article>
+    <details className="dashboard-context-disclosure">
+      <summary><span><strong>Fleet Context</strong><small>Asset health distribution and recent endpoint activity</small></span><ChevronDown size={16} /></summary>
+      <section className="dashboard-context-grid">
+        <article className="dashboard-context-section">
+          <div className="panel-heading"><div><h2>Asset Health Distribution</h2></div><StatusBadge label={`${dashboard.stale_hosts} Stale`} tone={dashboard.stale_hosts ? 'warning' : 'online'} /></div>
+          <div className="posture-content">
+            <RiskScore value={dashboard.overall_security_score} />
+            <div className="posture-chart" aria-label="Asset Health Distribution Chart"><Suspense fallback={<div className="chart-skeleton" />}><DashboardChart type="health" data={healthData} /></Suspense></div>
+            <div className="posture-legend">{healthData.map((item) => <div key={item.name}><span style={{ backgroundColor: item.color }} /><p><strong>{item.value}</strong><small>{item.name}</small></p></div>)}</div>
+          </div>
+        </article>
 
-      <article className="soc-panel overflow-hidden"><div className="panel-heading"><div><p className="panel-kicker">Telemetry</p><h2>Recent Endpoint Activity</h2></div><Link to="/hosts" className="panel-link">All Assets <ArrowRight size={13} /></Link></div><SecurityTimeline events={recentEvents} /></article>
-    </section>
+        <article className="dashboard-context-section overflow-hidden"><div className="panel-heading"><div><h2>Recent Endpoint Activity</h2></div><Link to="/hosts" className="panel-link">All Assets <ArrowRight size={13} /></Link></div><SecurityTimeline events={recentEvents} /></article>
+      </section>
+    </details>
   </div>
 }
